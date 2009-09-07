@@ -1,0 +1,11 @@
+Source: inithooks
+Section: admin
+Priority: optional
+Maintainer: Alon Swartz <alon@turnkeylinux.org>
+Build-Depends: debhelper (>> 4.2.0)
+Standards-Version: 3.6.1
+
+Package: inithooks
+Architecture: all
+Section: admin
+Description: Executes firstboot and everyboot scripts
