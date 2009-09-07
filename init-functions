@@ -1,0 +1,15 @@
+exec_scripts() {
+    SCRIPT_DIR=$1
+    [ -d $SCRIPT_DIR ] || return 0
+    for SCRIPT in $SCRIPT_DIR/*; do
+        [ -x $SCRIPT ] && $SCRIPT
+    done
+    return 0
+}
+
+set_firstboot_status() {
+    STATUS=$1
+    CONF=/etc/default/inithooks
+    sed -i "s|RUN_FIRSTBOOT=\(.*\)|RUN_FIRSTBOOT=$STATUS|" $CONF
+}
+

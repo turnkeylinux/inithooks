@@ -1,0 +1,41 @@
+#!/bin/sh
+# Copyright (c) 2009 Alon Swartz <alon@turnkeylinux.org> - all rights reserved
+# Executes firstboot and everyboot scripts
+
+DESC="Initialization hooks"
+NAME=inithooks
+
+. /lib/lsb/init-functions
+
+. /etc/default/inithooks
+. $INITHOOKS_PATH/init-functions
+[ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
+
+case "$1" in
+  start)
+    log_begin_msg "Starting $DESC"
+    if [ "$(echo $RUN_FIRSTBOOT | tr [A-Z] [a-z] )" = "true" ]; then
+        exec_scripts $INITHOOKS_PATH/firstboot.d
+        set_firstboot_status false
+    fi
+    exec_scripts $INITHOOKS_PATH/everyboot.d
+    log_action_end_msg $?
+    ;;
+
+  stop)
+    exit 0
+    ;;
+
+  restart|reload|force-reload)
+    echo "Error: argument '$1' not supported" >&2
+    exit 3
+    ;;
+
+  *)
+    N=/etc/init.d/$NAME
+    echo "Usage: $N {start}" >&2
+    exit 1
+    ;;
+esac
+
+exit 0
