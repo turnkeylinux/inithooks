@@ -8,7 +8,7 @@ NAME=inithooks
 . /lib/lsb/init-functions
 
 . /etc/default/inithooks
-. $INITHOOKS_PATH/init-functions
+. $INITHOOKS_PATH/functions
 [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
 
 case "$1" in
