@@ -9,7 +9,9 @@ NAME=inithooks
 
 . /etc/default/inithooks
 . $INITHOOKS_PATH/functions
+
 [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
+export INITHOOKS_CONF=$INITHOOKS_CONF
 
 case "$1" in
   start)
