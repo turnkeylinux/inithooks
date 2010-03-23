@@ -10,7 +10,7 @@ in predetermined paths. The firstboot scripts will only be executed
 if a flag is set. Once the firstboot scripts are executed successfully,
 the flag will be unset and those scripts will not be executed again.
 
-The init script is executed quiet early on in system initialization, at
+The init script is executed quite early on in system initialization, at
 runlevel 2 15, as to enable configuration of the system prior to most
 services starting. This should be taken into consideration when
 developing hook scripts.
@@ -27,13 +27,6 @@ So, the default firstboot and everyboot paths would be:
     /usr/lib/inithooks/everyboot.d/
 
 RUN_FIRSTBOOT is the flag (obviously).
-
-INITHOOKS_CONF is the configuration file which will be sourced by the
-init script prior to hook execution. In order for the hook scripts to
-have access to the variables set in the configuration file, they must
-be exported, e.g.,
-
-    export ROOT_PASSWORD=p@ssw0rd
 
 Enjoy!
 
