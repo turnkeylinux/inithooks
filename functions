@@ -2,7 +2,9 @@ exec_scripts() {
     SCRIPT_DIR=$1
     [ -d $SCRIPT_DIR ] || return 0
     for SCRIPT in $SCRIPT_DIR/*; do
-        [ -x $SCRIPT ] && $SCRIPT
+        [ -x $SCRIPT ] || return 0
+        echo "Executing: $SCRIPT"
+        $SCRIPT
     done
     return 0
 }
