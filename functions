@@ -1,8 +1,8 @@
 exec_scripts() {
     SCRIPT_DIR=$1
     [ -d $SCRIPT_DIR ] || return 0
-    for SCRIPT in $(find $SCRIPT_DIR -type f); do
-        [ -x $SCRIPT ] || return 0
+    for SCRIPT in $(find $SCRIPT_DIR -type f | sort); do
+        [ -x $SCRIPT ] || continue
         echo "Executing: $SCRIPT"
         $SCRIPT
     done
