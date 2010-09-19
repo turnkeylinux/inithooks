@@ -1,2 +1,2 @@
 inithooks           /etc/default
-functions           /usr/lib/inithooks
+run                 /usr/lib/inithooks

@@ -7,5 +7,6 @@ Standards-Version: 3.6.1
 
 Package: inithooks
 Architecture: all
+Depends: kbd
 Section: admin
 Description: Executes firstboot and everyboot scripts

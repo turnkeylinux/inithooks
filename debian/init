@@ -5,22 +5,18 @@
 DESC="Initialization hooks"
 NAME=inithooks
 
+# Exit if openvt is not available
+which openvt >/dev/null || exit 0
+
 . /lib/lsb/init-functions
-
 . /etc/default/inithooks
-. $INITHOOKS_PATH/functions
-
-[ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
-export INITHOOKS_CONF=$INITHOOKS_CONF
 
 case "$1" in
   start)
     log_begin_msg "Starting $DESC"
-    if [ "$(echo $RUN_FIRSTBOOT | tr [A-Z] [a-z] )" = "true" ]; then
-        exec_scripts $INITHOOKS_PATH/firstboot.d
-        set_firstboot_status false
-    fi
-    exec_scripts $INITHOOKS_PATH/everyboot.d
+    setterm -blank 0
+    chvt 1
+    openvt -c 8 -s -w -- $INITHOOKS_PATH/run
     log_action_end_msg $?
     ;;
 
