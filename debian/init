@@ -1,6 +1,15 @@
 #!/bin/sh
 # Copyright (c) 2009 Alon Swartz <alon@turnkeylinux.org> - all rights reserved
-# Executes firstboot and everyboot scripts
+
+### BEGIN INIT INFO
+# Provides:          inithooks
+# Required-Start:    $local_fs $network $named
+# Required-Stop:
+# Default-Start:     2
+# Default-Stop:
+# Short-Description: Executes initialization hooks at boot time
+# Description:       Executes firstboot and everyboot scripts
+### END INIT INFO
 
 DESC="Initialization hooks"
 NAME=inithooks
