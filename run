@@ -1,8 +1,16 @@
-#!/bin/sh
+#!/bin/bash
 # Executed by init script
 
 INITHOOKS_DEFAULT=/etc/default/inithooks
 . $INITHOOKS_DEFAULT
+
+# redirect stdout/stderr when running on an hvc0 console (e.g. Amazon EC2)
+if grep -qs console=hvc0 /proc/cmdline; then
+    LOGFILE=/var/log/inithooks.log
+    touch $LOGFILE; chmod 640 $LOGFILE
+    echo "Redirecting output to $LOGFILE"
+    exec > >(tee $LOGFILE|logger -t hvc0 -s 2>/dev/console) 2>&1
+fi
 
 exec_scripts() {
     SCRIPT_DIR=$1
