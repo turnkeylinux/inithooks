@@ -1,2 +1,3 @@
 inithooks           /etc/default
 run                 /usr/lib/inithooks
+turnkey-init        /usr/sbin
