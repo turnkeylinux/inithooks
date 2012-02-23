@@ -1,4 +1,5 @@
 #!/bin/bash -e
 
 sed -i '/RUN_FIRSTBOOT/ s/=.*/=true/g' /etc/default/inithooks
-FORCE_INTERACTIVE=y /usr/lib/inithooks/run
+sed -i '/REDIRECT_OUTPUT/ s/=.*/=false/g' /etc/default/inithooks
+/usr/lib/inithooks/run

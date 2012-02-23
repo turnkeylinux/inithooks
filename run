@@ -4,14 +4,12 @@
 INITHOOKS_DEFAULT=/etc/default/inithooks
 . $INITHOOKS_DEFAULT
 
-if [ ! $FORCE_INTERACTIVE ]; then
-    # redirect stdout/stderr when running on an hvc0 console (e.g. Amazon EC2)
-    if grep -qs console=hvc0 /proc/cmdline; then
-        LOGFILE=/var/log/inithooks.log
-        touch $LOGFILE; chmod 640 $LOGFILE
-        echo "Redirecting output to $LOGFILE"
-        exec > >(tee $LOGFILE|logger -t hvc0 -s 2>/dev/console) 2>&1
-    fi
+if [ "$(echo $REDIRECT_OUTPUT | tr [A-Z] [a-z] )" = "true" ]; then
+    # redirect stdout/stderr (use when preseeding headless deployments)
+    LOGFILE=/var/log/inithooks.log
+    touch $LOGFILE; chmod 640 $LOGFILE
+    echo "Redirecting output to $LOGFILE"
+    exec > >(tee $LOGFILE|logger -t inithooks -s 2>/dev/console) 2>&1
 fi
 
 exec_scripts() {
@@ -25,17 +23,12 @@ exec_scripts() {
     return 0
 }
 
-set_firstboot_status() {
-    STATUS=$1
-    sed -i "s|RUN_FIRSTBOOT=\(.*\)|RUN_FIRSTBOOT=$STATUS|" $INITHOOKS_DEFAULT
-}
-
 [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
 export INITHOOKS_CONF=$INITHOOKS_CONF
 
 if [ "$(echo $RUN_FIRSTBOOT | tr [A-Z] [a-z] )" = "true" ]; then
     exec_scripts $INITHOOKS_PATH/firstboot.d
-    set_firstboot_status false
+    sed -i '/RUN_FIRSTBOOT/ s/=.*/=false/g' $INITHOOKS_DEFAULT
 fi
 exec_scripts $INITHOOKS_PATH/everyboot.d
 
