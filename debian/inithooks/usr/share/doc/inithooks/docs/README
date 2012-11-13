@@ -1,0 +1,32 @@
+Initialization Hooks
+====================
+
+The inithooks package provides execution of firstboot and everyboot
+scripts. It was designed to be as generic and barebones as possible,
+leaving the functionality up to the hook scripts.
+
+In a nutshell, it will execute scripts in alpha-numeric ordering located
+in predetermined paths. The firstboot scripts will only be executed
+if a flag is set. Once the firstboot scripts are executed successfully,
+the flag will be unset and those scripts will not be executed again.
+
+The init script is executed quite early on in system initialization, at
+runlevel 2 15, as to enable configuration of the system prior to most
+services starting. This should be taken into consideration when
+developing hook scripts.
+
+/etc/default/inithooks
+
+    INITHOOKS_CONF=/etc/inithooks.conf
+    INITHOOKS_PATH=/usr/lib/inithooks
+    RUN_FIRSTBOOT=true
+
+So, the default firstboot and everyboot paths would be:
+
+    /usr/lib/inithooks/firstboot.d/
+    /usr/lib/inithooks/everyboot.d/
+
+RUN_FIRSTBOOT is the flag (obviously).
+
+Enjoy!
+

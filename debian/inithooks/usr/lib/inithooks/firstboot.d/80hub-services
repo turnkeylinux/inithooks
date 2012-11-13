@@ -1,0 +1,10 @@
+#!/bin/bash -e
+# initialize hub services (tklbam, hubdns)
+
+. /etc/default/inithooks
+
+[ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
+[ "$HUB_APIKEY" == "SKIP" ] && exit 0
+
+$INITHOOKS_PATH/bin/hubservices.py --apikey="$HUB_APIKEY" --fqdn="$FQDN"
+

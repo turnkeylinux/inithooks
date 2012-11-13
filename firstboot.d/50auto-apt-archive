@@ -1,0 +1,15 @@
+#!/bin/bash -e
+
+. /etc/default/inithooks
+[ "$AUTO_APT_ARCHIVE" == "SKIP" ] && exit 0
+
+host -W 2 hub.turnkeylinux.org >& /dev/null || exit 2
+
+DISTRO=$(lsb_release -i -s |tr 'A-Z' 'a-z')
+ARCHIVE=$(auto-apt-archive $DISTRO)
+
+LISTDIR=/etc/apt/sources.list.d
+[ "$DISTRO" == "ubuntu" ] && sed -i "s|http://\(.*\)archive.ubuntu.com/ubuntu|$ARCHIVE|g" $LISTDIR/*.list
+[ "$DISTRO" == "debian" ] && sed -i "s|http://ftp.\(.*\).debian.org/debian|$ARCHIVE|g" $LISTDIR/*.list
+
+exit 0
