@@ -1,5 +1,152 @@
-#!/bin/bash -e
+#!/usr/bin/python
+#
+# Copyright (c) 2012 Alon Swartz <alon@turnkeylinux.org>
+# 
+# This file is part of InitHooks.
+# 
+# InitHooks is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 3 of the License, or (at your
+# option) any later version.
+# 
+"""
+Execute firstboot initialization hooks, skipping blacklist
 
-sed -i '/RUN_FIRSTBOOT/ s/=.*/=true/g' /etc/default/inithooks
-sed -i '/REDIRECT_OUTPUT/ s/=.*/=false/g' /etc/default/inithooks
-/usr/lib/inithooks/run
+Options:
+
+    --disable         Set TURNKEYINIT_ENABLED to false, and exit
+    --enable          Set TURNKEYINIT_ENABLED to true, and exit
+    --force           Force execution even if TURNKEYINIT_ENABLED is not true
+"""
+import os
+import sys
+import getopt
+
+from conffile import ConfFile
+from executil import system, ExecError
+
+def fatal(e):
+    print >> sys.stderr, "error: " + str(e)
+    sys.exit(1)
+
+def usage(e=None):
+    if e:
+        print >> sys.stderr, "error: " + str(e)
+
+    print >> sys.stderr, "Syntax: %s [options]" % (sys.argv[0])
+    print >> sys.stderr, __doc__.strip()
+    print >> sys.stderr, "\nBlacklist:\n"
+    for script in BLACKLIST:
+        print >> sys.stderr, "    %s" % script
+    sys.exit(1)
+
+BLACKLIST = [
+    '10randomize-cronapt',
+    '10regen-sshkeys',
+    '15regen-sslcert',
+    '25ec2-userdata',
+    '26ec2-resizerootfs',
+    '29preseed',
+    '40ec2-sshkeys',
+    '50auto-apt-archive',
+    '82tklbam-restore',
+    '92etckeeper',
+]
+
+class Config(ConfFile):
+    CONF_FILE = "/etc/default/inithooks"
+
+    @property
+    def is_enabled(self):
+        if "turnkeyinit_enabled" in self.keys():
+            if self.turnkeyinit_enabled.lower() == "true":
+                return True
+
+        return False
+
+    def enable(self):
+        self.turnkeyinit_enabled = "true"
+        self.write()
+
+    def disable(self):
+        self.turnkeyinit_enabled = "false"
+        self.write()
+
+class InitHooks:
+    def __init__(self):
+        self.conf = Config()
+
+    @staticmethod
+    def _exec(cmd):
+        try:
+            env = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            system("%s %s" % (env, cmd))
+        except ExecError, e:
+            pass
+
+    def execute(self, dname):
+        dpath = os.path.join(self.conf.inithooks_path, dname)
+        if not os.path.exists(dpath):
+            return
+
+        scripts = os.listdir(dpath)
+        scripts.sort()
+        for fname in scripts:
+            fpath = os.path.join(dpath, fname)
+            if os.access(fpath, os.X_OK) and not fname in BLACKLIST:
+                self._exec(fpath)
+
+def main():
+    try:
+        opts, args = getopt.gnu_getopt(sys.argv[1:], "h", 
+                                       ["help", "disable", "enable", "force"])
+    except getopt.GetoptError, e:
+        usage(e)
+
+    disable = False
+    enable = False
+    force = False
+    for opt, val in opts:
+        if opt in ('-h', '--help'):
+            usage()
+
+        if opt == "--disable":
+            disable = True
+
+        if opt == "--enable":
+            enable = True
+
+        if opt == "--force":
+            force = True
+
+    if len(args) > 0:
+        usage("invalid arguments")
+
+    if (enable, disable, force).count(True) > 1:
+        usage("options are mutually exclusive")
+
+    inithooks = InitHooks()
+
+    if disable:
+        inithooks.conf.disable()
+        print "TURNKEYINIT_ENABLED set to 'false'"
+        sys.exit(0)
+
+    if enable:
+        inithooks.conf.enable()
+        print "TURNKEYINIT_ENABLED set to 'true'"
+        sys.exit(0)
+
+    if force:
+        inithooks.conf.enable()
+
+    if inithooks.conf.is_enabled:
+        inithooks.execute('firstboot.d')
+        inithooks.conf.disable()
+    else:
+        fatal("turnkey-init is disabled.")
+
+
+if __name__ == "__main__":
+    main()
+
