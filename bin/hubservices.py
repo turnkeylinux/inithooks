@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (c) 2011 Alon Swartz <alon@turnkeylinux.org> - all rights reserved
+# Copyright (c) 2011 Alon Swartz <alon@turnkeylinux.org>
 """Initialize Hub Services (TKLBAM, HubDNS)
 
 Options:
