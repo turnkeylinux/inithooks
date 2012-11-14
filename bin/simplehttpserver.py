@@ -1,4 +1,6 @@
 #!/usr/bin/python
+# Copyright (c) 2012 Liraz Siri <liraz@turnkeylinux.org>
+
 """
 Simple HTTP server
 

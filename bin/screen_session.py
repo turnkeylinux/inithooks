@@ -1,5 +1,5 @@
 #!/usr/bin/python
-#!/usr/bin/python
+# Copyright (c) 2012 Liraz Siri <liraz@turnkeylinux.org>
 
 """Runs a command in a screen session. 
 
