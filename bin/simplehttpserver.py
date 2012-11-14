@@ -56,10 +56,12 @@ def main():
 
     webroot_path = abspath(args[0])
 
-    address, port = parse_address(args[1])
-    httpd = SocketServer.TCPServer((address, port), SimpleHTTPServer.SimpleHTTPRequestHandler)
-    httpsd = None
+    httpd = None
+    if args[1] not in ("", "0"):
+        address, port = parse_address(args[1])
+        httpd = SocketServer.TCPServer((address, port), SimpleHTTPServer.SimpleHTTPRequestHandler)
 
+    httpsd = None
     if len(args) > 2:
         address, port = parse_address(args[2])
         certfile = args[3]
@@ -72,10 +74,12 @@ def main():
 
     os.chdir(webroot_path)
 
-    if httpsd:
+    if httpsd and httpd:
         serve_forever(httpd, httpsd)
-    else:
+    elif httpd:
         httpd.serve_forever()
+    elif httpsd:
+        httpsd.serve_forever()
 
 if __name__ == "__main__":
     main()
