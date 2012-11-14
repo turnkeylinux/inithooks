@@ -5,6 +5,7 @@ Simple HTTP server
 Options:
 
     --daemonize=/path/to/pidfile
+    --logfile=/path/to/logfile
 
 """
 import os
@@ -51,7 +52,7 @@ def parse_address(arg):
 
 def serve_forever(server1,server2):
     while True:
-        r,w,e = select.select([server1,server2],[],[],0)
+        r, w, e = select.select([server1,server2],[],[],0)
         if server1 in r:
             server1.handle_request()
         if server2 in r:
@@ -63,7 +64,10 @@ def is_writeable(path):
 
     return os.access(path, os.W_OK)
 
-def daemonize(pidfile):
+def daemonize(pidfile, logfile=None):
+    if logfile is None:
+        logfile = "/dev/null"
+
     pid = os.fork()
     if pid != 0:
         print >> file(pidfile, "w"), "%d" % pid
@@ -72,9 +76,9 @@ def daemonize(pidfile):
     os.chdir("/")
     os.setsid()
 
-    devnull = file("/dev/null", "w")
-    os.dup2(devnull.fileno(), sys.stdout.fileno())
-    os.dup2(devnull.fileno(), sys.stderr.fileno())
+    logfile = file(logfile, "w")
+    os.dup2(logfile.fileno(), sys.stdout.fileno())
+    os.dup2(logfile.fileno(), sys.stderr.fileno())
 
     devnull = file("/dev/null", "r")
     os.dup2(devnull.fileno(), sys.stdin.fileno())
@@ -105,17 +109,21 @@ def simplewebserver(webroot, http_address, https_address, certfile):
 def main():
     args = sys.argv[1:]
     try:
-        opts, args = getopt.gnu_getopt(sys.argv[1:], 'h', ["daemonize="])
+        opts, args = getopt.gnu_getopt(sys.argv[1:], 'h', ["daemonize=", "logfile="])
     except getopt.GetoptError, e:
         usage(e)
 
     daemonize_pidfile = None
+    logfile = None
     for opt, val in opts:
         if opt == '-h':
             usage()
 
         if opt == '--daemonize':
             daemonize_pidfile = abspath(val)
+
+        if opt == '--logfile':
+            logfile = abspath(val)
 
     if not args:
         usage()
@@ -125,6 +133,13 @@ def main():
 
     if daemonize_pidfile and not is_writeable(daemonize_pidfile):
         fatal("pidfile '%s' not writeable" % daemonize_pidfile)
+
+    if logfile:
+        if not daemonize_pidfile:
+            fatal("--logfile can only be used with --daemonize")
+
+        if not is_writeable(logfile):
+            fatal("logfile '%s' not writeable" % logfile)
 
     webroot = abspath(args[0])
 
@@ -142,7 +157,7 @@ def main():
         certfile = os.path.abspath(certfile)
 
     if daemonize_pidfile:
-        daemonize(daemonize_pidfile)
+        daemonize(daemonize_pidfile, logfile)
 
     simplewebserver(webroot, http_address, https_address, certfile)
 
