@@ -1,3 +1,0 @@
-#!/bin/bash -x
-
-SEC_UPDATES=FORCE /usr/lib/inithooks/firstboot.d/95secupdates

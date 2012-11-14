@@ -1,9 +1,0 @@
-Package: inithooks
-Version: 0.9+13+g251c608
-Architecture: all
-Maintainer: Alon Swartz <alon@turnkeylinux.org>
-Installed-Size: 160
-Depends: kbd
-Section: admin
-Priority: optional
-Description: Executes firstboot and everyboot scripts
