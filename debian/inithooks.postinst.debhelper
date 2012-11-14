@@ -2,4 +2,7 @@
 if [ -x "/etc/init.d/inithooks" ]; then
 	update-rc.d inithooks start 15 2 . >/dev/null || exit $?
 fi
+
+mkdir -p /var/run/turnkey-init-fence
+chown nobody /var/run/turnkey-init-fence
 # End automatically added section

@@ -20,7 +20,7 @@ PATH=/sbin:/usr/sbin:/bin:/usr/bin
 DESC="Description of the service"
 NAME=turnkey-init-fence
 DAEMON=/usr/lib/inithooks/bin/simplehttpd.py
-PIDFILE=/var/run/simplehttpd.pid
+PIDFILE=/var/run/$NAME/simplehttpd.pid
 SCRIPTNAME=/etc/init.d/$NAME
 
 # Exit if the package is not installed
@@ -48,8 +48,8 @@ do_start()
 	#   2 if daemon could not be started
 	start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON --test > /dev/null \
 		|| return 1
-	start-stop-daemon --start --pidfile $PIDFILE --exec $DAEMON -- \
-		--daemonize=$PIDFILE $WEBROOT 127.0.0.1:$HTTP_FENCE_PORT 127.0.0.1:$HTTPS_FENCE_PORT $HTTPS_FENCE_CERTFILE \
+	start-stop-daemon --start --chuid $RUNAS --pidfile $PIDFILE --exec $DAEMON -- \
+        --daemonize=$PIDFILE $WEBROOT 127.0.0.1:$HTTP_FENCE_PORT 127.0.0.1:$HTTPS_FENCE_PORT $HTTPS_FENCE_CERTFILE \
 		|| return 2
 	# Add code here, if necessary, that waits for the process to be ready
 	# to handle requests from services started subsequently which depend
