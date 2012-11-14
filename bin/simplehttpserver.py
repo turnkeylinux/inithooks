@@ -1,13 +1,24 @@
 #!/usr/bin/python
-"""Simple HTTP server"""
+"""
+Simple HTTP server
+
+Options:
+
+    --daemonize=/path/to/pidfile
+
+"""
 import os
+from os.path import exists, abspath
+
 import sys
+import getopt
+
 import SimpleHTTPServer
 import SocketServer
 import select
 import ssl
 
-from os.path import exists, abspath
+import stdtrap
 
 class Error(Exception):
     pass
@@ -18,7 +29,7 @@ def fatal(e):
 
 def usage(e=None):
     print >> sys.stderr, "Error: " + str(e)
-    print >> sys.stderr, "Syntax: %s /path/to/webroot [address:]http-port [ [ssl-address:]ssl-port /path/to/pem ]" % sys.argv[0]
+    print >> sys.stderr, "Syntax: %s [ -options ] /path/to/webroot [address:]http-port [ [ssl-address:]ssl-port /path/to/pem ]" % sys.argv[0]
     print >> sys.stderr, __doc__.strip()
     sys.exit(1)
 
@@ -46,33 +57,41 @@ def serve_forever(server1,server2):
         if server2 in r:
             server2.handle_request()
 
-def main():
-    args = sys.argv[1:]
-    if not args or "-h" in args:
-        usage()
+def is_writeable(path):
+    if not os.path.exists(path):
+        path = os.path.dirname(path)
 
-    if len(args) not in (2, 4):
-        usage("incorrect number of arguments")
+    return os.access(path, os.W_OK)
 
-    webroot_path = abspath(args[0])
+def daemonize(pidfile):
+    pid = os.fork()
+    if pid != 0:
+        print >> file(pidfile, "w"), "%d" % pid
+        sys.exit(1)
+
+    os.chdir("/")
+    os.setsid()
+
+    devnull = file("/dev/null", "w")
+    os.dup2(devnull.fileno(), sys.stdout.fileno())
+    os.dup2(devnull.fileno(), sys.stderr.fileno())
+
+    devnull = file("/dev/null", "r")
+    os.dup2(devnull.fileno(), sys.stdin.fileno())
+
+def simplewebserver(webroot, http_address, https_address, certfile):
 
     httpd = None
-    if args[1] not in ("", "0"):
-        address, port = parse_address(args[1])
-        httpd = SocketServer.TCPServer((address, port), SimpleHTTPServer.SimpleHTTPRequestHandler)
+    if http_address:
+        httpd = SocketServer.TCPServer(http_address, SimpleHTTPServer.SimpleHTTPRequestHandler)
 
     httpsd = None
-    if len(args) > 2:
-        address, port = parse_address(args[2])
-        certfile = args[3]
-        if not exists(certfile):
-            fatal("no such file '%s'" % certfile)
-        certfile = os.path.abspath(certfile)
-
-        httpsd = SocketServer.TCPServer((address, port), SimpleHTTPServer.SimpleHTTPRequestHandler)
+    if https_address:
+        httpsd = SocketServer.TCPServer(https_address, SimpleHTTPServer.SimpleHTTPRequestHandler)
         httpsd.socket = ssl.wrap_socket (httpsd.socket, certfile=certfile, server_side=True)
 
-    os.chdir(webroot_path)
+    orig_cwd = os.getcwd()
+    os.chdir(webroot)
 
     if httpsd and httpd:
         serve_forever(httpd, httpsd)
@@ -80,6 +99,52 @@ def main():
         httpd.serve_forever()
     elif httpsd:
         httpsd.serve_forever()
+
+    os.chdir(orig_cwd)
+
+def main():
+    args = sys.argv[1:]
+    try:
+        opts, args = getopt.gnu_getopt(sys.argv[1:], 'h', ["daemonize="])
+    except getopt.GetoptError, e:
+        usage(e)
+
+    daemonize_pidfile = None
+    for opt, val in opts:
+        if opt == '-h':
+            usage()
+
+        if opt == '--daemonize':
+            daemonize_pidfile = abspath(val)
+
+    if not args:
+        usage()
+
+    if len(args) not in (2, 4):
+        usage("incorrect number of arguments")
+
+    if daemonize_pidfile and not is_writeable(daemonize_pidfile):
+        fatal("pidfile '%s' not writeable" % daemonize_pidfile)
+
+    webroot = abspath(args[0])
+
+    http_address = None
+    if args[1] not in ("", "0"):
+        http_address = parse_address(args[1])
+
+    certfile = None
+    https_address = None
+    if len(args) > 2:
+        https_address = parse_address(args[2])
+        certfile = args[3]
+        if not exists(certfile):
+            fatal("no such file '%s'" % certfile)
+        certfile = os.path.abspath(certfile)
+
+    if daemonize_pidfile:
+        daemonize(daemonize_pidfile)
+
+    simplewebserver(webroot, http_address, https_address, certfile)
 
 if __name__ == "__main__":
     main()
