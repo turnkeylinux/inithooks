@@ -1,0 +1,7 @@
+#!/bin/bash
+
+CODENAME=$(cat /etc/hostname)
+sed -i "s/\$CODENAME/$CODENAME/" /var/lib/inithooks/turnkey-init-fence/htdocs/index.html
+
+update-rc.d turnkey-init-fence defaults
+/etc/init.d/turnkey-init-fence start
