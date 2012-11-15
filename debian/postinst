@@ -1,0 +1,6 @@
+#!/bin/sh
+
+mkdir -p /var/run/turnkey-init-fence
+
+#DEBHELPER#
+exit 0
