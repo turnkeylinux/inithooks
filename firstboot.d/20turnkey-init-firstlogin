@@ -1,7 +1,11 @@
 #!/bin/bash
 
+PROFILE_FIRSTLOGIN=/root/.profile.d/turnkey-init-firstlogin
+[ -f $PROFILE_FIRSTLOGIN ] && chmod +x $PROFILE_FIRSTLOGIN
+
 CODENAME=$(cat /etc/hostname)
 sed -i "s/\$CODENAME/$CODENAME/" /var/lib/inithooks/turnkey-init-fence/htdocs/index.html
 
 update-rc.d turnkey-init-fence defaults
 /etc/init.d/turnkey-init-fence start
+
