@@ -26,6 +26,8 @@ import pwd
 import grp
 import temp
 
+import signal
+
 class Error(Exception):
     pass
 
@@ -206,6 +208,11 @@ def main():
 
     if daemonize_pidfile:
         daemonize(daemonize_pidfile, logfile)
+
+    def handler(signum, stack):
+        print "caught signal (%d), exiting" % signum
+        sys.exit(1)
+    signal.signal(signal.SIGTERM, handler)
 
     simplewebserver(webroot, http_address, https_address, certfile, runas)
 
