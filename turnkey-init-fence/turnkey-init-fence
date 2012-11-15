@@ -37,6 +37,47 @@ SCRIPTNAME=/etc/init.d/$NAME
 # and status_of_proc is working.
 . /lib/lsb/init-functions
 
+iptables_delete_redirect()
+{
+    dport=$1
+    to_port=$2
+
+    while true; do
+        (2>&1 iptables -t nat -D PREROUTING -p tcp --dport $dport -j REDIRECT --to-port $to_port) > /dev/null || break
+            
+    done
+}
+
+iptables_add_redirect() 
+{
+    dport=$1
+    to_port=$2
+
+    iptables_delete_redirect $1 $2
+    iptables -t nat -A PREROUTING -p tcp --dport $dport -j REDIRECT --to-port $to_port
+}
+
+
+iptables_redirect()
+{
+    case "$1" in
+      start)
+          op=iptables_add_redirect
+        ;;
+      stop)
+          op=iptables_delete_redirect
+        ;;
+    esac
+
+    for port in $HTTP_PORTS; do
+        $op $port $HTTP_FENCE_PORT
+    done
+
+    for port in $HTTPS_PORTS; do
+        $op $port $HTTPS_FENCE_PORT
+    done
+}
+
 #
 # Function that starts the daemon/service
 #
@@ -49,11 +90,13 @@ do_start()
     start-stop-daemon --start --quiet --pidfile $PIDFILE --name $(basename $DAEMON) --startas $DAEMON --test > /dev/null \
 		|| return 1
 	start-stop-daemon --start --chuid $RUNAS --pidfile $PIDFILE --exec $DAEMON -- \
-        --daemonize=$PIDFILE $WEBROOT 127.0.0.1:$HTTP_FENCE_PORT 127.0.0.1:$HTTPS_FENCE_PORT $HTTPS_FENCE_CERTFILE \
-		|| return 2
+        --daemonize=$PIDFILE $WEBROOT $HTTP_FENCE_PORT $HTTPS_FENCE_PORT $HTTPS_FENCE_CERTFILE
+
 	# Add code here, if necessary, that waits for the process to be ready
 	# to handle requests from services started subsequently which depend
 	# on this one.  As a last resort, sleep for some time.
+
+    iptables_redirect start
 }
 
 #
@@ -79,20 +122,10 @@ do_stop()
 	[ "$?" = 2 ] && return 2
 	# Many daemons don't delete their pidfiles when they exit.
 	rm -f $PIDFILE
-	return "$RETVAL"
-}
 
-#
-# Function that sends a SIGHUP to the daemon/service
-#
-do_reload() {
-	#
-	# If the daemon can reload its configuration without
-	# restarting (for example, when it is sent a SIGHUP),
-	# then implement that here.
-	#
-	start-stop-daemon --stop --signal 1 --quiet --pidfile $PIDFILE --name $NAME
-	return 0
+    iptables_redirect stop
+
+	return "$RETVAL"
 }
 
 case "$1" in
@@ -115,16 +148,7 @@ case "$1" in
   status)
        status_of_proc "$DAEMON" "$NAME" && exit 0 || exit $?
        ;;
-  #reload|force-reload)
-	#
-	# If do_reload() is not implemented then leave this commented out
-	# and leave 'force-reload' as an alias for 'restart'.
-	#
-	#log_daemon_msg "Reloading $DESC" "$NAME"
-	#do_reload
-	#log_end_msg $?
-	#;;
-  restart|force-reload)
+  restart)
 	#
 	# If the "reload" option is implemented then remove the
 	# 'force-reload' alias
@@ -147,8 +171,7 @@ case "$1" in
 	esac
 	;;
   *)
-	#echo "Usage: $SCRIPTNAME {start|stop|restart|reload|force-reload}" >&2
-	echo "Usage: $SCRIPTNAME {start|stop|status|restart|force-reload}" >&2
+	echo "Usage: $SCRIPTNAME {start|stop|status|restart}" >&2
 	exit 3
 	;;
 esac
