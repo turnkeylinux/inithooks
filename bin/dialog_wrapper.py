@@ -1,13 +1,10 @@
 # Copyright (c) 2010 Alon Swartz <alon@turnkeylinux.org>
 
 import re
-import os
 import sys
 import dialog
 import traceback
 from StringIO import StringIO
-
-import executil
 
 email_re = re.compile(r"(?:^|\s)[-a-z0-9_.]+@(?:[-a-z0-9]+\.)+[a-z]{2,6}(?:\s|$)",re.IGNORECASE)
 
@@ -38,11 +35,11 @@ class Dialog:
 
         return height
 
-    def wrapper(self, dialog, text, *args, **kws):
+    def wrapper(self, dialog_name, text, *args, **kws):
         try:
-            method = getattr(self.console, dialog)
-        except AttibuteError:
-            raise Error("dialog not supported: " + dialog)
+            method = getattr(self.console, dialog_name)
+        except AttributeError:
+            raise Error("dialog not supported: " + dialog_name)
 
         while 1:
             try:
@@ -55,7 +52,7 @@ class Dialog:
                 if self._handle_exitcode(retcode):
                     break
 
-            except Exception, e:
+            except Exception:
                 sio = StringIO()
                 traceback.print_exc(file=sio)
 
@@ -124,9 +121,9 @@ class Dialog:
 
     def get_input(self, title, text, init=''):
         while 1:
-            input = self.inputbox(title, text, init, "Apply", "")[1]
-            if not input:
+            s = self.inputbox(title, text, init, "Apply", "")[1]
+            if not s:
                 self.error('%s is required.' % title)
                 continue
 
-            return input
+            return s
