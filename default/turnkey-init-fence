@@ -1,4 +1,4 @@
-WEBROOT=/usr/share/inithooks/turnkey-init-fence/htdocs
+WEBROOT=/var/lib/inithooks/turnkey-init-fence/htdocs
 HTTP_PORTS=80
 HTTPS_PORTS=443
 

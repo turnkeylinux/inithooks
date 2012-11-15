@@ -4,7 +4,7 @@ firstboot.d/*       /usr/lib/inithooks/firstboot.d
 run                 /usr/lib/inithooks
 
 turnkey-init-fence/turnkey-init-fence /etc/init.d
-turnkey-init-fence/htdocs /usr/share/inithooks/turnkey-init-fence
+turnkey-init-fence/htdocs /var/lib/inithooks/turnkey-init-fence
 
 turnkey-init                /usr/sbin
 install-security-updates    /usr/sbin
