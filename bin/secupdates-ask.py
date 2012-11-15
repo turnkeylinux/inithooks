@@ -4,6 +4,7 @@
 
 import sys
 import getopt
+import signal
 
 from executil import ExecError, getoutput
 from dialog_wrapper import Dialog
@@ -32,6 +33,7 @@ def usage(s=None):
     sys.exit(1)
 
 def main():
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
     try:
         opts, args = getopt.gnu_getopt(sys.argv[1:], "h", ['help'])
     except getopt.GetoptError, e:
