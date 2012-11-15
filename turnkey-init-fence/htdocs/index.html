@@ -1,17 +1,46 @@
-<title>Please initialize this system</title>
+<html>
+<head><title>Initialization required</title></head>
+<style type="text/css">
+body {
+	font-size: 1.5em;
+}
+</style>
 <body>
+    <h1>Please initialize this system...</h1>
 
-You need to initialize this appliance first before you can use it. To do
-that you'll need to log in as root. The initialization program will
-start automatically. You can log in using the <script type="text/javascript">
-    document.write("<a href='https://" + document.domain + ":12320/'>web shell</a>")
-</script> or using a native SSH client (e.g., Putty on Windows).
+    <p>Welcome to TurnKey! You need to initialize this system first before you can use it. To do
+that you'll need to log into the root account. The <i>turnkey-init</i> initialization program will start automatically:</p>
 
-<p>If you haven't setup SSH key authentication, you'll need to get the
-random root password from the EC2 console. It's printed at the bottom so
-please scroll all the way down.  <p>
+<img src="/turnkey-init.png" />
 
-For further information regarding this appliance, please consult the <a
-href="http://www.turnkeylinux.org/$CODENAME">product page</a> on
+<h2>Can I log in without SSH?</h2>
+
+<p>Yes. Point your browser at this machine's 
+
+<script type="text/javascript">
+    document.write("<a href='https://" + document.domain + ":12320/'>")
+</script>
+web shell
+<script type="text/javascript">
+    document.write("</a>")
+</script>
+:</p>
+
+<script type="text/javascript">
+    document.write("<a href='https://" + document.domain + ":12320/'>")
+</script>
+<img src="/webshell.png" />
+<script type="text/javascript">
+    document.write("</a>")
+</script>
+
+<h2>For more information, visit our website!</h2>
+
+<p>For further information regarding this appliance, please consult the
+<a href="http://www.turnkeylinux.org/$CODENAME">product page</a> on
 the <a href="http://www.turnkeylinux.org">TurnKey Linux</a> website.
+
+</p>
 </body>
+</html>
+
