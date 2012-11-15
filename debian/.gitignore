@@ -1,2 +1,6 @@
 changelog
 inithooks
+files
+*.log
+*.debhelper
+*.substvars
