@@ -11,16 +11,9 @@
 # 
 """
 Execute firstboot initialization hooks, skipping blacklist
-
-Options:
-
-    --disable         Set TURNKEYINIT_ENABLED to false, and exit
-    --enable          Set TURNKEYINIT_ENABLED to true, and exit
-    --force           Force execution even if TURNKEYINIT_ENABLED is not true
 """
 import os
 import sys
-import getopt
 
 from conffile import ConfFile
 from executil import system, ExecError
@@ -33,7 +26,7 @@ def usage(e=None):
     if e:
         print >> sys.stderr, "error: " + str(e)
 
-    print >> sys.stderr, "Syntax: %s [options]" % (sys.argv[0])
+    print >> sys.stderr, "Syntax: %s" % (sys.argv[0])
     print >> sys.stderr, __doc__.strip()
     print >> sys.stderr, "\nBlacklist:\n"
     for script in BLACKLIST:
@@ -56,22 +49,6 @@ BLACKLIST = [
 class Config(ConfFile):
     CONF_FILE = "/etc/default/inithooks"
 
-    @property
-    def is_enabled(self):
-        if "turnkeyinit_enabled" in self.keys():
-            if self.turnkeyinit_enabled.lower() == "true":
-                return True
-
-        return False
-
-    def enable(self):
-        self.turnkeyinit_enabled = "true"
-        self.write()
-
-    def disable(self):
-        self.turnkeyinit_enabled = "false"
-        self.write()
-
 class InitHooks:
     def __init__(self):
         self.conf = Config()
@@ -81,7 +58,7 @@ class InitHooks:
         try:
             env = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
             system("%s %s" % (env, cmd))
-        except ExecError, e:
+        except ExecError:
             pass
 
     def execute(self, dname):
@@ -97,55 +74,12 @@ class InitHooks:
                 self._exec(fpath)
 
 def main():
-    try:
-        opts, args = getopt.gnu_getopt(sys.argv[1:], "h", 
-                                       ["help", "disable", "enable", "force"])
-    except getopt.GetoptError, e:
-        usage(e)
-
-    disable = False
-    enable = False
-    force = False
-    for opt, val in opts:
-        if opt in ('-h', '--help'):
-            usage()
-
-        if opt == "--disable":
-            disable = True
-
-        if opt == "--enable":
-            enable = True
-
-        if opt == "--force":
-            force = True
-
-    if len(args) > 0:
-        usage("invalid arguments")
-
-    if (enable, disable, force).count(True) > 1:
-        usage("options are mutually exclusive")
+    args = sys.argv[1:]
+    if args and args[0] in ('-h', '--help'):
+        usage()
 
     inithooks = InitHooks()
-
-    if disable:
-        inithooks.conf.disable()
-        print "TURNKEYINIT_ENABLED set to 'false'"
-        sys.exit(0)
-
-    if enable:
-        inithooks.conf.enable()
-        print "TURNKEYINIT_ENABLED set to 'true'"
-        sys.exit(0)
-
-    if force:
-        inithooks.conf.enable()
-
-    if inithooks.conf.is_enabled:
-        inithooks.execute('firstboot.d')
-        inithooks.conf.disable()
-    else:
-        fatal("turnkey-init is disabled.")
-
+    inithooks.execute('firstboot.d')
 
 if __name__ == "__main__":
     main()
