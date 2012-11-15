@@ -6,6 +6,7 @@ Simple HTTP server
 
 Options:
 
+    --runas=username
     --daemonize=/path/to/pidfile
     --logfile=/path/to/logfile
 
@@ -21,7 +22,9 @@ import SocketServer
 import select
 import ssl
 
-import stdtrap
+import pwd
+import grp
+import temp
 
 class Error(Exception):
     pass
@@ -85,7 +88,37 @@ def daemonize(pidfile, logfile=None):
     devnull = file("/dev/null", "r")
     os.dup2(devnull.fileno(), sys.stdin.fileno())
 
-def simplewebserver(webroot, http_address, https_address, certfile):
+def drop_privileges(user):
+    pwent = pwd.getpwnam(user)
+    uid, gid, home = pwent[2], pwent[3], pwent[5]
+    os.unsetenv("XAUTHORITY")
+    os.putenv("USER", user)
+    os.putenv("HOME", home)
+
+    usergroups = []
+    groups = grp.getgrall()
+    for group in groups:
+        if user in group[3]:
+            usergroups.append(group[2])
+
+    os.setgroups(usergroups)
+    os.setgid(gid)
+    os.setuid(uid)
+
+def simplewebserver(webroot, http_address=None, https_address=None, certfile=None, runas=None):
+    if https_address and not certfile:
+        raise Error("certfile needed to use HTTPS")
+
+    if runas and certfile:
+        # copy over certfile to a temporary file owned by runas
+        tempfile = temp.TempFile()
+        file(tempfile.path, "w").write(file(certfile).read())
+
+        pwent = pwd.getpwnam(runas)
+        os.chown(tempfile.path, pwent.pw_uid, pwent.pw_gid)
+        os.chmod(tempfile.path, 0600)
+
+        certfile = tempfile.path
 
     httpd = None
     if http_address:
@@ -99,6 +132,9 @@ def simplewebserver(webroot, http_address, https_address, certfile):
     orig_cwd = os.getcwd()
     os.chdir(webroot)
 
+    if runas:
+        drop_privileges(runas)
+
     if httpsd and httpd:
         serve_forever(httpd, httpsd)
     elif httpd:
@@ -111,12 +147,14 @@ def simplewebserver(webroot, http_address, https_address, certfile):
 def main():
     args = sys.argv[1:]
     try:
-        opts, args = getopt.gnu_getopt(sys.argv[1:], 'h', ["daemonize=", "logfile="])
+        opts, args = getopt.gnu_getopt(sys.argv[1:], 'h', ["daemonize=", "logfile=", "runas="])
     except getopt.GetoptError, e:
         usage(e)
 
     daemonize_pidfile = None
     logfile = None
+    runas = None
+
     for opt, val in opts:
         if opt == '-h':
             usage()
@@ -126,6 +164,14 @@ def main():
 
         if opt == '--logfile':
             logfile = abspath(val)
+
+        if opt == '--runas':
+            try:
+                pwd.getpwnam(val)
+            except KeyError:
+                fatal("no such user '%s'" % val)
+
+            runas = val
 
     if not args:
         usage()
@@ -161,7 +207,7 @@ def main():
     if daemonize_pidfile:
         daemonize(daemonize_pidfile, logfile)
 
-    simplewebserver(webroot, http_address, https_address, certfile)
+    simplewebserver(webroot, http_address, https_address, certfile, runas)
 
 if __name__ == "__main__":
     main()
