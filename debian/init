@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2009 Alon Swartz <alon@turnkeylinux.org> - all rights reserved
+# Copyright (c) 2009 Alon Swartz <alon@turnkeylinux.org>
 
 ### BEGIN INIT INFO
 # Provides:          inithooks
