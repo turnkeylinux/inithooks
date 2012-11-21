@@ -41,7 +41,6 @@ BLACKLIST = [
     '26ec2-resizerootfs',
     '29preseed',
     '40ec2-sshkeys',
-    '50auto-apt-archive',
     '82tklbam-restore',
     '92etckeeper',
 ]
