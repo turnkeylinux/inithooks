@@ -15,8 +15,6 @@ import subprocess
 from subprocess import PIPE
 import signal
 
-import lsb_release
-
 from dialog_wrapper import Dialog
 
 def fatal(s):
@@ -57,10 +55,6 @@ def main():
 
     command = ["chpasswd"]
     input = ":".join([username, password])
-
-    # ugly hack to support lenny
-    if lsb_release.get_distro_information()['CODENAME'] == 'lenny':
-        command.append("-m")
 
     p = subprocess.Popen(command, stdin=PIPE, shell=False)
     p.stdin.write(input)
