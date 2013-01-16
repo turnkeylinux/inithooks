@@ -6,7 +6,7 @@ Build-Depends: debhelper (>> 4.2.0)
 Standards-Version: 3.6.1
 
 Package: inithooks
-Architecture: all
+Architecture: any
 Depends: kbd, turnkey-pylib
 Section: admin
 Description: Executes firstboot and everyboot scripts
