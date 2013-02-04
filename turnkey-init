@@ -80,6 +80,13 @@ def main():
     inithooks = InitHooks()
     inithooks.execute('firstboot.d')
 
+    confconsole = '/usr/bin/confconsole'
+    if os.path.exists(confconsole) and os.access(confconsole, os.X_OK):
+        try:
+            system(confconsole, '--usage')
+        except ExecError:
+            pass
+
 if __name__ == "__main__":
     main()
 
