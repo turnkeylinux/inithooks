@@ -27,7 +27,7 @@ case "$1" in
     if [ "$INITHOOKS_CHVT" ]; then
         setterm -blank 0
         chvt 1
-        openvt -c 8 -s -w -- $INITHOOKS_PATH/run
+        openvt -c 8 -s -w -b -- $INITHOOKS_PATH/run
     else
         $INITHOOKS_PATH/run
     fi
