@@ -17,6 +17,7 @@ NAME=inithooks
 
 # Check if VT's are supported
 fgconsole >/dev/null 2>&1 && INITHOOKS_CHVT=y
+dpkg -s console-tools >/dev/null 2>&1 && OPENVT_EXTRA_OPTS="-b"
 
 . /lib/lsb/init-functions
 . /etc/default/inithooks
@@ -27,7 +28,7 @@ case "$1" in
     if [ "$INITHOOKS_CHVT" ]; then
         setterm -blank 0
         chvt 1
-        openvt -c 8 -s -w -b -- $INITHOOKS_PATH/run
+        openvt -c 8 -s -w $OPENVT_EXTRA_OPTS -- $INITHOOKS_PATH/run
     else
         $INITHOOKS_PATH/run
     fi
