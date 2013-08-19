@@ -75,7 +75,7 @@ class Dialog:
     def inputbox(self, title, text, init='', ok_label="OK", cancel_label="Cancel"):
         height = self._calc_height(text) + 3
         no_cancel = True if cancel_label == "" else False
-        return self.wrapper("inputbox", text, height, self.width, title=title, 
+        return self.wrapper("inputbox", text, height, self.width, title=title,
                             init=init, ok_label=ok_label, cancel_label=cancel_label,
                             no_cancel=no_cancel)
 
@@ -86,9 +86,19 @@ class Dialog:
 
         return True if retcode is 0 else False
 
+    def menu(self, title, text, choices):
+        """choices: array of tuples
+            [ (opt1, opt1_text), (opt2, opt2_text) ]
+        """
+        retcode, choice = self.wrapper("menu", text, self.height, self.width,
+                                       menu_height=len(choices)+1,
+                                       title=title, choices=choices,
+                                       no_cancel=True)
+        return choice
+
     def get_password(self, title, text, min_length=1):
         def ask(title, text):
-            return self.wrapper('passwordbox', text, title=title, 
+            return self.wrapper('passwordbox', text, title=title,
                                 ok_label='OK', no_cancel='True')[1]
 
         while 1:
@@ -127,3 +137,4 @@ class Dialog:
                 continue
 
             return s
+
