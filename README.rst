@@ -2,21 +2,29 @@
 Initialization Hooks (inithooks) - TurnKey initialization, configuration and preseeding
 =======================================================================================
 
-The intended audience for this page are:
+The intended readers of this page are:
+
+- Appliance developers interested in learning how TurnKey works under
+  the hood and developing their own configuration hooks.
 
 - Hosting providers and private cloud operators interested in
-  integrating TurnKey with their virtualization / private cloud system.
-
-- Appliance developers interested in how TurnKey works under the hood.
-
-Inithook design goals
+  implementing tight integration between TurnKey and custom control
+  panels. 
+  
+  This isn't a requirement, just a bonus. TurnKey images can be deployed
+  like any other Debian or Debian-based image, using your existing
+  deployments scripts. If you can deploy Debian or Ubuntu it should
+  be trivial to deploy TurnKey.
+  
+Inithook design goals 
 ---------------------
 
 The inithooks package executes system initialization scripts
 which:
 
-- **Regenerate secret keys (e.g., SSH, default SSL certificate)**:
-  necessary to avoid man in the middle attacks
+- **Regenerate secret keys (e.g., SSH, default SSL certificate)**: This
+  isn't just a good idea, it's necessary to avoid man in the middle
+  attacks.
 
 - **Set passwords (e.g., root, database, application)**: necessary to avoid the risk
   of `hardwired default passwords <http://www.turnkeylinux.org/blog/end-to-default-passwords>`_ 
@@ -39,9 +47,9 @@ scripts themselves,
 These scripts are located in two sub-directories under
 /usr/lib/inithooks - everyboot.d and firstboot.d. 
 
-They are  executed in alphanumeric ordering.  This means a script named
+They are executed in alphanumeric ordering. This means a script named
 1-foo would be executed before 2-bar, which would itself be executed
-before 3-foobar.  That's why scripts in these directories have funny
+before 3-foobar. That's why scripts in these directories have funny
 numbers at the beginning.  
 
 The inithooks top-level init script is executed early on in system
@@ -75,61 +83,64 @@ following conditions:
    non-interactive, depending on the type of build.
 
    **Interactive mode on non-headless builds - Live CD ISO, VMDK and
-   OVF**: With these image types interactive access to the virtual console
-   during boot is expected so some of the inithooks initialization
-   scripts will interact with the user via text dialogs the first time
-   the system boots (e.g., ask for passwords, application settings,
-   etc.). These are the same scripts that get executed if you run
-   "turnkey-init".
+   OVF**: With these image types interactive access to the virtual
+   console during boot is expected so some of the inithooks
+   initialization scripts will interact with the user via text dialogs
+   the first time the system boots (e.g., ask for passwords,
+   application settings, etc.). These are the same scripts that get
+   executed if you run "turnkey-init".
 
    **Non-interactive mode on headless builds - OpenStack, OpenVZ,
    OpenNode, Xen**: with these image types interactive access to the
    virtual console during boot can not be assumed.  The first boot has
-   to be capable of running non-interactively, otherwise we would risk
+   to be capable of running non-interactively, otherwise we risk
    hanging the boot while it waits for user interaction that never
    happens.
    
    So instead of interacting with the user the system pre-initializes
    application settings with dummy defaults and set all passwords to a
-   random value.  The output from the non-interactive running of the
-   firstboot scripts is logged to /var/log/inithooks.log.
+   random value. If a root password has already been set (e.g., in a
+   pre-deployment script) the headless preseeding script will not
+   overwrite it, so your root password should work just fine.
+   
+   The output from the non-interactive running of the firstboot
+   scripts is logged to /var/log/inithooks.log.
 
    Interactive appliance configuration is delayed until the first time
    the user logs in as root. This is accomplished with the help of the
    /usr/lib/inithooks/firstboot.d/29preseed hook, which only exists on
    headless builds::
 
-        #!/bin/bash -e
-        # generic preseeding of inithooks.conf if it doesn't exist
+    #!/bin/bash -e
+    # generic preseeding of inithooks.conf if it doesn't exist
 
-        # activate the initfence if it hasn't been explicitly turned off
-        if ! [ -e $INITHOOKS_CONF ] || ! grep -i -q "INITFENCE=SKIP" $INITHOOKS_CONF; then
-            chmod +x /usr/lib/inithooks/firstboot.d/30turnkey-init-firstlogin
-        fi
+    [ -e $INITHOOKS_CONF ] && exit 0
 
-        [ -e $INITHOOKS_CONF ] && exit 0
+    MASTERPASS=$(mcookie | cut --bytes 1-8)
 
-        MASTERPASS=$(mcookie | cut --bytes 1-8)
+    cat>$INITHOOKS_CONF<<EOF
+    export ROOT_PASS=$MASTERPASS
+    export DB_PASS=$MASTERPASS
+    export APP_PASS=$MASTERPASS
+    export APP_EMAIL=admin@example.com
+    export APP_DOMAIN=DEFAULT
+    export HUB_APIKEY=SKIP
+    export SEC_UPDATES=FORCE
+    EOF
 
-        cat>$INITHOOKS_CONF<<EOF
-        export ROOT_PASS=$MASTERPASS
-        export DB_PASS=$MASTERPASS
-        export APP_PASS=$MASTERPASS
-        export APP_EMAIL=admin@example.com
-        export APP_DOMAIN=DEFAULT
-        export HUB_APIKEY=SKIP
-        export SEC_UPDATES=FORCE
-        EOF
+    chmod +x /usr/lib/inithooks/firstboot.d/30turnkey-init-firstlogin
 
-   **Initialization fence**: the above headless preseeding hook also activates the
-   "initialization fence" mechanism. It uses iptables to
-   redirect attempts to access the local web server to a static web page
-   which explains that you need to log in as root first in order to
-   finish initializing the system. The fence is used to prevent users
-   from accessing possibly insecure uninitialized web ap, possibly insecure 
+
+   **Initialization fence**: the above headless preseeding hook also
+   activates the "initialization fence" mechanism which uses iptables
+   to redirect attempts to access the local web server to a static web
+   page. This page explains you need to log in as root first in order
+   to finish initializing the system. The purpose of the fence is used
+   to prevent users from accessing uninitialized web applications,
+   which in some cases can pose a security risk.
 
    After the user logs in as root and completes the initialization
-   process the "initialization fence" is turned off so that users can
+   process the "initialization fence" is turned off. Users can then
    access applications running on the local web server.
 
 everyboot.d scripts
@@ -144,33 +155,41 @@ Setting the root password in a headless deployment
 --------------------------------------------------
 
 On headless deployments the user needs to login as root to complete the
-appliance initialization process, but how do you login as root if you
-don't know the random root password?
+appliance initialization process, but how do you login as root?
 
-On OpenStack you can log in with your configured SSH keypair or retrieve
-the random root password from the "system log". 
+Not a problem if you're using OpenNode or ProxMox - those systems
+prompt you to choose a root password before deploying a TurnKey image.
 
-If you're using ProxMox or OpenNode you're in luck because they are
-already integrated with TurnKey and let you choose your root password.
+On OpenStack you can log in as root with your configured SSH keypair
+or retrieve the random root password from the "system log". 
 
-Other virtualization / private cloud solutions will need to be
-configured to "preseed" a /etc/inithooks.conf file in the appliance's
-filesystem before booting it for the first time. See below for
-additional details on the preseeding mechanism.
+Other virtualization / private cloud solutions should be able to use
+their existing deployment scripts to set the root password, just like
+they already do with Debian and Ubuntu.
+
+Another more advanced option is to "preseed" the /etc/inithooks.conf
+file in the apliance's filesystem before booting it for the first
+time. This lets you leverage inithooks to pre-configure not just the
+root password but also the database and application passwords, admin
+email, domain name, etc.
+
+However note that using preseeding deactivates the "initilization
+fence". If you're using preseeding TurnKey assumes you've already
+interacted with the user some other way (e.g., web control panel) to
+get the preseeded configuration values.
 
 Preseeding
 ----------
 
 By default, when an appliance is run for the first time, the firstboot
-scripts will prompt the user interactively, through the virtual console,
-to choose various passwords and basic application configuration
-settings. This is what happens in the non-headless builds (e.g., ISO,
-VMDK, OVF).
- 
+scripts will prompt the user interactively, through the virtual
+console, to choose various passwords and basic application
+configuration settings. 
+
 It is possible to bypass this interactive configuration process by
 creating /etc/inithooks.conf in the appliance filesystem and
-writing inithooks configuration variables into it before inithooks
-runs for the first time. For example:
+writing inithooks configuration variables into it before the
+first system boot. For example:
 ::
 
     cat>/etc/inithooks.conf<<EOF
@@ -181,8 +200,9 @@ runs for the first time. For example:
     APP_PASS=webappadminpassword
     EOF
 
-Don't worry after the first boot, inithooks blanks out /etc/inithooks.conf so
-important passwords aren't left in the clear.
+Don't worry about leaving sensitive passwords in there: after the
+first boot, inithooks blanks /etc/inithooks.conf out so important
+passwords aren't accidentally left in the clear.
 
 This preseeding mechanism makes it relatively easy to integrate TurnKey
 with custom control panels, virtualization solutions, etc.
@@ -190,7 +210,7 @@ with custom control panels, virtualization solutions, etc.
 How exactly you create /etc/inithooks.conf is up to you and the
 capabilities of the virtualization platform you are using. For example,
 many virtualization platforms provide a facility through which you can
-run scripts or add files to the filesystem before the first boot .
+run scripts or add files to the filesystem before the first boot.
 
 List of initialization hooks and preseeding configuration parameters
 --------------------------------------------------------------------
