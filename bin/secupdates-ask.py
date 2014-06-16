@@ -20,9 +20,9 @@ This can take a few minutes. You need to be online.
 
 CONNECTIVITY_ERROR = """Unable to connect to package archive.
 
-Please try again once your network settings are configured by using the following shell command (output will be available in /var/log/cron-apt/log):
+Please try again once your network settings are configured by using the following shell command:
 
-    cron-apt
+    turnkey-install-security-updates
 """
 
 def usage(s=None):
