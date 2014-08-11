@@ -15,8 +15,6 @@ import subprocess
 from subprocess import PIPE
 import signal
 
-from dialog_wrapper import Dialog
-
 def fatal(s):
     print >> sys.stderr, "Error:", s
     sys.exit(1)
@@ -47,6 +45,7 @@ def main():
             password = val
 
     if not password:
+        from dialog_wrapper import Dialog
         d = Dialog('TurnKey Linux - First boot configuration')
         password = d.get_password(
             "%s Password" % username.capitalize(),
