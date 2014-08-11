@@ -1,0 +1,31 @@
+#!/bin/bash -e
+# set hostname
+
+. /etc/default/inithooks
+
+[ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
+
+[ -z "$HOSTNAME" ] && exit 0
+
+old=$(hostname)
+
+for file in \
+   /etc/exim4/update-exim4.conf.conf \
+   /etc/printcap \
+   /etc/hostname \
+   /etc/hosts \
+   /etc/ssh/ssh_host_rsa_key.pub \
+   /etc/ssh/ssh_host_dsa_key.pub \
+   /etc/ssh/ssh_host_ecdsa_key.pub \
+   /etc/ssh/ssh_host_ed25519_key.pub \
+   /etc/mailname \
+   /etc/postfix/main.cf \
+   /etc/motd \
+   /etc/ssmtp/ssmtp.conf
+do
+   [ -f $file ] && sed -i.old -e "s:$old:$HOSTNAME:g" $file
+done
+
+hostname $HOSTNAME
+
+exit 0
