@@ -26,6 +26,9 @@ if init_is_upstart; then
  killall -q sshd
 else
  if [ -x /etc/init.d/sshd ]; then
-  /etc/init.d/sshd restart
+  /etc/init.d/sshd status
+  if [ $? -eq 0 ]; then
+   /etc/init.d/sshd restart
+  fi
  fi
 fi
