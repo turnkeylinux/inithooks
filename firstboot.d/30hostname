@@ -23,7 +23,7 @@ for file in \
    /etc/motd \
    /etc/ssmtp/ssmtp.conf
 do
-   [ -f $file ] && sed -i.old -e "s:$old:$HOSTNAME:g" $file
+   [ -f $file ] && sed -i -e "s:$old:$HOSTNAME:g" $file
 done
 
 hostname $HOSTNAME
