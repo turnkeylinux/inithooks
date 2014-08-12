@@ -1,10 +1,34 @@
 #!/bin/bash -e
 # remove existing ssh keys and generate new ones
-# note: ssh daemon needs to be restarted for changes to take effect
 
 echo "* Regenerating SSH cryptographic keys"
 
-rm -f /etc/ssh/ssh_host_[dr]sa_key*
-ssh-keygen -q -f /etc/ssh/ssh_host_rsa_key -N '' -t rsa
-ssh-keygen -q -f /etc/ssh/ssh_host_dsa_key -N '' -t dsa
+init_is_upstart()
+{
+   if [ -x /sbin/initctl ] && /sbin/initctl version 2>/dev/null | /bin/grep -q upstart; then
+       return 0
+   fi
+   return 1
+}
 
+for cipher in rsa dsa ecdsa ed25519
+do
+ keyfile="/etc/ssh/ssh_host_${cipher}_key"
+ if [ -e $keyfile ]; then
+  rm -f $keyfile*
+  ssh-keygen -q -f $keyfile -N '' -t $cipher
+ fi
+done
+
+find /etc/ssh -name '*_key*' -mtime +1 -exec rm -f {} \;
+
+if init_is_upstart; then
+ killall -q sshd
+else
+ if [ -x /etc/init.d/sshd ]; then
+  /etc/init.d/sshd status
+  if [ $? -eq 0 ]; then
+   /etc/init.d/sshd restart
+  fi
+ fi
+fi
