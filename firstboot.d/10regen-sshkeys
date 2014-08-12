@@ -20,6 +20,8 @@ do
  fi
 done
 
+find /etc/ssh -name '*_key*' -mtime +1 -exec rm -f {} \;
+
 if init_is_upstart; then
  killall -q sshd
 else
