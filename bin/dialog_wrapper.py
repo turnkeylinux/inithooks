@@ -107,15 +107,15 @@ class Dialog:
                 self.error("Please enter non-empty password.")
                 continue
 
-            try:
-                if not re.match(pass_req, password):
-                    self.error("Password does not match complexity requirements.")
-                    continue
-            except TypeError:
+            if isinstance(pass_req, int):
                 if len(password) < pass_req:
                     self.error("Password must be at least %s characters." % pass_req)
                     continue
-
+            else:
+                if not re.match(pass_req, password):
+                    self.error("Password does not match complexity requirements.")
+                    continue
+                    
             if password == ask(title, 'Confirm password'):
                 return password
 
