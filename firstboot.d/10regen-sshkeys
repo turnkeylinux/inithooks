@@ -4,7 +4,5 @@
 
 echo "* Regenerating SSH cryptographic keys"
 
-rm -f /etc/ssh/ssh_host_[dr]sa_key*
-ssh-keygen -q -f /etc/ssh/ssh_host_rsa_key -N '' -t rsa
-ssh-keygen -q -f /etc/ssh/ssh_host_dsa_key -N '' -t dsa
-
+rm -f /etc/ssh/*_key{,.pub}
+dpkg-reconfigure openssh-server
