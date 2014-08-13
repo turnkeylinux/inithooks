@@ -2,8 +2,10 @@
 
 . /etc/default/inithooks
 
+[ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
+
 # blank out configuration file (usually contains passwords)
-[ -e $INITHOOKS_CONF ] && echo > $INITHOOKS_CONF
+[ -e $INITHOOKS_CONF ] && echo "SEC_UPDATES=$SEC_UPDATES" > $INITHOOKS_CONF
 
 exit 0
 

@@ -8,6 +8,8 @@ grep -qs boot=casper /proc/cmdline && exit 2
 LOGFILE=/var/log/cron-apt/log
 . /etc/default/inithooks
 
+[ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
+
 install_updates() {
     for actionfile in /etc/cron-apt/action.d/*; do
         while read aptcmd; do

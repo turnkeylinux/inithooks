@@ -96,20 +96,25 @@ class Dialog:
                                        no_cancel=True)
         return choice
 
-    def get_password(self, title, text, min_length=1):
+    def get_password(self, title, text, pass_req=6):
         def ask(title, text):
             return self.wrapper('passwordbox', text, title=title,
                                 ok_label='OK', no_cancel='True')[1]
 
         while 1:
             password = ask(title, text)
-            if len(password) < min_length:
-                error = "Password must be at least %s characters." % min_length
-                if not password:
-                    error = "Please enter non-empty password."
-
-                self.error(error)
+            if not password:
+                self.error("Please enter non-empty password.")
                 continue
+
+            try:
+                if not re.match(pass_req, password):
+                    self.error("Password does not match complexity requirements.")
+                    continue
+            except TypeError:
+                if len(password) < pass_req:
+                    self.error("Password must be at least %s characters." % pass_req)
+                    continue
 
             if password == ask(title, 'Confirm password'):
                 return password
