@@ -19,6 +19,7 @@ exec_scripts() {
         [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
         [ -x $SCRIPT ] || continue
         $SCRIPT
+        [ $? -eq 42 ] && init 6 && exit 0
     done
     return 0
 }
