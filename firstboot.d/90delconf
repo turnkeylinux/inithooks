@@ -2,10 +2,10 @@
 
 . /etc/default/inithooks
 
-[ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
+[ ! -e $INITHOOKS_CONF ] &&  exit 0
 
-# blank out configuration file (usually contains passwords)
-[ -e $INITHOOKS_CONF ] && echo "SEC_UPDATES=$SEC_UPDATES" > $INITHOOKS_CONF
+# remove passwords from configuration file
+sed -i '/PASS/ s/=.*/=XXXX/g' $INITHOOKS_CONF
 
 exit 0
 
