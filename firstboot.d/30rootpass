@@ -4,5 +4,9 @@
 . /etc/default/inithooks
 
 [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
-$INITHOOKS_PATH/bin/setpass.py root --pass="$ROOT_PASS"
 
+if [ -n "$ROOT_USER" ]; then
+   $INITHOOKS_PATH/bin/setpass.py $ROOT_USER --pass="$ROOT_PASS"
+else
+   $INITHOOKS_PATH/bin/setpass.py root --pass="$ROOT_PASS"
+fi

@@ -1,0 +1,55 @@
+#!/bin/bash
+# auto grow filesystem for block device based appliances - (c) Aug/2014 by Peter Lieven <pl@kamp.de>
+
+. /etc/default/inithooks
+
+[ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
+
+[ "$AUTOGROW" != "ONCE" ] && [ "$AUTOGROW" != "ALWAYS" ] && exit 0
+[ $(pwd) = "/usr/lib/inithooks/everyboot.d" ] && [ "$AUTOGROW" != "ALWAYS" ] && exit 0
+
+[ -z "$AUTOGROW_DEV" ] && AUTOGROW_DEV=/dev/vda
+[ -z "$AUTOGROW_PART" ] && AUTOGROW_PART="${AUTOGROW_DEV}2"
+[ -z "$AUTOGROW_FS" ] && AUTOGROW_FS=/dev/turnkey/root
+
+DEVSIZE=$(blockdev --getsize $AUTOGROW_DEV)
+
+[ "0$DEVSIZE" -eq 0 ] && exit 1
+
+PARTINFO=$(sfdisk -d -uS $AUTOGROW_DEV | grep $AUTOGROW_PART)
+[ -z "$PARTINFO" ] && exit 1
+
+PARTINFO=${PARTINFO/:/ }
+PARTINFO=${PARTINFO//,/ }
+PARTINFO=${PARTINFO//=/ }
+PARTINFOX=(${PARTINFO})
+
+[ "${PARTINFOX[0]}" != "$AUTOGROW_PART" ] && exit 1
+[ "${PARTINFOX[1]}" != "start" ] && exit 1
+[ "${PARTINFOX[3]}" != "size" ] && exit 1
+[ "${PARTINFOX[5]}" != "Id" ] && exit 1
+
+START=${PARTINFOX[2]}
+SIZE=${PARTINFOX[4]}
+ID=${PARTINFOX[6]}
+
+[ "$ID" != "8e" ] && exit 1
+
+if [ $((START + SIZE)) -lt $DEVSIZE ]; then
+ [ -e /var/tmp/autogrow.size ] && [ $(cat /var/tmp/autogrow.size) -eq $DEVSIZE ] && exit 1
+ echo $DEVSIZE >/var/tmp/autogrow.size
+ sfdisk -d -uS $AUTOGROW_DEV | grep -v $AUTOGROW_PART | grep -v "unit: sectors" >/tmp/sfdisk.dump
+ echo "$AUTOGROW_PART : start= $START, size= $((DEVSIZE - START)), Id=$ID" >>/tmp/sfdisk.dump
+ cat /tmp/sfdisk.dump | sort | sfdisk -uS --no-reread --force $AUTOGROW_DEV
+ exit 42
+else
+ if [ "$AUTOGROW_FS" != "SKIP" ]; then
+  pvresize $AUTOGROW_PART
+  lvextend -l+100%FREE $AUTOGROW_FS 2>/dev/null 
+  ERR=$?
+  [ $ERR -eq 3 ] && exit 0
+  [ $ERR -eq 0 ] && resize2fs $AUTOGROW_FS && touch /forcefsck && exit 42
+ fi
+fi
+
+exit 1
