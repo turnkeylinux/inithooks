@@ -6,7 +6,7 @@
 [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
 
 [ "$AUTOGROW" != "ONCE" ] && [ "$AUTOGROW" != "ALWAYS" ] && exit 0
-[ $(pwd) = "/usr/lib/inithooks/everyboot.d" ] && [ "$AUTOGROW" != "ALWAYS" ] && exit 0
+[ $(dirname $0) = "/usr/lib/inithooks/everyboot.d" ] && [ "$AUTOGROW" != "ALWAYS" ] && exit 0
 
 [ -z "$AUTOGROW_DEV" ] && AUTOGROW_DEV=/dev/vda
 [ -z "$AUTOGROW_PART" ] && AUTOGROW_PART="${AUTOGROW_DEV}2"
@@ -46,7 +46,7 @@ if [ $((START + SIZE)) -lt $DEVSIZE ]; then
 else
  if [ "$AUTOGROW_FS" != "SKIP" ]; then
   pvresize $AUTOGROW_PART
-  [ $(pwd) = "/usr/lib/inithooks/everyboot.d" ] && [ "$AUTOGROW_FS_ALWAYS" != "TRUE" ] && exit 0
+  [ $(dirname $0) = "/usr/lib/inithooks/everyboot.d" ] && [ "$AUTOGROW_FS_ALWAYS" != "TRUE" ] && exit 0
   lvextend -l+100%FREE $AUTOGROW_FS 2>/dev/null 
   ERR=$?
   [ $ERR -eq 3 ] && exit 0
