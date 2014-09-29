@@ -45,6 +45,8 @@ if [ $((START + SIZE)) -lt $DEVSIZE ]; then
  exit 42
 else
  if [ "$AUTOGROW_FS" != "SKIP" ]; then
+  [ -e /var/tmp/autogrow_fs.size ] && [ $(cat /var/tmp/autogrow_fs.size) -eq $DEVSIZE ] && exit 0
+  echo $DEVSIZE >/var/tmp/autogrow_fs.size
   pvresize $AUTOGROW_PART
   [ $(dirname $0) = "/usr/lib/inithooks/everyboot.d" ] && [ "$AUTOGROW_FS_ALWAYS" != "TRUE" ] && exit 0
   lvextend -l+100%FREE $AUTOGROW_FS 2>/dev/null 
