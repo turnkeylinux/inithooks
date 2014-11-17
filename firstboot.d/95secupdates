@@ -6,7 +6,8 @@
 grep -qs boot=casper /proc/cmdline && exit 2
 
 LOGFILE=/var/log/cron-apt/log
-. /etc/default/inithooks
+INITHOOKS_DEFAULT=/etc/default/inithooks
+. $INITHOOKS_DEFAULT
 
 [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
 
@@ -18,6 +19,8 @@ install_updates() {
             DEBIAN_FRONTEND=noninteractive apt-get $aptcmd | tee -a $LOGFILE
         done < $actionfile
     done
+    sed -i '/RUN_FIRSTBOOT/ s/=.*/=false/g' $INITHOOKS_DEFAULT
+    exit 42
 }
 
 [ "$SEC_UPDATES" == "SKIP" ] && exit 0
