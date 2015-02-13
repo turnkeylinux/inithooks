@@ -105,7 +105,7 @@ def main():
         return
 
     initialized_tklbam = False
-    d = Dialog('TurnKey Linux - First boot configuration')
+    d = Dialog('TurnKey GNU/Linux - First boot configuration')
     while 1:
         retcode, apikey = d.inputbox("Initialize Hub services", TEXT_SERVICES,
                                      apikey, "Apply", "Skip")

@@ -46,7 +46,7 @@ def main():
 
     if not password:
         from dialog_wrapper import Dialog
-        d = Dialog('TurnKey Linux - First boot configuration')
+        d = Dialog('TurnKey GNU/Linux - First boot configuration')
         password = d.get_password(
             "%s Password" % username.capitalize(),
             "Please enter new password for the %s account." % username)

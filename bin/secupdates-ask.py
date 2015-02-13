@@ -43,7 +43,7 @@ def main():
         if opt in ('-h', '--help'):
             usage()
 
-    d = Dialog("TurnKey Linux - First boot configuration")
+    d = Dialog("TurnKey GNU/Linux - First boot configuration")
     install = d.yesno("Security updates", TEXT, "Install", "Skip")
 
     if not install:
