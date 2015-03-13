@@ -6,11 +6,12 @@
 [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
 
 [ "$AUTOGROW" != "ONCE" ] && [ "$AUTOGROW" != "ALWAYS" ] && exit 0
-[ $(pwd) = "/usr/lib/inithooks/everyboot.d" ] && [ "$AUTOGROW" != "ALWAYS" ] && exit 0
+[ $(dirname $0) = "/usr/lib/inithooks/everyboot.d" ] && [ "$AUTOGROW" != "ALWAYS" ] && exit 0
 
 [ -z "$AUTOGROW_DEV" ] && AUTOGROW_DEV=/dev/vda
 [ -z "$AUTOGROW_PART" ] && AUTOGROW_PART="${AUTOGROW_DEV}2"
 [ -z "$AUTOGROW_FS" ] && AUTOGROW_FS=/dev/turnkey/root
+[ -z "$AUTOGROW_FS_ALWAYS" ] && AUTOGROW_FS_ALWAYS=TRUE
 
 DEVSIZE=$(blockdev --getsize $AUTOGROW_DEV)
 
@@ -44,7 +45,10 @@ if [ $((START + SIZE)) -lt $DEVSIZE ]; then
  exit 42
 else
  if [ "$AUTOGROW_FS" != "SKIP" ]; then
+  [ -e /var/tmp/autogrow_fs.size ] && [ $(cat /var/tmp/autogrow_fs.size) -eq $DEVSIZE ] && exit 0
+  echo $DEVSIZE >/var/tmp/autogrow_fs.size
   pvresize $AUTOGROW_PART
+  [ $(dirname $0) = "/usr/lib/inithooks/everyboot.d" ] && [ "$AUTOGROW_FS_ALWAYS" != "TRUE" ] && exit 0
   lvextend -l+100%FREE $AUTOGROW_FS 2>/dev/null 
   ERR=$?
   [ $ERR -eq 3 ] && exit 0
