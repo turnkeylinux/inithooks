@@ -12,6 +12,7 @@ INITHOOKS_DEFAULT=/etc/default/inithooks
 [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
 
 install_updates() {
+    OLDMD5=$(ls -la /lib/modules /boot | md5sum)
     for actionfile in /etc/cron-apt/action.d/*; do
         while read aptcmd; do
             aptcmd=$(echo $aptcmd | sed "s|-q||")
@@ -20,7 +21,10 @@ install_updates() {
         done < $actionfile
     done
     sed -i '/RUN_FIRSTBOOT/ s/=.*/=false/g' $INITHOOKS_DEFAULT
-    exit 42
+    NEWMD5=$(ls -la /lib/modules /boot | md5sum)
+    if [ "$NEWMD5" != "$OLDMD5" ]; then
+        exit 42
+    fi
 }
 
 [ "$SEC_UPDATES" == "SKIP" ] && exit 0
