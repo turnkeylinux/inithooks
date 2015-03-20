@@ -17,6 +17,15 @@ DEVSIZE=$(blockdev --getsize $AUTOGROW_DEV)
 
 [ "0$DEVSIZE" -eq 0 ] && exit 1
 
+PARTINFO=$(sfdisk -d -uS $AUTOGROW_DEV | grep -A1 $AUTOGROW_PART | grep -v $AUTOGROW_PART)
+if [ -n "$PARTINFO" ]; then
+ PARTINFO=${PARTINFO/:/ }
+ PARTINFO=${PARTINFO//,/ }
+ PARTINFO=${PARTINFO//=/ }
+ X=$(echo $PARTINFO | grep "start 0 size 0 Id 0")
+ [ $? -ne 0 ] && exit 1
+fi
+
 PARTINFO=$(sfdisk -d -uS $AUTOGROW_DEV | grep $AUTOGROW_PART)
 [ -z "$PARTINFO" ] && exit 1
 

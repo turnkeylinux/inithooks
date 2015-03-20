@@ -1,0 +1,30 @@
+#!/bin/bash -e
+# set ipconfig
+
+. /etc/default/inithooks
+
+[ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
+[ -z "$IP_CONFIG" ] && exit 0
+[ "$IP_CONFIG" != "manual" ] && [ "$IP_CONFIG" != "static" ] && [ "$IP_CONFIG" != "dhcp" ] && exit 1
+[ ! -e /etc/network/interfaces ] && exit 1
+
+ifdown --exclude=lo -a
+
+echo "# interfaces(5) file used by ifup(8) and ifdown(8)" >/etc/network/interfaces
+echo >>/etc/network/interfaces
+echo "auto lo" >>/etc/network/interfaces
+echo "iface lo inet loopback" >>/etc/network/interfaces
+echo >>/etc/network/interfaces
+echo "auto eth0" >>/etc/network/interfaces
+echo "iface eth0 inet $IP_CONFIG" >>/etc/network/interfaces
+
+if [ "$IP_CONFIG" = "static" ]; then
+ echo " address $IP_ADDRESS" >>/etc/network/interfaces
+ echo " netmask $IP_NETMASK" >>/etc/network/interfaces
+ echo " gateway $IP_GW" >>/etc/network/interfaces
+ echo " dns-nameservers $IP_DNS1 $IP_DNS2" >>/etc/network/interfaces
+fi
+
+ifup --exclude=lo -a
+
+exit $?
