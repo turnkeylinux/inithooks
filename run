@@ -18,6 +18,7 @@ exec_scripts() {
     for SCRIPT in $(find $SCRIPT_DIR -type f -or -type l | sort); do
         [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
         [ -x $SCRIPT ] || continue
+        echo "# $SCRIPT"
         $SCRIPT
         [ $? -eq 42 ] && init 6 && exit 0
     done
