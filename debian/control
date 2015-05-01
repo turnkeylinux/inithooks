@@ -7,7 +7,7 @@ Standards-Version: 3.6.1
 
 Package: inithooks
 Architecture: any
-Depends: console-tools | console-utilities, turnkey-pylib
+Depends: kbd, turnkey-pylib
 Recommends: confconsole (>= 0.9.4+36+g2256734)
 Section: admin
 Description: Executes firstboot and everyboot scripts
