@@ -6,7 +6,7 @@ Build-Depends: debhelper (>> 4.2.0)
 Standards-Version: 3.6.1
 
 Package: inithooks
-Architecture: any
+Architecture: all
 Depends: kbd, turnkey-pylib
 Recommends: confconsole (>= 0.9.4+36+g2256734)
 Section: admin
