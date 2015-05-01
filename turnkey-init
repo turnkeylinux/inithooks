@@ -34,6 +34,7 @@ def usage(e=None):
     sys.exit(1)
 
 BLACKLIST = [
+    '05autogrow-fs',
     '10randomize-cronapt',
     '10regen-sshkeys',
     '15regen-sslcert',
