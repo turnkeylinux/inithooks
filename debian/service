@@ -1,0 +1,18 @@
+[Unit]
+Description=inithooks: firstboot and everyboot initialization scripts
+After=getty@tty8.service
+
+[Service]
+Type=oneshot
+StandardInput=tty-force
+TTYPath=/dev/tty8
+TTYReset=yes
+TTYVHangup=yes
+EnvironmentFile=/etc/default/inithooks
+ExecStart=/bin/sh -c '\
+    FGCONSOLE=$(fgconsole); \
+    openvt -f -c 8 -s -w -- ${INITHOOKS_PATH}/run; \
+    chvt $FGCONSOLE'
+
+[Install]
+WantedBy=basic.target
