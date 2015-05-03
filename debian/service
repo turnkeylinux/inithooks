@@ -8,6 +8,7 @@ StandardInput=tty-force
 TTYPath=/dev/tty8
 TTYReset=yes
 TTYVHangup=yes
+TTYVTDisallocate=yes
 EnvironmentFile=/etc/default/inithooks
 ExecStart=/bin/sh -c '\
     FGCONSOLE=$(fgconsole); \
