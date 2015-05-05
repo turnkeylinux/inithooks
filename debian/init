@@ -18,6 +18,13 @@ NAME=inithooks
 . /lib/lsb/init-functions
 . /etc/default/inithooks
 
+# don't run the hooks if noinithooks is passed as a boot param
+for x in $(cat /proc/cmdline); do
+    if [ $x = "noinithooks" ]; then
+        exit 0
+    fi
+done
+
 case "$1" in
   start)
     log_begin_msg "Starting $DESC"

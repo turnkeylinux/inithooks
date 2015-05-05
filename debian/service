@@ -1,6 +1,7 @@
 [Unit]
 Description=inithooks: firstboot and everyboot initialization scripts
 After=getty@tty8.service
+ConditionKernelCommandLine=!noinithooks
 
 [Service]
 Type=oneshot
