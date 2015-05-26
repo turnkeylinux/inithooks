@@ -1,0 +1,24 @@
+body {
+  font-family: "proxima-nova","Helvetica Neue",Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing: antialiased;
+  width: 980px;
+  margin: 20px auto;
+  line-height: 30px;
+}
+h1 {
+  color: #222;
+  font-size: 38px;
+  font-weight: 400;
+  text-shadow: 1px 1px 0 #eee;
+  text-align: center;
+  margin-top: 50px;
+}
+h2 {
+  color: #333;
+  font-size: 30px;
+  font-weight: 400;
+}
+img {
+  width: 980px;
+  text-align: center;
+}
