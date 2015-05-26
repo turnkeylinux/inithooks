@@ -2,10 +2,8 @@
 
 . /etc/default/inithooks
 
-[ ! -e $INITHOOKS_CONF ] &&  exit 0
-
-# remove passwords from configuration file
-sed -i '/PASS/ s/=.*/=XXXX/g' $INITHOOKS_CONF
+# blank out configuration file (usually contains passwords)
+[ -e $INITHOOKS_CONF ] && echo > $INITHOOKS_CONF
 
 exit 0
 
