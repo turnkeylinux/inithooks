@@ -128,7 +128,7 @@ following conditions:
     export SEC_UPDATES=FORCE
     EOF
 
-    chmod +x /usr/lib/inithooks/firstboot.d/30turnkey-init-firstlogin
+    chmod +x /usr/lib/inithooks/firstboot.d/30turnkey-init-fence
 
 
    **Initialization fence**: the above headless preseeding hook also

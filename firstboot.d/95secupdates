@@ -9,8 +9,6 @@ LOGFILE=/var/log/cron-apt/log
 INITHOOKS_DEFAULT=/etc/default/inithooks
 . $INITHOOKS_DEFAULT
 
-[ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
-
 install_updates() {
     OLDMD5=$(ls -la /lib/modules /boot | md5sum)
     for actionfile in /etc/cron-apt/action.d/*; do
@@ -32,6 +30,6 @@ install_updates() {
 if [ "$SEC_UPDATES" == "FORCE" ]; then
     install_updates
 else
-    $INITHOOKS_PATH/bin/secupdates-ask.py && install_updates  
+    $INITHOOKS_PATH/bin/secupdates-ask.py && install_updates
 fi
 
