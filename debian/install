@@ -7,4 +7,5 @@ turnkey-init-fence/turnkey-init-fence /etc/init.d
 turnkey-init-fence/htdocs /var/lib/inithooks/turnkey-init-fence
 
 turnkey-init                        /usr/sbin
+turnkey-sudoadmin                   /usr/sbin
 turnkey-install-security-updates    /usr/sbin

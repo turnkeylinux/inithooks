@@ -1,0 +1,193 @@
+#!/bin/bash -e
+#
+# Copyright (c) 2015 Alon Swartz <alon@turnkeylinux.org>
+# 
+# This file is part of InitHooks.
+# 
+# InitHooks is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 3 of the License, or (at your
+# option) any later version.
+# 
+fatal() { echo "FATAL [$(basename $0)]: $@" 1>&2; exit 1; }
+warn() { echo "WARN [$(basename $0)]: $@"; }
+info() { echo "INFO [$(basename $0)]: $@"; }
+
+usage() {
+cat<<EOF
+Syntax: $(basename $0) on|off [--disable-setpass]
+Configure system to use admin user with sudo, or root
+
+On:
+    - installs sudo package
+    - creates admin user
+    - configures passwordless sudo for admin user
+    - configures inithooks and init-fence for admin user
+    - merges root .ssh/authorized_keys with admin
+    - locks the root user
+    - disables root ssh access
+    - restarts ssh daemon
+    - sets admin password interactively (unless --disable-setpass)
+
+Off:
+    - configures inithooks and init-fence for root
+    - merges admin .ssh/authorized_keys with root
+    - enables root ssh access
+    - locks admin user
+    - restarts ssh daemon
+    - sets root password interactively (unless --disable-setpass)
+
+EOF
+exit 1
+}
+
+install_sudo() {
+    info $FUNCNAME $@
+    which sudo >/dev/null && return
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get -y install sudo
+}
+
+create_user() {
+    info $FUNCNAME $@
+    username=$1
+    grep -q ^${username}: /etc/passwd && return
+    useradd --create-home --shell /bin/bash ${username}
+}
+
+passwordless_sudo() {
+    info $FUNCNAME $@
+    username=$1
+    cfg="/etc/sudoers.d/99_${username}"
+    str="${username} ALL=(ALL) NOPASSWD:ALL"
+    touch $cfg
+    grep -q "^${str}$" $cfg && return
+    echo "$str" >> $cfg
+    chmod 0440 $cfg
+}
+
+inithooks_sudoadmin() {
+    info $FUNCNAME $@
+    val=$1
+    key="SUDOADMIN"
+    cfg="/etc/default/inithooks"
+    [ -e $cfg ] || return
+    grep -q ^${key}= $cfg || (echo "$key=$val" >> $cfg; return)
+    sed -i "s/^${key}=.*/$key=$val/" $cfg
+}
+
+setup_initfence() {
+    info $FUNCNAME $@
+    username=$1
+    if [ -e /root/.profile.d/turnkey-init-fence ]; then
+        if [ $username != "root" ]; then
+            profile_fence=/home/${username}/.profile.d/turnkey-init-fence
+            mkdir -p $(dirname $profile_fence)
+            cp /root/.profile.d/turnkey-init-fence $profile_fence
+            chown -R $username:$username $(dirname $profile_fence)
+            sed -i "s|^\$BIN|sudo \$BIN|" $profile_fence
+        fi
+    fi
+    index=/var/lib/inithooks/turnkey-init-fence/htdocs/index.html
+    [ -e $index ] || return
+    sed -i "s|username=.*;|username=\"$username\";|" $index
+}
+
+ssh_authorizedkeys_inithook() {
+    info $FUNCNAME $@
+    username=$1
+    sshkeys_inithook=/usr/lib/inithooks/firstboot.d/40ec2-sshkeys
+    [ -e $sshkeys_inithook ] || return
+    sed -i "s|^USERNAME.*|USERNAME = \'${username}\'|" $sshkeys_inithook
+}
+
+ssh_authorizedkeys_merge() {
+    info $FUNCNAME $@
+    user1=$1
+    user2=$2
+
+    grep -q ^${user1}: /etc/passwd || return
+    grep -q ^${user2}: /etc/passwd || return
+
+    auth1="$(eval printf ~$user1)/.ssh/authorized_keys"
+    mkdir -p $(dirname $auth1)
+    chmod 0700 $(dirname $auth1)
+    touch $auth1
+
+    auth2="$(eval printf ~$user2)/.ssh/authorized_keys"
+    mkdir -p $(dirname $auth2)
+    chmod 0700 $(dirname $auth2)
+    touch $auth2
+
+    cat $auth1 $auth2 | sort | uniq | tee $auth1 $auth2 >/dev/null
+    chown -R $user1:$user1 $(dirname $auth1)
+    chown -R $user2:$user2 $(dirname $auth2)
+}
+
+permitrootlogin_ssh() {
+    info $FUNCNAME $@
+    val=$1
+    key="PermitRootLogin"
+    cfg="/etc/ssh/sshd_config"
+    grep -q ^${key} $cfg || (echo "$key $val" >> $cfg; return)
+    sed -i "s/^${key} .*/$key $val/" $cfg
+}
+
+user_state() {
+    info $FUNCNAME $@
+    username=$1
+    action=$2
+    grep -q ^${username}: /etc/passwd || return
+    passwd --${action} $username
+}
+
+restart_sshd() {
+    info $FUNCNAME $@
+    /etc/init.d/ssh status >/dev/null && /etc/init.d/ssh restart
+}
+
+setpass() {
+    info $FUNCNAME $@
+    username=$1
+    script=/usr/lib/inithooks/bin/setpass.py
+    if [ -x $script ]; then
+        $script $username
+    else
+        echo "Set password for $username"
+        passwd $username
+    fi
+}
+
+case $1 in
+    on)
+        [ "$(id -u)" != "0" ] && fatal "must be run with root permissions"
+        install_sudo;
+        create_user "admin";
+        passwordless_sudo "admin";
+        inithooks_sudoadmin "true";
+        setup_initfence "admin";
+        ssh_authorizedkeys_inithook "admin"
+        ssh_authorizedkeys_merge "admin" "root"
+        user_state "admin" "unlock";
+        user_state "root" "lock";
+        permitrootlogin_ssh "no";
+        restart_sshd;
+        [ "$2" == "--disable-setpass" ] || setpass "admin";
+        ;;
+
+    off)
+        [ "$(id -u)" != "0" ] && fatal "must be run with root permissions"
+        inithooks_sudoadmin "false";
+        setup_initfence "root";
+        ssh_authorizedkeys_inithook "root"
+        ssh_authorizedkeys_merge "root" "admin"
+        permitrootlogin_ssh "yes";
+        user_state "root" "unlock";
+        user_state "admin" "lock";
+        restart_sshd;
+        [ "$2" == "--disable-setpass" ] || setpass "root";
+        ;;
+    *)  
+        usage;;
+esac
+

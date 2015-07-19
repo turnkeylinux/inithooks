@@ -40,6 +40,8 @@ BLACKLIST = [
     '15regen-sslcert',
     '25ec2-userdata',
     '26ec2-resizerootfs',
+    '28ec2-sudoadmin',
+    '29sudoadmin',
     '29preseed',
     '40ec2-sshkeys',
     '82tklbam-restore',
