@@ -32,6 +32,20 @@ configure_cronapt() {
     sed -i "s/^${key}=.*/$key=\"$val\"/" $cfg
 }
 
+send_enabled_notification() {
+    info $FUNCNAME $@
+    recipient=$1
+    subject="[$(hostname)] system alerts and notifications enabled"
+    mail -s "$subject" $recipient <<EOF
+This server is configured to send you system alerts and notifications.
+For more information, see:
+http://www.turnkeylinux.org/security-alerts
+
+--
+$(turnkey-version)
+EOF
+}
+
 if [[ "$#" != "1" ]]; then
     usage
 fi
@@ -41,4 +55,5 @@ email=$1
 configure_alias "root" "$email"
 configure_cronapt "MAILON" "output"
 configure_cronapt "MAILTO" "root"
+send_enabled_notification "root"
 
