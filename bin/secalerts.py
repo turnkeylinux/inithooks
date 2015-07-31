@@ -14,11 +14,13 @@ import signal
 from dialog_wrapper import Dialog, email_re
 from executil import system
 
-DEFAULT_TITLE = "System Alerts and Notifications"
-DEFAULT_TEXT = """Enable local system alerts and notifications to be
-sent to your inbox, such as automatic security
-updates output and system messages.
+TITLE = "System Notifications and Critical Security Alerts"
 
+TEXT = """Enable local system notifications (root@localhost) to be forwarded to your regular inbox. These will include messages regarding auto security updates and system messages.
+
+Enabling this option will also sign you up to receive critical security and bug alerts via TurnKey's low-traffic Security and News announcements newsletter.
+
+These settings can be changed/disabled if required:
 http://www.turnkeylinux.org/security-alerts
 
 Email:
@@ -59,8 +61,8 @@ def main():
         d = Dialog("TurnKey Linux - First boot configuration")
         while 1:
             retcode, email = d.inputbox(
-                DEFAULT_TITLE,
-                DEFAULT_TEXT,
+                TITLE,
+                TEXT,
                 email,
                 "Enable",
                 "Skip")

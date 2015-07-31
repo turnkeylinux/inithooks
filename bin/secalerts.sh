@@ -46,6 +46,14 @@ $(turnkey-version)
 EOF
 }
 
+enable_security_alerts() {
+    info $FUNCNAME $@
+    email=$1
+    curl https://hub.turnkeylinux.org/api/server/secalerts/ \
+        -d email="$email" \
+        -d turnkey_version="$(turnkey-version)"
+}
+
 if [[ "$#" != "1" ]]; then
     usage
 fi
@@ -56,4 +64,5 @@ configure_alias "root" "$email"
 configure_cronapt "MAILON" "output"
 configure_cronapt "MAILTO" "root"
 send_enabled_notification "root"
+enable_security_alerts "$email"
 
