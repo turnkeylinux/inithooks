@@ -18,9 +18,8 @@ TITLE = "System Notifications and Critical Security Alerts"
 
 TEXT = """Enable local system notifications (root@localhost) to be forwarded to your regular inbox. These will include messages regarding auto security updates and system messages.
 
-Enabling this option will also sign you up to receive critical security and bug alerts via TurnKey's low-traffic Security and News announcements newsletter.
+Enabling this option will also sign you up to receive critical security and bug alerts via TurnKey's low-traffic Security and News announcements newsletter. You can unsubscribe at any time.
 
-These settings can be changed/disabled if required:
 http://www.turnkeylinux.org/security-alerts
 
 Email:
@@ -75,7 +74,8 @@ def main():
                 d.error('Email is not valid')
                 continue
 
-            break
+            if d.yesno("Is your email correct?", email):
+                break
 
     if email:
         cmd = os.path.join(os.path.dirname(__file__), 'secalerts.sh')
