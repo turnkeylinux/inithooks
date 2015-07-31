@@ -49,9 +49,21 @@ EOF
 enable_security_alerts() {
     info $FUNCNAME $@
     email=$1
-    curl https://hub.turnkeylinux.org/api/server/secalerts/ \
-        -d email="$email" \
-        -d turnkey_version="$(turnkey-version)"
+    script=/etc/cron.hourly/enable_secalerts
+
+    cat>$script<<EOF
+#!/bin/bash -e
+# created by: $(readlink -f $0)
+curl https://hub.turnkeylinux.org/api/server/secalerts/ \\
+    -d email="$email" \\
+    -d turnkey_version="$(turnkey-version)" \\
+    --silent --fail --output /dev/null
+
+rm -f \$0
+EOF
+
+    chmod +x $script
+    $script
 }
 
 if [[ "$#" != "1" ]]; then
