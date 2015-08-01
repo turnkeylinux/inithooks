@@ -3,3 +3,4 @@ INITHOOKS_PATH=/usr/lib/inithooks
 
 RUN_FIRSTBOOT=true
 REDIRECT_OUTPUT=false
+SUDOADMIN=false

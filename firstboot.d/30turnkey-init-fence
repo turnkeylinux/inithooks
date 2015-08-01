@@ -1,6 +1,11 @@
 #!/bin/bash
 
-PROFILE_FIRSTLOGIN=/root/.profile.d/turnkey-init-fence
+USERNAME=root
+
+. /etc/default/inithooks
+[ "$(echo $SUDOADMIN | tr [A-Z] [a-z] )" = "true" ] && USERNAME=admin
+
+PROFILE_FIRSTLOGIN=$(eval printf ~$USERNAME)/.profile.d/turnkey-init-fence
 [ -f $PROFILE_FIRSTLOGIN ] && chmod +x $PROFILE_FIRSTLOGIN
 
 CODENAME=$(cat /etc/hostname)

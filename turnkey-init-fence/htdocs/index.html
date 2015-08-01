@@ -2,16 +2,22 @@
 <head>
   <title>Initialization required</title>
   <link href="/style.css" rel="stylesheet" type="text/css">
+  <script type="text/javascript">username="root";</script>
 </head>
 
 <body>
   <h1>Please initialize this system...</h1>
 
-  <p>Welcome to TurnKey! You need to initialize this system first before you
-  can use it. To do that you'll need to log into the root account. The
-  <i>turnkey-init</i> initialization program will start automatically:</p>
 
-  <img src="/turnkey-init.png" />
+  <p>Welcome to TurnKey! You need to initialize this system first before you
+  can use it. To do that you'll need to log into the
+  <script type="text/javascript">document.write("<i>"+username+"</i>")</script>
+  account. The <i>turnkey-init</i> initialization program will start
+  automatically:</p>
+
+  <script type="text/javascript">
+    document.write("<img src='/turnkey-init-" + username + ".png' />")
+  </script>
 
   <h2>Can I log in without SSH?</h2>
 
