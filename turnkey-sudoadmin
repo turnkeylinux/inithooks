@@ -23,6 +23,7 @@ On:
     - creates admin user and sets random password
     - configures passwordless sudo for admin user
     - configures inithooks and init-fence for admin user
+    - updates confconsole services for admin user
     - merges root .ssh/authorized_keys with admin
     - locks the root user
     - disables root ssh access
@@ -31,6 +32,7 @@ On:
 
 Off:
     - configures inithooks and init-fence for root
+    - updates confconsole services for root
     - merges admin .ssh/authorized_keys with root
     - enables root ssh access
     - locks admin user
@@ -92,6 +94,14 @@ setup_initfence() {
     index=/var/lib/inithooks/turnkey-init-fence/htdocs/index.html
     [ -e $index ] || return 0
     sed -i "s|username=.*;|username=\"$username\";|" $index
+}
+
+update_confconsole_services() {
+    info $FUNCNAME $@
+    username=$1
+    cfg="/etc/confconsole/services.txt"
+    [ -e $cfg ] || return 0
+    sed -i "s|\S*@|${username}@|g" $cfg
 }
 
 ssh_authorizedkeys_inithook() {
@@ -170,8 +180,9 @@ case $1 in
         passwordless_sudo "admin";
         inithooks_sudoadmin "true";
         setup_initfence "admin";
-        ssh_authorizedkeys_inithook "admin"
-        ssh_authorizedkeys_merge "admin" "root"
+        update_confconsole_services "admin";
+        ssh_authorizedkeys_inithook "admin";
+        ssh_authorizedkeys_merge "admin" "root";
         user_state "admin" "unlock";
         user_state "root" "lock";
         permitrootlogin_ssh "no";
@@ -183,8 +194,9 @@ case $1 in
         [ "$(id -u)" != "0" ] && fatal "must be run with root permissions"
         inithooks_sudoadmin "false";
         setup_initfence "root";
-        ssh_authorizedkeys_inithook "root"
-        ssh_authorizedkeys_merge "root" "admin"
+        update_confconsole_services "root";
+        ssh_authorizedkeys_inithook "root";
+        ssh_authorizedkeys_merge "root" "admin";
         permitrootlogin_ssh "yes";
         user_state "root" "unlock";
         user_state "admin" "lock";
