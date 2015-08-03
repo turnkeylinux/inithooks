@@ -20,7 +20,7 @@ Configure system to use admin user with sudo, or root
 
 On:
     - installs sudo package
-    - creates admin user
+    - creates admin user and sets random password
     - configures passwordless sudo for admin user
     - configures inithooks and init-fence for admin user
     - merges root .ssh/authorized_keys with admin
@@ -53,6 +53,7 @@ create_user() {
     username=$1
     grep -q ^${username}: /etc/passwd && return
     useradd --create-home --shell /bin/bash ${username}
+    echo ${username}:$(mcookie) | chpasswd
 }
 
 passwordless_sudo() {
