@@ -120,7 +120,10 @@ ssh_authorizedkeys_merge() {
     chmod 0700 $(dirname $auth2)
     touch $auth2
 
-    cat $auth1 $auth2 | sort | uniq | tee $auth1 $auth2 >/dev/null
+    cat $auth1 $auth2 | sort | uniq > $auth1.new
+    echo $auth1 $auth2 | xargs -n 1 cp $auth1.new
+    rm $auth1.new
+
     chown -R $user1:$user1 $(dirname $auth1)
     chown -R $user2:$user2 $(dirname $auth2)
 }
