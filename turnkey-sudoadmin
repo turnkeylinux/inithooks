@@ -71,7 +71,7 @@ inithooks_sudoadmin() {
     val=$1
     key="SUDOADMIN"
     cfg="/etc/default/inithooks"
-    [ -e $cfg ] || return
+    [ -e $cfg ] || return 0
     grep -q ^${key}= $cfg || (echo "$key=$val" >> $cfg; return)
     sed -i "s/^${key}=.*/$key=$val/" $cfg
 }
@@ -89,7 +89,7 @@ setup_initfence() {
         fi
     fi
     index=/var/lib/inithooks/turnkey-init-fence/htdocs/index.html
-    [ -e $index ] || return
+    [ -e $index ] || return 0
     sed -i "s|username=.*;|username=\"$username\";|" $index
 }
 
@@ -97,7 +97,7 @@ ssh_authorizedkeys_inithook() {
     info $FUNCNAME $@
     username=$1
     sshkeys_inithook=/usr/lib/inithooks/firstboot.d/40ec2-sshkeys
-    [ -e $sshkeys_inithook ] || return
+    [ -e $sshkeys_inithook ] || return 0
     sed -i "s|^USERNAME.*|USERNAME = \'${username}\'|" $sshkeys_inithook
 }
 
@@ -106,8 +106,8 @@ ssh_authorizedkeys_merge() {
     user1=$1
     user2=$2
 
-    grep -q ^${user1}: /etc/passwd || return
-    grep -q ^${user2}: /etc/passwd || return
+    grep -q ^${user1}: /etc/passwd || return 0
+    grep -q ^${user2}: /etc/passwd || return 0
 
     auth1="$(eval printf ~$user1)/.ssh/authorized_keys"
     mkdir -p $(dirname $auth1)
@@ -137,7 +137,7 @@ user_state() {
     info $FUNCNAME $@
     username=$1
     action=$2
-    grep -q ^${username}: /etc/passwd || return
+    grep -q ^${username}: /etc/passwd || return 0
     passwd --${action} $username
 }
 
