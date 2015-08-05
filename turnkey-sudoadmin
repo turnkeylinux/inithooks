@@ -82,13 +82,15 @@ inithooks_sudoadmin() {
 setup_initfence() {
     info $FUNCNAME $@
     username=$1
-    if [ -e /root/.profile.d/turnkey-init-fence ]; then
+    root_fence=/root/.profile.d/turnkey-init-fence
+    user_fence=/home/${username}/.profile.d/turnkey-init-fence
+    if [ -e $root_fence ]; then
         if [ $username != "root" ]; then
-            profile_fence=/home/${username}/.profile.d/turnkey-init-fence
-            mkdir -p $(dirname $profile_fence)
-            cp /root/.profile.d/turnkey-init-fence $profile_fence
-            chown -R $username:$username $(dirname $profile_fence)
-            sed -i "s|^\$BIN|sudo \$BIN|" $profile_fence
+            mkdir -p $(dirname $user_fence)
+            cp $root_fence $user_fence
+            sed -i "s|^\$BIN|sudo \$BIN|" $user_fence
+            sed -i "s|root|home\/${username}|" $user_fence
+            chown -R $username:$username $(dirname $user_fence)
         fi
     fi
     index=/var/lib/inithooks/turnkey-init-fence/htdocs/index.html
