@@ -9,5 +9,11 @@ INITHOOKS_DEFAULT=/etc/default/inithooks
 # set run_firstboot to false
 sed -i '/RUN_FIRSTBOOT/ s/=.*/=false/g' $INITHOOKS_DEFAULT
 
+# if registered with hub, update with status and sshfp for user verification
+if grep SERVERID= /var/lib/hubclient/server.conf -q -s; then
+    sshfp="$($INITHOOKS_PATH/everyboot.d/70ec2-log-sshfp | grep :)"
+    hubclient-status inithooks-finalized "$sshfp"
+fi
+
 exit 0
 
