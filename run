@@ -28,7 +28,6 @@ export INITHOOKS_CONF=$INITHOOKS_CONF
 
 if [ "$(echo $RUN_FIRSTBOOT | tr [A-Z] [a-z] )" = "true" ]; then
     exec_scripts $INITHOOKS_PATH/firstboot.d
-    sed -i '/RUN_FIRSTBOOT/ s/=.*/=false/g' $INITHOOKS_DEFAULT
 fi
 exec_scripts $INITHOOKS_PATH/everyboot.d
 

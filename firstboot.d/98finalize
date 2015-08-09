@@ -1,9 +1,13 @@
 #!/bin/bash -e
 
-. /etc/default/inithooks
+INITHOOKS_DEFAULT=/etc/default/inithooks
+. $INITHOOKS_DEFAULT
 
 # blank out configuration file (usually contains passwords)
 [ -e $INITHOOKS_CONF ] && echo > $INITHOOKS_CONF
+
+# set run_firstboot to false
+sed -i '/RUN_FIRSTBOOT/ s/=.*/=false/g' $INITHOOKS_DEFAULT
 
 exit 0
 
