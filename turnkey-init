@@ -44,8 +44,8 @@ BLACKLIST = [
     '29sudoadmin',
     '29preseed',
     '40ec2-sshkeys',
-    '82tklbam-restore',
     '92etckeeper',
+    '97tklbam-restore',
 ]
 
 class Config(ConfFile):
