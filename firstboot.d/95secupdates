@@ -21,7 +21,7 @@ install_updates() {
     sed -i '/RUN_FIRSTBOOT/ s/=.*/=false/g' $INITHOOKS_DEFAULT
     NEWMD5=$(ls -la /lib/modules /boot | md5sum)
     if [ "$NEWMD5" != "$OLDMD5" ]; then
-        exit 42
+        chmod +x $INITHOOKS_PATH/firstboot.d/99reboot
     fi
 }
 
