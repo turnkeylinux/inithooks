@@ -155,6 +155,11 @@ user_state() {
     action=$2
     grep -q ^${username}: /etc/passwd || return 0
     passwd --${action} $username
+    if [ $username != "root" ]; then
+        [ $action == "lock" ] && usermod --expiredate "1" $username
+        [ $action == "unlock" ] && usermod --expiredate "" $username
+    fi
+    return 0
 }
 
 restart_sshd() {
