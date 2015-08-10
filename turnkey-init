@@ -43,6 +43,7 @@ BLACKLIST = [
     '28ec2-sudoadmin',
     '29sudoadmin',
     '29preseed',
+    '30turnkey-init-fence',
     '40ec2-sshkeys',
     '92etckeeper',
     '97tklbam-restore',
