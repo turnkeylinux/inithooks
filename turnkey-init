@@ -43,9 +43,10 @@ BLACKLIST = [
     '28ec2-sudoadmin',
     '29sudoadmin',
     '29preseed',
+    '30turnkey-init-fence',
     '40ec2-sshkeys',
-    '82tklbam-restore',
     '92etckeeper',
+    '97tklbam-restore',
 ]
 
 class Config(ConfFile):
@@ -79,6 +80,9 @@ def main():
     args = sys.argv[1:]
     if args and args[0] in ('-h', '--help'):
         usage()
+
+    if os.geteuid() != 0:
+        fatal("turnkey-init must be run with root permissions")
 
     inithooks = InitHooks()
     inithooks.execute('firstboot.d')

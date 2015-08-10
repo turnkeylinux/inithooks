@@ -46,6 +46,30 @@ $(turnkey-version)
 EOF
 }
 
+enable_security_alerts() {
+    info $FUNCNAME $@
+    email=$1
+
+    f=/etc/apt/apt.conf.d/01turnkey
+    [ -e "$f" ] && turnkey_version=$(sed "s/.*(\(.*\)).*/\1/" $f)
+    [ -n "$turnkey_version" ] || turnkey_version=$(turnkey-version)
+
+    script=/etc/cron.hourly/enable_secalerts
+    cat>$script<<EOF
+#!/bin/bash -e
+# created by: $(readlink -f $0)
+curl https://hub.turnkeylinux.org/api/server/secalerts/ \\
+    -d email="$email" \\
+    -d turnkey_version="$turnkey_version" \\
+    --silent --fail --output /dev/null
+
+rm -f \$0
+EOF
+
+    chmod +x $script
+    $script
+}
+
 if [[ "$#" != "1" ]]; then
     usage
 fi
@@ -56,4 +80,5 @@ configure_alias "root" "$email"
 configure_cronapt "MAILON" "output"
 configure_cronapt "MAILTO" "root"
 send_enabled_notification "root"
+enable_security_alerts "$email"
 

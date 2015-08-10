@@ -125,6 +125,7 @@ following conditions:
     export APP_EMAIL=admin@example.com
     export APP_DOMAIN=DEFAULT
     export HUB_APIKEY=SKIP
+    export SEC_ALERTS=SKIP
     export SEC_UPDATES=FORCE
     EOF
 
@@ -193,11 +194,13 @@ first system boot. For example:
 ::
 
     cat>/etc/inithooks.conf<<EOF
-    HUB_APIKEY=SKIP
-    ROOT_PASS=supersecretrootpass
-    DB_PASS=supersecretmysqlpass
-    APP_EMAIL=admin@example.com
-    APP_PASS=webappadminpassword
+    export ROOT_PASS=supersecretrootpass
+    export DB_PASS=supersecretmysqlpass
+    export APP_EMAIL=admin@example.com
+    export APP_PASS=webappadminpassword
+    export SEC_ALERTS=admin@example.com
+    export SEC_UPDATES=FORCE
+    export HUB_APIKEY=SKIP
     EOF
 
 Don't worry about leaving sensitive passwords in there: after the

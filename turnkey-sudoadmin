@@ -20,9 +20,10 @@ Configure system to use admin user with sudo, or root
 
 On:
     - installs sudo package
-    - creates admin user
+    - creates admin user and sets random password
     - configures passwordless sudo for admin user
     - configures inithooks and init-fence for admin user
+    - updates confconsole services for admin user
     - merges root .ssh/authorized_keys with admin
     - locks the root user
     - disables root ssh access
@@ -31,6 +32,7 @@ On:
 
 Off:
     - configures inithooks and init-fence for root
+    - updates confconsole services for root
     - merges admin .ssh/authorized_keys with root
     - enables root ssh access
     - locks admin user
@@ -53,6 +55,7 @@ create_user() {
     username=$1
     grep -q ^${username}: /etc/passwd && return
     useradd --create-home --shell /bin/bash ${username}
+    echo ${username}:$(mcookie) | chpasswd
 }
 
 passwordless_sudo() {
@@ -71,7 +74,7 @@ inithooks_sudoadmin() {
     val=$1
     key="SUDOADMIN"
     cfg="/etc/default/inithooks"
-    [ -e $cfg ] || return
+    [ -e $cfg ] || return 0
     grep -q ^${key}= $cfg || (echo "$key=$val" >> $cfg; return)
     sed -i "s/^${key}=.*/$key=$val/" $cfg
 }
@@ -79,25 +82,35 @@ inithooks_sudoadmin() {
 setup_initfence() {
     info $FUNCNAME $@
     username=$1
-    if [ -e /root/.profile.d/turnkey-init-fence ]; then
+    root_fence=/root/.profile.d/turnkey-init-fence
+    user_fence=/home/${username}/.profile.d/turnkey-init-fence
+    if [ -e $root_fence ]; then
         if [ $username != "root" ]; then
-            profile_fence=/home/${username}/.profile.d/turnkey-init-fence
-            mkdir -p $(dirname $profile_fence)
-            cp /root/.profile.d/turnkey-init-fence $profile_fence
-            chown -R $username:$username $(dirname $profile_fence)
-            sed -i "s|^\$BIN|sudo \$BIN|" $profile_fence
+            mkdir -p $(dirname $user_fence)
+            cp $root_fence $user_fence
+            sed -i "s|^\$BIN|sudo \$BIN|" $user_fence
+            sed -i "s|root|home\/${username}|" $user_fence
+            chown -R $username:$username $(dirname $user_fence)
         fi
     fi
     index=/var/lib/inithooks/turnkey-init-fence/htdocs/index.html
-    [ -e $index ] || return
+    [ -e $index ] || return 0
     sed -i "s|username=.*;|username=\"$username\";|" $index
+}
+
+update_confconsole_services() {
+    info $FUNCNAME $@
+    username=$1
+    cfg="/etc/confconsole/services.txt"
+    [ -e $cfg ] || return 0
+    sed -i "s|\S*@|${username}@|g" $cfg
 }
 
 ssh_authorizedkeys_inithook() {
     info $FUNCNAME $@
     username=$1
     sshkeys_inithook=/usr/lib/inithooks/firstboot.d/40ec2-sshkeys
-    [ -e $sshkeys_inithook ] || return
+    [ -e $sshkeys_inithook ] || return 0
     sed -i "s|^USERNAME.*|USERNAME = \'${username}\'|" $sshkeys_inithook
 }
 
@@ -106,8 +119,8 @@ ssh_authorizedkeys_merge() {
     user1=$1
     user2=$2
 
-    grep -q ^${user1}: /etc/passwd || return
-    grep -q ^${user2}: /etc/passwd || return
+    grep -q ^${user1}: /etc/passwd || return 0
+    grep -q ^${user2}: /etc/passwd || return 0
 
     auth1="$(eval printf ~$user1)/.ssh/authorized_keys"
     mkdir -p $(dirname $auth1)
@@ -119,7 +132,10 @@ ssh_authorizedkeys_merge() {
     chmod 0700 $(dirname $auth2)
     touch $auth2
 
-    cat $auth1 $auth2 | sort | uniq | tee $auth1 $auth2 >/dev/null
+    cat $auth1 $auth2 | sort | uniq > $auth1.new
+    echo $auth1 $auth2 | xargs -n 1 cp $auth1.new
+    rm $auth1.new
+
     chown -R $user1:$user1 $(dirname $auth1)
     chown -R $user2:$user2 $(dirname $auth2)
 }
@@ -137,8 +153,13 @@ user_state() {
     info $FUNCNAME $@
     username=$1
     action=$2
-    grep -q ^${username}: /etc/passwd || return
+    grep -q ^${username}: /etc/passwd || return 0
     passwd --${action} $username
+    if [ $username != "root" ]; then
+        [ $action == "lock" ] && usermod --expiredate "1" $username
+        [ $action == "unlock" ] && usermod --expiredate "" $username
+    fi
+    return 0
 }
 
 restart_sshd() {
@@ -166,8 +187,9 @@ case $1 in
         passwordless_sudo "admin";
         inithooks_sudoadmin "true";
         setup_initfence "admin";
-        ssh_authorizedkeys_inithook "admin"
-        ssh_authorizedkeys_merge "admin" "root"
+        update_confconsole_services "admin";
+        ssh_authorizedkeys_inithook "admin";
+        ssh_authorizedkeys_merge "admin" "root";
         user_state "admin" "unlock";
         user_state "root" "lock";
         permitrootlogin_ssh "no";
@@ -179,8 +201,9 @@ case $1 in
         [ "$(id -u)" != "0" ] && fatal "must be run with root permissions"
         inithooks_sudoadmin "false";
         setup_initfence "root";
-        ssh_authorizedkeys_inithook "root"
-        ssh_authorizedkeys_merge "root" "admin"
+        update_confconsole_services "root";
+        ssh_authorizedkeys_inithook "root";
+        ssh_authorizedkeys_merge "root" "admin";
         permitrootlogin_ssh "yes";
         user_state "root" "unlock";
         user_state "admin" "lock";

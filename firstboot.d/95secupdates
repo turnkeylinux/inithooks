@@ -2,14 +2,14 @@
 # install security updates
 # SEC_UPDATES: SKIP, FORCE (if none specified, will be interactive)
 
+. /etc/default/inithooks
+[ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
+
 # exit if running live
 grep -qs boot=casper /proc/cmdline && exit 2
 
-LOGFILE=/var/log/cron-apt/log
-INITHOOKS_DEFAULT=/etc/default/inithooks
-. $INITHOOKS_DEFAULT
-
 install_updates() {
+    LOGFILE=/var/log/cron-apt/log
     OLDMD5=$(ls -la /lib/modules /boot | md5sum)
     for actionfile in /etc/cron-apt/action.d/*; do
         while read aptcmd; do
@@ -18,10 +18,9 @@ install_updates() {
             DEBIAN_FRONTEND=noninteractive apt-get $aptcmd | tee -a $LOGFILE
         done < $actionfile
     done
-    sed -i '/RUN_FIRSTBOOT/ s/=.*/=false/g' $INITHOOKS_DEFAULT
     NEWMD5=$(ls -la /lib/modules /boot | md5sum)
     if [ "$NEWMD5" != "$OLDMD5" ]; then
-        exit 42
+        chmod +x $INITHOOKS_PATH/firstboot.d/99reboot
     fi
 }
 
