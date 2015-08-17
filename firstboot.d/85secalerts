@@ -7,5 +7,7 @@
 [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
 [ "$SEC_ALERTS" == "SKIP" ] && exit 0
 
-$INITHOOKS_PATH/bin/secalerts.py --email="$SEC_ALERTS"
+$INITHOOKS_PATH/bin/secalerts.py \
+    --email="$SEC_ALERTS" \
+    --email-placeholder="$($INITHOOKS_PATH/bin/inithooks_cache.py APP_EMAIL)"
 

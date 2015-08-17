@@ -2,7 +2,8 @@
 """Enable system alerts and notifications
 
 Options:
-    --email=     if not provided, will ask interactively
+    --email=                if not provided, will ask interactively
+    --email-placeholder=    placeholder when asking interactively
 
 """
 
@@ -42,22 +43,27 @@ def usage(s=None):
 def main():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     try:
-        opts, args = getopt.gnu_getopt(sys.argv[1:], "h", ["help", "email="])
+        l_opts = ["help", "email=", "email-placeholder="]
+        opts, args = getopt.gnu_getopt(sys.argv[1:], "h", l_opts)
     except getopt.GetoptError, e:
         usage(e)
 
     email = ""
+    email_placeholder = ""
     for opt, val in opts:
         if opt in ("-h", "--help"):
             usage()
         elif opt == "--email":
             email = val
+        elif opt == "--email-placeholder":
+            email_placeholder = val
 
     if email and not email_re.match(email):
         fatal("email is not valid")
 
     if not email:
         d = Dialog("TurnKey Linux - First boot configuration")
+        email = email_placeholder
         while 1:
             retcode, email = d.inputbox(
                 TITLE,
