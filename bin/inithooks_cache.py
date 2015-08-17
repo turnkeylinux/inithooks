@@ -14,16 +14,10 @@ Environment:
 
 import os
 import sys
-import getopt
-
-INITHOOKS_CACHE = os.environ.get('INITHOOKS_CACHE', '/var/lib/inithooks/cache')
 
 def fatal(e):
     print >> sys.stderr, "Error:", e
     sys.exit(1)
-
-def warn(e):
-    print >> sys.stderr, "Warning:", e
 
 def usage(s=None):
     if s:
@@ -32,21 +26,40 @@ def usage(s=None):
     print >> sys.stderr, __doc__
     sys.exit(1)
 
-def write(key, value):
-    if not os.path.exists(INITHOOKS_CACHE):
-        os.makedirs(INITHOOKS_CACHE)
+class KeyStore:
+    def __init__(self, path):
+        self.path = path
+        if not os.path.exists(self.path):
+            os.makedirs(self.path)
 
-    fh = file(os.path.join(INITHOOKS_CACHE, key), 'w')
-    fh.write(value)
-    fh.close()
+    def read(self, key):
+        keypath = os.path.join(self.path, key)
+
+        if os.path.exists(keypath):
+            return file(keypath, 'r').read()
+
+        return None
+
+    def write(self, key, val):
+        keypath = os.path.join(self.path, key)
+
+        fh = file(keypath, 'w')
+        fh.write(val)
+        fh.close()
+
+#convenience functions
+CACHE_DIR = os.environ.get('INITHOOKS_CACHE', '/var/lib/inithooks/cache')
 
 def read(key):
-    if os.path.exists(os.path.join(INITHOOKS_CACHE, key)):
-        return file(os.path.join(INITHOOKS_CACHE, key), 'r').read()
+    return KeyStore(CACHE_DIR).read(key)
 
-    return None
+def write(key, value):
+    return KeyStore(CACHE_DIR).write(key, value)
 
-def main():
+
+if __name__ == "__main__":
+    import getopt
+
     try:
         opts, args = getopt.gnu_getopt(sys.argv[1:], "h", ["help"])
     except getopt.GetoptError, e:
@@ -56,8 +69,11 @@ def main():
         if opt in ("-h", "--help"):
             usage()
 
-    if not len(args) in (1, 2):
+    if len(args) == 0:
         usage()
+
+    if len(args) > 2:
+        fatal("too many arguments")
 
     if len(args) == 1:
         val = read(args[0])
@@ -66,8 +82,4 @@ def main():
 
     if len(args) == 2:
         write(args[0], args[1])
-
-
-if __name__ == "__main__":
-    main()
 
