@@ -9,6 +9,11 @@
 grep -qs boot=casper /proc/cmdline && exit 2
 
 install_updates() {
+    # if registered with hub, update with status
+    if grep SERVERID= /var/lib/hubclient/server.conf -q -s; then
+        hubclient-status sec-updates
+    fi
+
     LOGFILE=/var/log/cron-apt/log
     OLDMD5=$(ls -la /lib/modules /boot | md5sum)
     for actionfile in /etc/cron-apt/action.d/*; do
