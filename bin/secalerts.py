@@ -17,9 +17,9 @@ from executil import system
 
 TITLE = "System Notifications and Critical Security Alerts"
 
-TEXT = """Enable local system notifications (root@localhost) to be forwarded to your regular inbox. These will include details about auto security updates and system messages.
+TEXT = """Enable local system notifications (root@localhost) to be forwarded to your regular inbox. Notifications include security updates and system messages.
 
-Enabling this option will also sign you up to receive critical security and bug alerts via TurnKey's low-traffic Security and News announcements newsletter. You can unsubscribe at any time.
+You will also be subscribed to receive critical security and bug alerts through a low-traffic Security and News announcements newsletter. You can unsubscribe at any time.
 
 http://www.turnkeylinux.org/security-alerts
 
