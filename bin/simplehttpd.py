@@ -37,7 +37,7 @@ def fatal(e):
 
 def usage(e=None):
     print >> sys.stderr, "Error: " + str(e)
-    print >> sys.stderr, "Syntax: %s [ -options ] /path/to/webroot [address:]http-port [ [ssl-address:]ssl-port /path/to/pem ]" % sys.argv[0]
+    print >> sys.stderr, "Syntax: %s [ -options ] /path/to/webroot [address:]http-port [ [ssl-address:]ssl-port /path/to/pem /path/to/key ]" % sys.argv[0]
     print >> sys.stderr, __doc__.strip()
     sys.exit(1)
 
@@ -107,20 +107,25 @@ def drop_privileges(user):
     os.setgid(gid)
     os.setuid(uid)
 
-def simplewebserver(webroot, http_address=None, https_address=None, certfile=None, runas=None):
-    if https_address and not certfile:
-        raise Error("certfile needed to use HTTPS")
+def simplewebserver(webroot, http_address=None, https_address=None, certfile=None, keyfile=None, runas=None):
+    if https_address and not certfile or not keyfile:
+        raise Error("certfile and keyfile needed to use HTTPS")
 
-    if runas and certfile:
-        # copy over certfile to a temporary file owned by runas
-        tempfile = temp.TempFile()
-        file(tempfile.path, "w").write(file(certfile).read())
+    if runas and certfile and keyfile:
+        # copy over keyfile and certfile to a temporary file owned by runas
+
+        paths = [certfile, keyfile]
+        temps = [temp.TempFile(), temp.TempFile()]
+        for i, afile in enumerate(paths):
+                tempfile = temps[i].path
+                file(tempfile, "w").write(file(afile).read())
 
         pwent = pwd.getpwnam(runas)
-        os.chown(tempfile.path, pwent.pw_uid, pwent.pw_gid)
-        os.chmod(tempfile.path, 0600)
+        os.chown(tempfile, pwent.pw_uid, pwent.pw_gid)
+        os.chmod(tempfile, 0600)
 
-        certfile = tempfile.path
+        certfile = temps[0].path
+        keyfile = temps[1].path
 
     httpd = None
     if http_address:
@@ -129,7 +134,7 @@ def simplewebserver(webroot, http_address=None, https_address=None, certfile=Non
     httpsd = None
     if https_address:
         httpsd = SocketServer.TCPServer(https_address, SimpleHTTPServer.SimpleHTTPRequestHandler)
-        httpsd.socket = ssl.wrap_socket (httpsd.socket, certfile=certfile, server_side=True, ssl_version=ssl.PROTOCOL_TLSv1, ciphers='ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:DES-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA')
+        httpsd.socket = ssl.wrap_socket(httpsd.socket, certfile=certfile, keyfile=keyfile, server_side=True, ssl_version=ssl.PROTOCOL_TLSv1, ciphers='ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:DES-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA')
 
     orig_cwd = os.getcwd()
     os.chdir(webroot)
@@ -178,7 +183,7 @@ def main():
     if not args:
         usage()
 
-    if len(args) not in (2, 4):
+    if len(args) not in (2, 5):
         usage("incorrect number of arguments")
 
     if daemonize_pidfile and not is_writeable(daemonize_pidfile):
@@ -205,6 +210,10 @@ def main():
         if not exists(certfile):
             fatal("no such file '%s'" % certfile)
         certfile = os.path.abspath(certfile)
+        keyfile = args[4]
+        if not exists(keyfile):
+            fatal("no such file '%s'" % keyfile)
+        keyfile = os.path.abspath(keyfile)
 
     if daemonize_pidfile:
         daemonize(daemonize_pidfile, logfile)
@@ -214,7 +223,7 @@ def main():
         sys.exit(1)
     signal.signal(signal.SIGTERM, handler)
 
-    simplewebserver(webroot, http_address, https_address, certfile, runas)
+    simplewebserver(webroot, http_address, https_address, certfile, keyfile, runas)
 
 if __name__ == "__main__":
     main()
