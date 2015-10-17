@@ -61,7 +61,7 @@ enable_security_alerts() {
 curl https://hub.turnkeylinux.org/api/server/secalerts/ \\
     -d email="$email" \\
     -d turnkey_version="$turnkey_version" \\
-    --silent --fail --output /dev/null
+    --silent --fail --output /dev/null 2>&1 > /dev/null
 
 rm -f \$0
 EOF
