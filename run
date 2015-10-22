@@ -8,8 +8,14 @@ if [ "$(echo $REDIRECT_OUTPUT | tr [A-Z] [a-z] )" = "true" ]; then
     # redirect stdout/stderr (use when preseeding headless deployments)
     LOGFILE=/var/log/inithooks.log
     touch $LOGFILE; chmod 640 $LOGFILE
+    TTY=$(cat /sys/devices/virtual/tty/tty0/active)
+    [ -z $TTY ] && TTY=console
+    echo "-------------------------------------------------" > /dev/$TTY
+    echo "Regenerating keys and installing security updates" > /dev/$TTY
+    echo "-------------------------------------------------" > /dev/$TTY
     echo "Redirecting output to $LOGFILE"
-    exec > >(tee $LOGFILE|logger -t inithooks -s 2>/dev/console) 2>&1
+    exec > >(tee $LOGFILE|logger -t inithooks -s 2>/dev/$TTY) 2>&1
+    
 fi
 
 exec_scripts() {
@@ -18,7 +24,6 @@ exec_scripts() {
     for SCRIPT in $(find $SCRIPT_DIR -type f -or -type l | sort); do
         [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
         [ -x $SCRIPT ] || continue
-        echo "# $SCRIPT"
         $SCRIPT
     done
     return 0
