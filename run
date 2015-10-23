@@ -20,6 +20,7 @@ exec_scripts() {
         [ -x $SCRIPT ] || continue
         echo "# $SCRIPT"
         $SCRIPT
+        [ $? -eq 42 ] && init 6 && exit 0
     done
     return 0
 }
