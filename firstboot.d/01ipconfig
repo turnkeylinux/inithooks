@@ -8,7 +8,9 @@
 [ "$IP_CONFIG" != "manual" ] && [ "$IP_CONFIG" != "static" ] && [ "$IP_CONFIG" != "dhcp" ] && exit 1
 [ ! -e /etc/network/interfaces ] && exit 1
 
-ifdown --exclude=lo -a
+# if IP_CONFIG is set to DHCP and dhcp is already configured in /etc/network/interfaces
+# (which is the default) skip this script and avoid a reboot due to changed network config.
+[ "$IP_CONFIG" = "dhcp" ] && grep "iface eth0 inet dhcp" /etc/network/interfaces >/dev/null && exit 0
 
 echo "# interfaces(5) file used by ifup(8) and ifdown(8)" >/etc/network/interfaces
 echo >>/etc/network/interfaces
@@ -25,6 +27,7 @@ if [ "$IP_CONFIG" = "static" ]; then
  echo " dns-nameservers $IP_DNS1 $IP_DNS2" >>/etc/network/interfaces
 fi
 
-ifup --exclude=lo -a
+# disable this script to avoid a reboot loop
+chmod 644 $0
 
-exit $?
+exit 42
