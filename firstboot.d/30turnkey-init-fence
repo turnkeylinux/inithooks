@@ -8,7 +8,7 @@ USERNAME=root
 PROFILE_FIRSTLOGIN=$(eval printf ~$USERNAME)/.profile.d/turnkey-init-fence
 [ -f $PROFILE_FIRSTLOGIN ] && chmod +x $PROFILE_FIRSTLOGIN
 
-CODENAME=$(cat /etc/hostname)
+CODENAME=$(turnkey-version | cut -d- -f2)
 sed -i "s/\$CODENAME/$CODENAME/" /var/lib/inithooks/turnkey-init-fence/htdocs/index.html
 
 update-rc.d turnkey-init-fence defaults
