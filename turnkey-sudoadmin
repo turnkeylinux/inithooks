@@ -88,8 +88,8 @@ setup_initfence() {
         if [ $username != "root" ]; then
             mkdir -p $(dirname $user_fence)
             cp $root_fence $user_fence
-            sed -i "s|^\$BIN|sudo \$BIN|" $user_fence
-            sed -i "s|root|home\/${username}|" $user_fence
+            sed -i "s|^|sudo |" $user_fence
+            sed -i "s|root|home\/${username}|g" $user_fence
             chown -R $username:$username $(dirname $user_fence)
         fi
     fi
