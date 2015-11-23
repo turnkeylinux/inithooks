@@ -154,15 +154,11 @@ following conditions:
 
    2) activates ~$USERNAME/.profile.d/turnkey-init-fence
 
-      the .profile.d script launches a screen session via inithooks/bin/screen_session.py
+      the .profile.d script launches a dtach session bound to a socket
 
-          screen_session.py is a wrapper around screen that
-                    
-                calculates session id for a given command
+          if a session is already bound to the socket attach to it
 
-                if the session exists, attach to it, otherwise create it
-
-          what command are we running in the .profile.d screen session?
+          what command are we running in the dtach session?
 
                 turnkey-init -> deactivate initfence (service and profile.d)
 
