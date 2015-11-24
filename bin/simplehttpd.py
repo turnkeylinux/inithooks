@@ -37,7 +37,7 @@ def fatal(e):
 
 def usage(e=None):
     print >> sys.stderr, "Error: " + str(e)
-    print >> sys.stderr, "Syntax: %s [ -options ] /path/to/webroot [address:]http-port [ [ssl-address:]ssl-port /path/to/pem /path/to/key ]" % sys.argv[0]
+    print >> sys.stderr, "Syntax: %s [ -options ] path/to/webroot [address:]http-port [ [ssl-address:]ssl-port path/to/pem [ path/to/key ] ]" % sys.argv[0]
     print >> sys.stderr, __doc__.strip()
     sys.exit(1)
 
@@ -108,6 +108,9 @@ def drop_privileges(user):
     os.setuid(uid)
 
 def simplewebserver(webroot, http_address=None, https_address=None, certfile=None, keyfile=None, runas=None):
+    if not keyfile:
+        keyfile=certfile
+
     if https_address and not certfile or not keyfile:
         raise Error("certfile and keyfile needed to use HTTPS")
 
@@ -183,7 +186,7 @@ def main():
     if not args:
         usage()
 
-    if len(args) not in (2, 5):
+    if len(args) not in (2, 4, 5):
         usage("incorrect number of arguments")
 
     if daemonize_pidfile and not is_writeable(daemonize_pidfile):
@@ -203,6 +206,7 @@ def main():
         http_address = parse_address(args[1])
 
     certfile = None
+    keyfile = None
     https_address = None
     if len(args) > 2:
         https_address = parse_address(args[2])
@@ -210,10 +214,14 @@ def main():
         if not exists(certfile):
             fatal("no such file '%s'" % certfile)
         certfile = os.path.abspath(certfile)
-        keyfile = args[4]
-        if not exists(keyfile):
-            fatal("no such file '%s'" % keyfile)
-        keyfile = os.path.abspath(keyfile)
+
+        try:
+            keyfile = args[4]
+            if not exists(keyfile):
+                fatal("no such file '%s'" % keyfile)
+            keyfile = os.path.abspath(keyfile)
+        except IndexError:
+            pass
 
     if daemonize_pidfile:
         daemonize(daemonize_pidfile, logfile)
