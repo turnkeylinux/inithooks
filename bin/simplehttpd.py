@@ -41,21 +41,30 @@ def usage(e=None):
     print >> sys.stderr, __doc__.strip()
     sys.exit(1)
 
-def parse_address(arg):
-    if ':' in arg:
-        address, port = arg.split(':', 1)
-    else:
-        address = '0.0.0.0'
-        port = arg
+class HTTPAddress:
 
-    try:
-        port = int(port)
-        if not 0 < port < 65535:
-            raise Exception
-    except:
-        raise Error("illegal port")
+    @staticmethod
+    def parse_address(address):
+        if ':' in address:
+            host, port = address.split(':', 1)
+        else:
+            host = '0.0.0.0'
+            port = address
 
-    return address, port
+        try:
+            port = int(port)
+            if not 0 < port < 65535:
+                raise Exception
+        except:
+            raise Error("illegal port")
+
+        return host, port
+
+    def __init__(self, address):
+
+        host, port = self.parse_address(address)
+        self.host = host
+        self.port = port
 
 def serve_forever(server1,server2):
     while True:
@@ -111,7 +120,7 @@ def simplewebserver(webroot, http_address=None, https_address=None, certfile=Non
     if not keyfile:
         keyfile=certfile
 
-    if https_address and not certfile or not keyfile:
+    if https_address and not (certfile or keyfile):
         raise Error("certfile and keyfile needed to use HTTPS")
 
     if runas and certfile and keyfile:
@@ -132,7 +141,7 @@ def simplewebserver(webroot, http_address=None, https_address=None, certfile=Non
 
     httpd = None
     if http_address:
-        httpd = SocketServer.TCPServer(http_address, SimpleHTTPServer.SimpleHTTPRequestHandler)
+        httpd = SocketServer.TCPServer((http_address.host, http_address.port), SimpleHTTPServer.SimpleHTTPRequestHandler)
 
     httpsd = None
     if https_address:
@@ -201,15 +210,14 @@ def main():
 
     webroot = abspath(args[0])
 
-    http_address = None
-    if args[1] not in ("", "0"):
-        http_address = parse_address(args[1])
+    http_address = HTTPAddress(args[1]) if args[1] not in ("", "0") else None
 
     certfile = None
     keyfile = None
+
     https_address = None
     if len(args) > 2:
-        https_address = parse_address(args[2])
+        https_address = HTTPAddress.parse_address(args[2])
         certfile = args[3]
         if not exists(certfile):
             fatal("no such file '%s'" % certfile)
