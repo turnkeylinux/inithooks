@@ -104,7 +104,7 @@ def daemonize(pidfile, logfile=None):
     pid = os.fork()
     if pid != 0:
         print >> file(pidfile, "w"), "%d" % pid
-        sys.exit(1)
+        sys.exit(0)
 
     os.chdir("/")
     os.setsid()
