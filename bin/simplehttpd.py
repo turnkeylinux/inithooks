@@ -41,48 +41,6 @@ def usage(e=None):
     print >> sys.stderr, __doc__.strip()
     sys.exit(1)
 
-class ServerAddress:
-
-    @staticmethod
-    def parse_address(address):
-        if ':' in address:
-            host, port = address.split(':', 1)
-        else:
-            host = '0.0.0.0'
-            port = address
-
-        try:
-            port = int(port)
-            if not 0 < port < 65535:
-                raise Exception
-        except:
-            raise Error("illegal port")
-
-        return host, port
-
-    def __init__(self, address):
-
-        host, port = self.parse_address(address)
-        self.host = host
-        self.port = port
-
-class HTTPSConf(ServerAddress):
-    def __init__(self, address, certfile, keyfile=None):
-        ServerAddress.__init__(self, address)
-        if keyfile is None:
-            keyfile = certfile
-
-        self.certfile = self._validate_path(certfile)
-        self.keyfile = self._validate_path(keyfile)
-
-    @staticmethod
-    def _validate_path(fpath):
-        if not exists(fpath):
-            raise Error("no such file '%s'" % fpath)
-        return abspath(fpath)
-
-    CIPHERS='ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:DES-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA'
-
 def is_writeable(path):
     if not os.path.exists(path):
         path = os.path.dirname(path)
@@ -108,46 +66,70 @@ def daemonize(pidfile, logfile=None):
     devnull = file("/dev/null", "r")
     os.dup2(devnull.fileno(), sys.stdin.fileno())
 
-def drop_privileges(user):
-    pwent = pwd.getpwnam(user)
-    uid, gid, home = pwent[2], pwent[3], pwent[5]
-    os.unsetenv("XAUTHORITY")
-    os.putenv("USER", user)
-    os.putenv("HOME", home)
-
-    usergroups = []
-    groups = grp.getgrall()
-    for group in groups:
-        if user in group[3]:
-            usergroups.append(group[2])
-
-    os.setgroups(usergroups)
-    os.setgid(gid)
-    os.setuid(uid)
-
-class TempOwnedAs(str):
-    def __new__(cls, fpath, owner, chmod=0600):
-
-        if not exists(fpath):
-            raise Error("file does not exist '%s'" % fpath)
-
-        tempfile = temp.TempFile()
-
-        tempfile.write(file(fpath).read())
-        tempfile.close()
-
-        pwent = pwd.getpwnam(owner)
-
-        os.chown(tempfile.path, pwent.pw_uid, pwent.pw_gid)
-        if chmod:
-            os.chmod(tempfile.path, chmod)
-
-        self = str.__new__(cls, tempfile.path)
-        self.tempfile = tempfile
-
-        return self
-
 class SimpleWebServer:
+    class Address:
+
+        @staticmethod
+        def parse_address(address):
+            if ':' in address:
+                host, port = address.split(':', 1)
+            else:
+                host = '0.0.0.0'
+                port = address
+
+            try:
+                port = int(port)
+                if not 0 < port < 65535:
+                    raise Exception
+            except:
+                raise Error("illegal port")
+
+            return host, port
+
+        def __init__(self, address):
+
+            host, port = self.parse_address(address)
+            self.host = host
+            self.port = port
+
+    class HTTPSConf(Address):
+        def __init__(self, address, certfile, keyfile=None):
+            SimpleWebServer.Address.__init__(self, address)
+            if keyfile is None:
+                keyfile = certfile
+
+            self.certfile = self._validate_path(certfile)
+            self.keyfile = self._validate_path(keyfile)
+
+        @staticmethod
+        def _validate_path(fpath):
+            if not exists(fpath):
+                raise Error("no such file '%s'" % fpath)
+            return abspath(fpath)
+
+        CIPHERS='ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:DES-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA'
+
+    class TempOwnedAs(str):
+        def __new__(cls, fpath, owner, chmod=0600):
+
+            if not exists(fpath):
+                raise Error("file does not exist '%s'" % fpath)
+
+            tempfile = temp.TempFile()
+
+            tempfile.write(file(fpath).read())
+            tempfile.close()
+
+            pwent = pwd.getpwnam(owner)
+
+            os.chown(tempfile.path, pwent.pw_uid, pwent.pw_gid)
+            if chmod:
+                os.chmod(tempfile.path, chmod)
+
+            self = str.__new__(cls, tempfile.path)
+            self.tempfile = tempfile
+
+            return self
 
     def __init__(self, webroot, http_address=None, https_conf=None, runas=None):
 
@@ -164,8 +146,8 @@ class SimpleWebServer:
             keyfile = https_conf.keyfile
 
             if runas:
-                certfile = TempOwnedAs(certfile, runas)
-                keyfile = TempOwnedAs(keyfile, runas)
+                certfile = self.TempOwnedAs(certfile, runas)
+                keyfile = self.TempOwnedAs(keyfile, runas)
 
             httpsd = SocketServer.TCPServer((https_conf.host, https_conf.port),
                                             SimpleHTTPServer.SimpleHTTPRequestHandler)
@@ -175,9 +157,28 @@ class SimpleWebServer:
                                             ciphers=https_conf.CIPHERS)
 
         if runas:
-            drop_privileges(runas)
+            self.drop_privileges(runas)
 
         self.httpsd = httpsd
+
+
+    @staticmethod
+    def drop_privileges(user):
+        pwent = pwd.getpwnam(user)
+        uid, gid, home = pwent[2], pwent[3], pwent[5]
+        os.unsetenv("XAUTHORITY")
+        os.putenv("USER", user)
+        os.putenv("HOME", home)
+
+        usergroups = []
+        groups = grp.getgrall()
+        for group in groups:
+            if user in group[3]:
+                usergroups.append(group[2])
+
+        os.setgroups(usergroups)
+        os.setgid(gid)
+        os.setuid(uid)
 
     def serve_forever(self):
 
@@ -250,7 +251,7 @@ def main():
     if http_address in ("", "0"):
         http_address = None
     else:
-        http_address = ServerAddress(http_address)
+        http_address = SimpleWebServer.Address(http_address)
 
     https_conf = None
     if len(args[2:]):
@@ -261,7 +262,7 @@ def main():
         except IndexError:
             keyfile = None
 
-        https_conf = HTTPSConf(address, certfile, keyfile)
+        https_conf = SimpleWebServer.HTTPSConf(address, certfile, keyfile)
 
     server = SimpleWebServer(webroot, http_address, https_conf, runas)
     if daemonize_pidfile:
