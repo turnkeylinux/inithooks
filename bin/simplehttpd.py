@@ -67,6 +67,10 @@ def daemonize(pidfile, logfile=None):
     os.dup2(devnull.fileno(), sys.stdin.fileno())
 
 class SimpleWebServer:
+
+    class TCPServer(SocketServer.TCPServer):
+        allow_reuse_address = True
+
     class Address:
 
         @staticmethod
@@ -135,7 +139,7 @@ class SimpleWebServer:
 
         os.chdir(webroot)
 
-        self.httpd = SocketServer.TCPServer((http_address.host, http_address.port),
+        self.httpd = self.TCPServer((http_address.host, http_address.port),
                                     SimpleHTTPServer.SimpleHTTPRequestHandler) \
                      if http_address else None
 
@@ -149,8 +153,8 @@ class SimpleWebServer:
                 certfile = self.TempOwnedAs(certfile, runas)
                 keyfile = self.TempOwnedAs(keyfile, runas)
 
-            httpsd = SocketServer.TCPServer((https_conf.host, https_conf.port),
-                                            SimpleHTTPServer.SimpleHTTPRequestHandler)
+            httpsd = self.TCPServer((https_conf.host, https_conf.port),
+                                    SimpleHTTPServer.SimpleHTTPRequestHandler)
 
             httpsd.socket = ssl.wrap_socket(httpsd.socket, certfile=certfile, keyfile=keyfile,
                                             server_side=True, ssl_version=ssl.PROTOCOL_TLSv1,
