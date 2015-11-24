@@ -133,6 +133,28 @@ def drop_privileges(user):
     os.setgid(gid)
     os.setuid(uid)
 
+class TempOwnedAs(str):
+    def __new__(cls, fpath, owner, chmod=0600):
+
+        if not exists(fpath):
+            raise Error("file does not exist '%s'" % fpath)
+
+        tempfile = temp.TempFile()
+
+        tempfile.write(file(fpath).read())
+        tempfile.close()
+
+        pwent = pwd.getpwnam(owner)
+
+        os.chown(tempfile.path, pwent.pw_uid, pwent.pw_gid)
+        if chmod:
+            os.chmod(tempfile.path, chmod)
+
+        self = str.__new__(cls, tempfile.path)
+        self.tempfile = tempfile
+
+        return self
+
 def simplewebserver(webroot, http_address=None, https_conf=None, runas=None):
 
     httpd = SocketServer.TCPServer((http_address.host, http_address.port),
@@ -146,22 +168,8 @@ def simplewebserver(webroot, http_address=None, https_conf=None, runas=None):
         keyfile = https_conf.keyfile
 
         if runas:
-            def tempfile_ownedas(origfile, owner):
-                tempfile = temp.TempFile()
-                tempfile.write(file(origfile).read())
-
-                pwent = pwd.getpwnam(owner)
-
-                os.chown(tempfile.path, pwent.pw_uid, pwent.pw_gid)
-                os.chmod(tempfile.path, 0600)
-
-                return tempfile
-
-            certfile_tmp = tempfile_ownedas(certfile, runas)
-            certfile = certfile_tmp.path
-
-            keyfile_tmp = tempfile_ownedas(keyfile, runas)
-            keyfile = keyfile.path
+            certfile = TempOwnedAs(certfile, runas)
+            keyfile = TempOwnedAs(keyfile, runas)
 
         httpsd = SocketServer.TCPServer((https_conf.host, https_conf.port),
                                         SimpleHTTPServer.SimpleHTTPRequestHandler)
