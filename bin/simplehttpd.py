@@ -12,7 +12,7 @@ Options:
 
 """
 import os
-from os.path import exists, abspath
+from os.path import exists, abspath, isdir
 
 import sys
 import getopt
@@ -83,14 +83,6 @@ class HTTPSConf(ServerAddress):
 
     CIPHERS='ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:DES-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA'
 
-def serve_forever(server1,server2):
-    while True:
-        r, w, e = select.select([server1,server2],[],[],0)
-        if server1 in r:
-            server1.handle_request()
-        if server2 in r:
-            server2.handle_request()
-
 def is_writeable(path):
     if not os.path.exists(path):
         path = os.path.dirname(path)
@@ -155,43 +147,58 @@ class TempOwnedAs(str):
 
         return self
 
-def simplewebserver(webroot, http_address=None, https_conf=None, runas=None):
+class SimpleWebServer:
 
-    httpd = SocketServer.TCPServer((http_address.host, http_address.port),
-                                   SimpleHTTPServer.SimpleHTTPRequestHandler) \
-            if http_address else None
+    def __init__(self, webroot, http_address=None, https_conf=None, runas=None):
 
-    httpsd = None
-    if https_conf:
+        os.chdir(webroot)
 
-        certfile = https_conf.certfile
-        keyfile = https_conf.keyfile
+        self.httpd = SocketServer.TCPServer((http_address.host, http_address.port),
+                                    SimpleHTTPServer.SimpleHTTPRequestHandler) \
+                     if http_address else None
+
+        httpsd = None
+        if https_conf:
+
+            certfile = https_conf.certfile
+            keyfile = https_conf.keyfile
+
+            if runas:
+                certfile = TempOwnedAs(certfile, runas)
+                keyfile = TempOwnedAs(keyfile, runas)
+
+            httpsd = SocketServer.TCPServer((https_conf.host, https_conf.port),
+                                            SimpleHTTPServer.SimpleHTTPRequestHandler)
+
+            httpsd.socket = ssl.wrap_socket(httpsd.socket, certfile=certfile, keyfile=keyfile,
+                                            server_side=True, ssl_version=ssl.PROTOCOL_TLSv1,
+                                            ciphers=https_conf.CIPHERS)
 
         if runas:
-            certfile = TempOwnedAs(certfile, runas)
-            keyfile = TempOwnedAs(keyfile, runas)
+            drop_privileges(runas)
 
-        httpsd = SocketServer.TCPServer((https_conf.host, https_conf.port),
-                                        SimpleHTTPServer.SimpleHTTPRequestHandler)
+        self.httpsd = httpsd
 
-        httpsd.socket = ssl.wrap_socket(httpsd.socket, certfile=certfile, keyfile=keyfile,
-                                        server_side=True, ssl_version=ssl.PROTOCOL_TLSv1,
-                                        ciphers=https_conf.CIPHERS)
+    def serve_forever(self):
 
-    orig_cwd = os.getcwd()
-    os.chdir(abspath(webroot))
+        httpd = self.httpd
+        httpsd = self.httpsd
 
-    if runas:
-        drop_privileges(runas)
+        if not httpsd and not httpd:
+            return
 
-    if httpsd and httpd:
-        serve_forever(httpd, httpsd)
-    elif httpd:
-        httpd.serve_forever()
-    elif httpsd:
-        httpsd.serve_forever()
+        if not httpsd and httpd:
+            return httpd.serve_forever()
 
-    os.chdir(orig_cwd)
+        if not httpd and httpsd:
+            return httpsd.serve_forever()
+
+        while True:
+            r, w, e = select.select([httpd,httpsd],[],[],0)
+            if httpd in r:
+                httpd.handle_request()
+            if httpsd in r:
+                httpsd.handle_request()
 
 def main():
     args = sys.argv[1:]
@@ -256,6 +263,7 @@ def main():
 
         https_conf = HTTPSConf(address, certfile, keyfile)
 
+    server = SimpleWebServer(webroot, http_address, https_conf, runas)
     if daemonize_pidfile:
         daemonize(daemonize_pidfile, logfile)
 
@@ -264,7 +272,7 @@ def main():
         sys.exit(1)
     signal.signal(signal.SIGTERM, handler)
 
-    simplewebserver(webroot, http_address, https_conf, runas)
+    server.serve_forever()
 
 if __name__ == "__main__":
     main()
