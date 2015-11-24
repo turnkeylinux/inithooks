@@ -41,7 +41,7 @@ def usage(e=None):
     print >> sys.stderr, __doc__.strip()
     sys.exit(1)
 
-class HTTPAddress:
+class ServerAddress:
 
     @staticmethod
     def parse_address(address):
@@ -65,6 +65,23 @@ class HTTPAddress:
         host, port = self.parse_address(address)
         self.host = host
         self.port = port
+
+class HTTPSConf(ServerAddress):
+    def __init__(self, address, certfile, keyfile=None):
+        ServerAddress.__init__(self, address)
+        if keyfile is None:
+            keyfile = certfile
+
+        self.certfile = self._validate_path(certfile)
+        self.keyfile = self._validate_path(keyfile)
+
+    @staticmethod
+    def _validate_path(fpath):
+        if not exists(fpath):
+            raise Error("no such file '%s'" % fpath)
+        return abspath(fpath)
+
+    CIPHERS='ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:DES-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA'
 
 def serve_forever(server1,server2):
     while True:
@@ -116,40 +133,45 @@ def drop_privileges(user):
     os.setgid(gid)
     os.setuid(uid)
 
-def simplewebserver(webroot, http_address=None, https_address=None, certfile=None, keyfile=None, runas=None):
-    if not keyfile:
-        keyfile=certfile
+def simplewebserver(webroot, http_address=None, https_conf=None, runas=None):
 
-    if https_address and not (certfile or keyfile):
-        raise Error("certfile and keyfile needed to use HTTPS")
-
-    if runas and certfile and keyfile:
-        # copy over keyfile and certfile to a temporary file owned by runas
-
-        paths = [certfile, keyfile]
-        temps = [temp.TempFile(), temp.TempFile()]
-        for i, afile in enumerate(paths):
-                tempfile = temps[i].path
-                file(tempfile, "w").write(file(afile).read())
-
-        pwent = pwd.getpwnam(runas)
-        os.chown(tempfile, pwent.pw_uid, pwent.pw_gid)
-        os.chmod(tempfile, 0600)
-
-        certfile = temps[0].path
-        keyfile = temps[1].path
-
-    httpd = None
-    if http_address:
-        httpd = SocketServer.TCPServer((http_address.host, http_address.port), SimpleHTTPServer.SimpleHTTPRequestHandler)
+    httpd = SocketServer.TCPServer((http_address.host, http_address.port),
+                                   SimpleHTTPServer.SimpleHTTPRequestHandler) \
+            if http_address else None
 
     httpsd = None
-    if https_address:
-        httpsd = SocketServer.TCPServer(https_address, SimpleHTTPServer.SimpleHTTPRequestHandler)
-        httpsd.socket = ssl.wrap_socket(httpsd.socket, certfile=certfile, keyfile=keyfile, server_side=True, ssl_version=ssl.PROTOCOL_TLSv1, ciphers='ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:DES-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA')
+    if https_conf:
+
+        certfile = https_conf.certfile
+        keyfile = https_conf.keyfile
+
+        if runas:
+            def tempfile_ownedas(origfile, owner):
+                tempfile = temp.TempFile()
+                tempfile.write(file(origfile).read())
+
+                pwent = pwd.getpwnam(owner)
+
+                os.chown(tempfile.path, pwent.pw_uid, pwent.pw_gid)
+                os.chmod(tempfile.path, 0600)
+
+                return tempfile
+
+            certfile_tmp = tempfile_ownedas(certfile, runas)
+            certfile = certfile_tmp.path
+
+            keyfile_tmp = tempfile_ownedas(keyfile, runas)
+            keyfile = keyfile.path
+
+        httpsd = SocketServer.TCPServer((https_conf.host, https_conf.port),
+                                        SimpleHTTPServer.SimpleHTTPRequestHandler)
+
+        httpsd.socket = ssl.wrap_socket(httpsd.socket, certfile=certfile, keyfile=keyfile,
+                                        server_side=True, ssl_version=ssl.PROTOCOL_TLSv1,
+                                        ciphers=https_conf.CIPHERS)
 
     orig_cwd = os.getcwd()
-    os.chdir(webroot)
+    os.chdir(abspath(webroot))
 
     if runas:
         drop_privileges(runas)
@@ -208,28 +230,23 @@ def main():
         if not is_writeable(logfile):
             fatal("logfile '%s' not writeable" % logfile)
 
-    webroot = abspath(args[0])
+    webroot, http_address = args[:2]
 
-    http_address = HTTPAddress(args[1]) if args[1] not in ("", "0") else None
+    if http_address in ("", "0"):
+        http_address = None
+    else:
+        http_address = ServerAddress(http_address)
 
-    certfile = None
-    keyfile = None
-
-    https_address = None
-    if len(args) > 2:
-        https_address = HTTPAddress.parse_address(args[2])
-        certfile = args[3]
-        if not exists(certfile):
-            fatal("no such file '%s'" % certfile)
-        certfile = os.path.abspath(certfile)
+    https_conf = None
+    if len(args[2:]):
+        address, certfile = args[2:4]
 
         try:
             keyfile = args[4]
-            if not exists(keyfile):
-                fatal("no such file '%s'" % keyfile)
-            keyfile = os.path.abspath(keyfile)
         except IndexError:
-            pass
+            keyfile = None
+
+        https_conf = HTTPSConf(address, certfile, keyfile)
 
     if daemonize_pidfile:
         daemonize(daemonize_pidfile, logfile)
@@ -239,7 +256,7 @@ def main():
         sys.exit(1)
     signal.signal(signal.SIGTERM, handler)
 
-    simplewebserver(webroot, http_address, https_address, certfile, keyfile, runas)
+    simplewebserver(webroot, http_address, https_conf, runas)
 
 if __name__ == "__main__":
     main()
