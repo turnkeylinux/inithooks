@@ -1,8 +1,11 @@
 #!/usr/bin/python
-# Copyright (c) 2012 Liraz Siri <liraz@turnkeylinux.org>
+# Copyright (c) 2012-2015 Liraz Siri <liraz@turnkeylinux.org>
 
 """
 Simple HTTP server
+Arguments:
+
+        http-port       Port to bind HTTP web server to. 0 = disable HTTP
 
 Options:
 
@@ -12,7 +15,7 @@ Options:
 
 """
 import os
-from os.path import exists, abspath, isdir
+from os.path import exists, abspath
 
 import sys
 import getopt
