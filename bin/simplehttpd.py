@@ -70,7 +70,7 @@ def daemonize(pidfile, logfile=None):
 
 class SimpleWebServer:
 
-    class TCPServer(SocketServer.TCPServer):
+    class TCPServer(SocketServer.ForkingTCPServer):
         allow_reuse_address = True
 
     class Address:
