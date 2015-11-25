@@ -22,7 +22,6 @@ import getopt
 
 import SimpleHTTPServer
 import SocketServer
-import select
 import ssl
 
 import pwd
@@ -193,7 +192,7 @@ class SimpleWebServer:
         httpsd = self.httpsd
 
         if not httpsd and not httpd:
-            return
+            raise Error("nothing to serve")
 
         if not httpsd and httpd:
             return httpd.serve_forever()
@@ -201,12 +200,11 @@ class SimpleWebServer:
         if not httpd and httpsd:
             return httpsd.serve_forever()
 
-        while True:
-            r, w, e = select.select([httpd,httpsd],[],[],0)
-            if httpd in r:
-                httpd.handle_request()
-            if httpsd in r:
-                httpsd.handle_request()
+        pid = os.fork()
+        if pid == 0:
+            return httpsd.serve_forever()
+        else:
+            return httpd.serve_forever()
 
 def main():
     args = sys.argv[1:]
