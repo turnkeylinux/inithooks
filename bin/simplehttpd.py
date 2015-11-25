@@ -274,10 +274,10 @@ def main():
         daemonize(daemonize_pidfile, logfile)
 
     def handler(signum, stack):
-        print "caught signal (%d), exiting" % signum
+        print "%d caught signal (%d), exiting" % (os.getpid(), signum)
         sys.exit(1)
-    signal.signal(signal.SIGTERM, handler)
 
+    signal.signal(signal.SIGTERM, handler)
     server.serve_forever()
 
 if __name__ == "__main__":
