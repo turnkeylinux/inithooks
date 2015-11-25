@@ -3,15 +3,21 @@
 
 """
 Simple HTTP server
+
 Arguments:
 
-        http-port       Port to bind HTTP web server to. 0 = disable HTTP
+        http-port          Port to bind HTTP web server to.
+                           0 = disable HTTP
 
 Options:
 
     --runas=username
     --daemonize=/path/to/pidfile
     --logfile=/path/to/logfile
+
+Known bugs:
+
+- Invalid cert.pem && cert.key will break SSL silently
 
 """
 import os
@@ -39,7 +45,7 @@ def fatal(e):
 
 def usage(e=None):
     print >> sys.stderr, "Error: " + str(e)
-    print >> sys.stderr, "Syntax: %s [ -options ] path/to/webroot [address:]http-port [ [ssl-address:]ssl-port path/to/pem [ path/to/key ] ]" % sys.argv[0]
+    print >> sys.stderr, "Syntax: %s [ -options ] path/to/webroot [address:]http-port [ [ssl-address:]ssl-port path/to/cert.pem [ path/to/cert.key ] ]" % sys.argv[0]
     print >> sys.stderr, __doc__.strip()
     sys.exit(1)
 
