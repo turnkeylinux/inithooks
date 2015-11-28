@@ -145,8 +145,6 @@ class SimpleWebServer:
 
     def __init__(self, webroot, http_address=None, https_conf=None, runas=None):
 
-        os.chdir(webroot)
-
         self.httpd = self.TCPServer((http_address.host, http_address.port),
                                     SimpleHTTPServer.SimpleHTTPRequestHandler) \
                      if http_address else None
@@ -172,6 +170,7 @@ class SimpleWebServer:
             self.drop_privileges(runas)
 
         self.httpsd = httpsd
+        self.webroot = webroot
 
 
     @staticmethod
@@ -193,6 +192,8 @@ class SimpleWebServer:
         os.setuid(uid)
 
     def serve_forever(self):
+
+        os.chdir(self.webroot)
 
         httpd = self.httpd
         httpsd = self.httpsd
