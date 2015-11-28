@@ -79,6 +79,12 @@ class SimpleWebServer:
     class TCPServer(SocketServer.ForkingTCPServer):
         allow_reuse_address = True
 
+    class SimpleHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
+
+        def list_directory(self, path):
+            self.send_error(404, "No permission to list directory")
+            return None
+
     class Address:
 
         @staticmethod
@@ -146,7 +152,7 @@ class SimpleWebServer:
     def __init__(self, webroot, http_address=None, https_conf=None, runas=None):
 
         self.httpd = self.TCPServer((http_address.host, http_address.port),
-                                    SimpleHTTPServer.SimpleHTTPRequestHandler) \
+                                    self.SimpleHTTPRequestHandler) \
                      if http_address else None
 
         httpsd = None
@@ -160,7 +166,7 @@ class SimpleWebServer:
                 keyfile = self.TempOwnedAs(keyfile, runas)
 
             httpsd = self.TCPServer((https_conf.host, https_conf.port),
-                                    SimpleHTTPServer.SimpleHTTPRequestHandler)
+                                    self.SimpleHTTPRequestHandler)
 
             httpsd.socket = ssl.wrap_socket(httpsd.socket, certfile=certfile, keyfile=keyfile,
                                             server_side=True, ssl_version=ssl.PROTOCOL_TLSv1,
@@ -194,9 +200,9 @@ class SimpleWebServer:
     def serve_forever(self):
 
         os.chdir(self.webroot)
-
         httpd = self.httpd
         httpsd = self.httpsd
+
 
         if not httpsd and not httpd:
             raise Error("nothing to serve")
