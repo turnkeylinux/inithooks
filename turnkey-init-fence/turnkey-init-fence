@@ -22,7 +22,6 @@
 #        HTTP_PORT=80
 #        HTTPS_PORTS=443
 #
-# Do NOT "set -e"
 
 # PATH should only include /usr/* if it runs after the mountnfs.sh script
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
