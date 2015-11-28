@@ -21,7 +21,9 @@ Known bugs:
 
 """
 import os
-from os.path import exists, abspath
+from os.path import exists, abspath, isdir
+
+import posixpath
 
 import sys
 import getopt
@@ -74,19 +76,32 @@ def daemonize(pidfile, logfile=None):
     devnull = file("/dev/null", "r")
     os.dup2(devnull.fileno(), sys.stdin.fileno())
 
+class SecureHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
+    ALLOWED_EXTS = []
+
+    def list_directory(self, path):
+        self.send_error(404, "No permission to list directory")
+        return None
+
+    def translate_path(self, path):
+        if not isdir(path):
+
+            base, ext = posixpath.splitext(path)
+            ext = ext.lower()
+            if ext[1:] not in self.ALLOWED_EXTS:
+                return '/dev/null/doesntexist'
+
+        return SimpleHTTPServer.SimpleHTTPRequestHandler.translate_path(self, path)
+
 class SimpleWebServer:
 
     class TCPServer(SocketServer.ForkingTCPServer):
         allow_reuse_address = True
 
-    class SimpleHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
-
-        def list_directory(self, path):
-            self.send_error(404, "No permission to list directory")
-            return None
+    class HTTPRequestHandler(SecureHTTPRequestHandler):
+        ALLOWED_EXTS = [ 'css', 'gif', 'html', 'js', 'png', 'jpg', 'txt' ]
 
     class Address:
-
         @staticmethod
         def parse_address(address):
             if ':' in address:
@@ -152,7 +167,7 @@ class SimpleWebServer:
     def __init__(self, webroot, http_address=None, https_conf=None, runas=None):
 
         self.httpd = self.TCPServer((http_address.host, http_address.port),
-                                    self.SimpleHTTPRequestHandler) \
+                                    self.HTTPRequestHandler) \
                      if http_address else None
 
         httpsd = None
@@ -166,7 +181,7 @@ class SimpleWebServer:
                 keyfile = self.TempOwnedAs(keyfile, runas)
 
             httpsd = self.TCPServer((https_conf.host, https_conf.port),
-                                    self.SimpleHTTPRequestHandler)
+                                    self.HTTPRequestHandler)
 
             httpsd.socket = ssl.wrap_socket(httpsd.socket, certfile=certfile, keyfile=keyfile,
                                             server_side=True, ssl_version=ssl.PROTOCOL_TLSv1,
