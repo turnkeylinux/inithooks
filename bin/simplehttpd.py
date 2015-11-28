@@ -275,15 +275,18 @@ def main():
 
         https_conf = SimpleWebServer.HTTPSConf(address, certfile, keyfile)
 
+    def sighandler(signum, stack):
+        if signum == signal.SIGTERM:
+            os.killpg(os.getpgrp(), signal.SIGHUP)
+        sys.exit(1)
+
+    signal.signal(signal.SIGHUP, sighandler)
+    signal.signal(signal.SIGTERM, sighandler)
+
     server = SimpleWebServer(webroot, http_address, https_conf, runas)
     if daemonize_pidfile:
         daemonize(daemonize_pidfile, logfile)
 
-    def handler(signum, stack):
-        print "%d caught signal (%d), exiting" % (os.getpid(), signum)
-        sys.exit(1)
-
-    signal.signal(signal.SIGTERM, handler)
     server.serve_forever()
 
 if __name__ == "__main__":
