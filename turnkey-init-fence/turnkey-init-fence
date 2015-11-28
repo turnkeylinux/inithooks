@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash -e
 ### BEGIN INIT INFO
 # Provides:          turnkey-init-fence
 # Required-Start:    $remote_fs $syslog
@@ -40,6 +40,7 @@ mkdir -p $(dirname $PIDFILE)
 
 # Read configuration variable file if it is present
 [ -r /etc/default/$NAME ] && . /etc/default/$NAME
+chown -R $RUNAS $(dirname $PIDFILE)
 
 # Load the VERBOSE setting and other rcS variables
 . /lib/init/vars.sh
@@ -116,6 +117,8 @@ do_start()
 #
 do_stop()
 {
+    iptables_redirect stop
+
 	# Return
 	#   0 if daemon has been stopped
 	#   1 if daemon was already stopped
@@ -134,8 +137,6 @@ do_stop()
 	[ "$?" = 2 ] && return 2
 	# Many daemons don't delete their pidfiles when they exit.
 	rm -f $PIDFILE
-
-    iptables_redirect stop
 
 	return "$RETVAL"
 }
