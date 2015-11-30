@@ -1,6 +1,6 @@
 WEBROOT=/var/lib/inithooks/turnkey-init-fence/htdocs
 HTTP_PORTS=80
-HTTPS_PORTS=443
+HTTPS_PORTS="443 12321"
 
 RUNAS=nobody
 
