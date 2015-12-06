@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash -e
 ### BEGIN INIT INFO
 # Provides:          turnkey-init-fence
 # Required-Start:    $remote_fs $syslog
@@ -7,13 +7,21 @@
 # Default-Stop:      0 1 6
 # Short-Description: Fences off appliance ports until after initialization
 ### END INIT INFO
-
+#
 # Author: Liraz Siri <liraz@turnkeylinux.org>
 #
-# Please remove the "Author" lines above and replace them
-# with your own name if you copy and modify this script.
-
-# Do NOT "set -e"
+# how it works: iptables redirects http/https TCP connections to simplehttpd.py
+#
+#    redirect $HTTP_PORTS-> $HTTP_FENCE_PORT
+#    redirect $HTTPS_PORTS -> $HTTPS_FENCE_PORT
+#
+#    configuration @ /etc/default/turnkey-init-fence
+#
+#        HTTP_FENCE_PORT=60080
+#        HTTPS_FENCE_PORT=60443
+#        HTTP_PORT=80
+#        HTTPS_PORTS=443
+#
 
 # PATH should only include /usr/* if it runs after the mountnfs.sh script
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
@@ -31,6 +39,7 @@ mkdir -p $(dirname $PIDFILE)
 
 # Read configuration variable file if it is present
 [ -r /etc/default/$NAME ] && . /etc/default/$NAME
+chown -R $RUNAS $(dirname $PIDFILE)
 
 # Load the VERBOSE setting and other rcS variables
 . /lib/init/vars.sh
@@ -93,7 +102,7 @@ do_start()
     start-stop-daemon --start --quiet --pidfile $PIDFILE --name $(basename $DAEMON) --startas $DAEMON --test > /dev/null \
 		|| return 1
 	start-stop-daemon --start --pidfile $PIDFILE --exec $DAEMON -- --runas=$RUNAS \
-        --daemonize=$PIDFILE $WEBROOT $HTTP_FENCE_PORT $HTTPS_FENCE_PORT $HTTPS_FENCE_CERTFILE
+        --daemonize=$PIDFILE $WEBROOT $HTTP_FENCE_PORT $HTTPS_FENCE_PORT $HTTPS_FENCE_CERTFILE $HTTPS_FENCE_KEYFILE
 
 	# Add code here, if necessary, that waits for the process to be ready
 	# to handle requests from services started subsequently which depend
@@ -107,6 +116,8 @@ do_start()
 #
 do_stop()
 {
+    iptables_redirect stop
+
 	# Return
 	#   0 if daemon has been stopped
 	#   1 if daemon was already stopped
@@ -121,12 +132,11 @@ do_stop()
 	# that waits for the process to drop all resources that could be
 	# needed by services started subsequently.  A last resort is to
 	# sleep for some time.
-	start-stop-daemon --stop --quiet --oknodo --retry=0/30/KILL/5 --exec $DAEMON
+    start-stop-daemon --stop --quiet --oknodo --retry=TERM/30/KILL/5 --user $RUNAS --name $(basename $DAEMON)
+
 	[ "$?" = 2 ] && return 2
 	# Many daemons don't delete their pidfiles when they exit.
 	rm -f $PIDFILE
-
-    iptables_redirect stop
 
 	return "$RETVAL"
 }

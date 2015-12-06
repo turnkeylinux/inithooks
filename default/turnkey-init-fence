@@ -1,9 +1,10 @@
 WEBROOT=/var/lib/inithooks/turnkey-init-fence/htdocs
 HTTP_PORTS=80
-HTTPS_PORTS=443
+HTTPS_PORTS="443 12321"
 
 RUNAS=nobody
 
 HTTP_FENCE_PORT=60080
 HTTPS_FENCE_PORT=60443
-HTTPS_FENCE_CERTFILE=/etc/ssl/certs/cert.pem
+HTTPS_FENCE_CERTFILE=/etc/ssl/private/cert.pem
+HTTPS_FENCE_KEYFILE=/etc/ssl/private/cert.key

@@ -133,16 +133,34 @@ following conditions:
 
 
    **Initialization fence**: the above headless preseeding hook also
-   activates the "initialization fence" mechanism which uses iptables
-   to redirect attempts to access the local web server to a static web
-   page. This page explains you need to log in as root first in order
-   to finish initializing the system. The purpose of the fence is used
-   to prevent users from accessing uninitialized web applications,
-   which in some cases can pose a security risk.
+   activates the "initialization fence" mechanism which uses iptables to
+   redirect attempts to access the local web server to a static web page
+   served by inithooks/bin/simplehttpd.py. 
+   
+   This page explains you need to log in as root first in order to
+   finish initializing the system. The purpose of the fence is used to
+   prevent users from accessing uninitialized web applications, which in
+   some cases can pose a security risk.
 
    After the user logs in as root and completes the initialization
    process the "initialization fence" is turned off. Users can then
    access applications running on the local web server.
+
+   What firstboot.d/30turnkey-init-fence does:
+   
+   1) enables turnkey-init-fence as a service and starts it
+
+      service is enabled / disabled via update-rc.d
+
+   2) activates ~$USERNAME/.profile.d/turnkey-init-fence
+
+      the .profile.d script launches a dtach session bound to a socket
+
+          if a session is already bound to the socket attach to it
+
+          what command are we running in the dtach session?
+
+                turnkey-init -> deactivate initfence (service and profile.d)
 
 everyboot.d scripts
 '''''''''''''''''''
