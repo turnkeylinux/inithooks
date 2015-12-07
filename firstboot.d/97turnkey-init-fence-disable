@@ -1,0 +1,15 @@
+#!/bin/bash
+
+[ -z "$_TURNKEY_INIT" ] && exit 0; # ONLY run from within turnkey-init
+
+if [ -x /etc/init.d/turnkey-init-fence ]; then
+
+    update-rc.d turnkey-init-fence remove; 
+    /etc/init.d/turnkey-init-fence stop;
+
+fi
+
+for home in /root /home/admin; do
+    [ -e $home/.profile.d/turnkey-init-fence ] && chmod -x $home/.profile.d/turnkey-init-fence;
+done
+
