@@ -1,5 +1,7 @@
 #!/bin/bash
 
+[ -n "$_TURNKEY_INIT" ] && exit 0
+
 . /etc/default/inithooks
 if [ "$(echo $SUDOADMIN | tr [A-Z] [a-z] )" = "true" ]; then
     turnkey-sudoadmin on --disable-setpass

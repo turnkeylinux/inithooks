@@ -1,6 +1,8 @@
 #!/bin/bash
 # auto grow filesystem for block device based appliances - (c) Aug/2014 by Peter Lieven <pl@kamp.de>
 
+[ -n "$_TURNKEY_INIT" ] && exit 0
+
 . /etc/default/inithooks
 
 [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
