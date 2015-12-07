@@ -89,7 +89,7 @@ setup_initfence() {
             mkdir -p $(dirname $user_profiled)
             cp $root_profiled $user_profiled
             sed -i "s|^|sudo |" $user_profiled
-            sed -i "s|/root|/home\/${username}|" $user_profiled
+            sed -i "s|/root|/home\/${username}|g" $user_profiled
             chown -R $username:$username $(dirname $user_profiled)
         fi
     fi
