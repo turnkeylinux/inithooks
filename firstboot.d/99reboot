@@ -2,13 +2,22 @@
 # reboot system (kernel upgrade, set chmod +x by 95secupdates)
 # will be skipped if running live or REBOOT set to SKIP
 
+chmod -x $0 # self-deactivating
+
 . /etc/default/inithooks
 [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
 
-chmod -x $0
-[ "$REBOOT" == "SKIP" ] && exit 0
 grep -qs boot=casper /proc/cmdline && exit 2
 
-echo "rebooting due to kernel security upgrade..."
-init 6
+[ "$REBOOT" == "SKIP" ] && exit 0
 
+reboot() {
+    init 6
+}
+
+if [ "$SEC_UPDATES" == "FORCE" ]; then
+    echo "rebooting due to kernel security upgrade..."
+    reboot
+else
+    $INITHOOKS_PATH/bin/reboot-ask.py && reboot
+fi
