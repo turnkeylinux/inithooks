@@ -2,6 +2,8 @@
 # remove existing ssh keys and generate new ones
 # note: ssh daemon needs to be restarted for changes to take effect
 
+[ -n "$_TURNKEY_INIT" ] && exit 0
+
 echo "* Regenerating SSH cryptographic keys"
 
 rm -f /etc/ssh/*_key{,.pub}

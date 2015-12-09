@@ -1,6 +1,8 @@
 #!/bin/bash -e
 # set random hour/minute for security updates (cron-apt)
 
+[ -n "$_TURNKEY_INIT" ] && exit 0
+
 # random hour: 0-23, minute: 0-59
 HOUR=$[ ($RANDOM % 23) ]
 MINUTE=$[ ($RANDOM % 59) ]
