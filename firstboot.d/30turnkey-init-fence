@@ -10,24 +10,5 @@ USERNAME=root
 PROFILE_FIRSTLOGIN=$(eval printf ~$USERNAME)/.profile.d/turnkey-init-fence
 [ -f $PROFILE_FIRSTLOGIN ] && chmod +x $PROFILE_FIRSTLOGIN
 
-CODENAME=$(cat /etc/turnkey_version  | perl -pe 's/^turnkey-//; s/-[^-]+(-[^-]+){2}$//')
-
-INITFENCE_INDEX=/var/lib/inithooks/turnkey-init-fence/htdocs/index.html
-sed -i "s/\$CODENAME/$CODENAME/" $INITFENCE_INDEX
-
-if ! grep -q ajax.turnkeylinux.org $INITFENCE_INDEX; then
-
-    VERSION=$(cat /etc/turnkey_version | perl -pe 's/.*-([^-]+(-[^-]+){2})$/\1/')
-    BUILD=$(cat /etc/apt/apt.conf.d/01turnkey | perl -ne 'chomp; s/.*\((.*)\).*/\1/; s/^\S+ ?//; $tags=$_ ? $_ : "iso"; system("echo $tags | xargs -n 1 | sort -u | xargs echo | sed \"s/ /-/g\"");')
-
-    cat>>$INITFENCE_INDEX<<EOF
-<script src="https://ajax.turnkeylinux.org/initfence/$BUILD/$VERSION/$CODENAME.js" async></script>
-<script src="https://ajax.turnkeylinux.org/initfence/$BUILD/$VERSION/$CODENAME.direct" async></script>
-EOF
-	
-
-fi
-
-
 update-rc.d turnkey-init-fence defaults
 /etc/init.d/turnkey-init-fence start

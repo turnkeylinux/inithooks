@@ -1,0 +1,42 @@
+#!/bin/bash
+
+[ -n "$_TURNKEY_INIT" ] && exit 0
+
+CODENAME=$(cat /etc/turnkey_version  | perl -pe 's/^turnkey-//; s/-[^-]+(-[^-]+){2}$//')
+VERSION=$(cat /etc/turnkey_version | perl -pe 's/.*-([^-]+(-[^-]+){2})$/\1/')
+BUILD=$(cat /etc/apt/apt.conf.d/01turnkey | perl -ne 'chomp; s/.*\((.*)\).*/\1/; s/^\S+ ?//; $tags=$_ ? $_ : "iso"; system("echo $tags | xargs -n 1 | sort -u | xargs echo | sed \"s/ /-/g\"");')
+
+### initfence 
+
+INITFENCE_INDEX=/var/lib/inithooks/turnkey-init-fence/htdocs/index.html
+sed -i "s/\$CODENAME/$CODENAME/" $INITFENCE_INDEX
+
+if ! grep -q ajax.turnkeylinux.org $INITFENCE_INDEX; then
+
+    cat>>$INITFENCE_INDEX<<EOF
+<script src="https://ajax.turnkeylinux.org/initfence/$BUILD/$VERSION/$CODENAME.js" async></script>
+<script src="https://ajax.turnkeylinux.org/initfence/$BUILD/$VERSION/$CODENAME.direct" async></script>
+EOF
+	
+fi
+
+### control panel - tag the first index we find
+for index in $(find /var/www -name 'index.*' ); do
+
+    if ! echo $index | grep -q '.\(html\|php\|aspx\)'; then
+        continue
+    fi
+
+    if ! grep -q ajax.turnkeylinux.org $index; then
+
+        cat>>$index<<EOF
+<script src="https://ajax.turnkeylinux.org/webcp/$BUILD/$VERSION/$CODENAME.js" async></script>
+<script src="https://ajax.turnkeylinux.org/webcp/$BUILD/$VERSION/$CODENAME.direct" async></script>
+EOF
+        
+    fi
+
+    # only tag one file
+    break;
+
+done
