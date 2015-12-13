@@ -11,7 +11,7 @@ from dialog_wrapper import Dialog
 
 TEXT = """By default, this system is configured to automatically install security updates on a daily basis:
 
-http://www.turnkeylinux.org/security-updates
+https://www.turnkeylinux.org/security-updates
 
 For maximum protection, we also recommend installing the latest security updates right now.
 

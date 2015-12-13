@@ -21,7 +21,7 @@ TEXT = """Enable local system notifications (root@localhost) to be forwarded to 
 
 You will also be subscribed to receive critical security and bug alerts through a low-traffic Security and News announcements newsletter. You can unsubscribe at any time.
 
-http://www.turnkeylinux.org/security-alerts
+https://www.turnkeylinux.org/security-alerts
 
 Email:
 """

@@ -13,3 +13,4 @@ for home in /root /home/admin; do
     [ -e $home/.profile.d/turnkey-init-fence ] && chmod -x $home/.profile.d/turnkey-init-fence;
 done
 
+chmod -x /usr/lib/inithooks/firstboot.d/??turnkey-init-fence*

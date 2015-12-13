@@ -39,7 +39,7 @@ send_enabled_notification() {
     mail -s "$subject" $recipient <<EOF
 This server is configured to send you system alerts and notifications.
 For more information, see:
-http://www.turnkeylinux.org/security-alerts
+https://www.turnkeylinux.org/security-alerts
 
 --
 $(turnkey-version)

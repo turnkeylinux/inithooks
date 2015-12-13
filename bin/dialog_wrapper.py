@@ -11,6 +11,16 @@ email_re = re.compile(r"(?:^|\s)[-a-z0-9_.]+@(?:[-a-z0-9]+\.)+[a-z]{2,6}(?:\s|$)
 class Error(Exception):
     pass
 
+def password_complexity(password):
+    """return password complexity score from 0 (invalid) to 4 (strong)"""
+
+    lowercase = re.search('[a-z]', password) is not None
+    uppercase = re.search('[A-Z]', password) is not None
+    number = re.search('\d', password) is not None
+    nonalpha = re.search('\W', password) is not None
+
+    return sum([lowercase, uppercase, number, nonalpha])
+
 class Dialog:
     def __init__(self, title, width=60, height=20):
         self.width = width
@@ -96,7 +106,7 @@ class Dialog:
                                        no_cancel=True)
         return choice
 
-    def get_password(self, title, text, pass_req=6):
+    def get_password(self, title, text, pass_req=8, min_complexity=3):
         def ask(title, text):
             return self.wrapper('passwordbox', text, title=title,
                                 ok_label='OK', no_cancel='True')[1]
@@ -104,7 +114,7 @@ class Dialog:
         while 1:
             password = ask(title, text)
             if not password:
-                self.error("Please enter non-empty password.")
+                self.error("Please enter non-empty password!")
                 continue
 
             if isinstance(pass_req, int):
@@ -115,7 +125,11 @@ class Dialog:
                 if not re.match(pass_req, password):
                     self.error("Password does not match complexity requirements.")
                     continue
-                    
+
+            if password_complexity(password) < min_complexity:
+                self.error("Insecure password! Mix uppercase, lowercase, and at least one number. Multiple words and punctuation are highly recommended but not strictly required.")
+                continue
+
             if password == ask(title, 'Confirm password'):
                 return password
 

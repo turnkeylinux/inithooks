@@ -17,17 +17,17 @@ from dialog_wrapper import Dialog
 TEXT_SERVICES = """1) TurnKey Backup and Migration: saves changes to files,
    databases and package management to encrypted storage
    which servers can be automatically restored from.
-   http://www.turnkeylinux.org/tklbam
+   https://www.turnkeylinux.org/tklbam
 
 2) TurnKey Domain Management and Dynamic DNS:
-   http://www.turnkeylinux.org/dns
+   https://www.turnkeylinux.org/dns
 
 You can start using these services immediately if you initialize now. Or you can do this manually later (e.g., from the command line / Webmin)
 
 API Key: (see https://hub.turnkeylinux.org/profile)
 """
 
-TEXT_HUBDNS = """TurnKey supports dynamic DNS configuration, powered by Amazon Route 53, a robust cloud DNS service: http://www.turnkeylinux.org/dns
+TEXT_HUBDNS = """TurnKey supports dynamic DNS configuration, powered by Amazon Route 53, a robust cloud DNS service: https://www.turnkeylinux.org/dns
 
 You can assign a hostname under:
 
@@ -48,7 +48,7 @@ You can enable daily automatic backup updates with this command:
 
     chmod +x /etc/cron.daily/tklbam-backup
 
-Documentation: http://www.turnkeylinux.org/tklbam
+Documentation: https://www.turnkeylinux.org/tklbam
 Manage your backups: https://hub.turnkeylinux.org
 """
 
@@ -56,7 +56,7 @@ SUCCESS_HUBDNS = """You can enable hourly automatic updates with this command:
 
     chmod +x /etc/cron.hourly/hubdns-update
 
-Documentation: http://www.turnkeylinux.org/dns
+Documentation: https://www.turnkeylinux.org/dns
 Manage your hostnames: https://hub.turnkeylinux.org
 """
 
@@ -80,7 +80,7 @@ def usage(s=None):
 def main():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     try:
-        opts, args = getopt.gnu_getopt(sys.argv[1:], "h", 
+        opts, args = getopt.gnu_getopt(sys.argv[1:], "h",
                                        ['help', 'apikey=', 'fqdn='])
     except getopt.GetoptError, e:
         usage(e)
