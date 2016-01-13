@@ -1,23 +1,89 @@
-=======================================================================================
-Initialization Hooks (inithooks) - TurnKey initialization, configuration and preseeding
-=======================================================================================
+===============================================================
+System initialization, configuration and preseeding (inithooks)
+===============================================================
 
-The intended readers of this page are:
+Introduction
+============
 
-- Appliance developers interested in learning how TurnKey works under
-  the hood and developing their own configuration hooks.
+Before we expose a TurnKey system to a hostile Internet, we first need
+to initialize it. This will setup passwords, install security updates,
+and configure key applications settings.
 
-- Hosting providers and private cloud operators interested in
+This initialization process can be interactive or non-interactive
+depending on what works best given where and how the system is deployed.
+
+Interactive system initialization
+---------------------------------
+
+A configuration wizard shows a short sequence of simple text dialogs
+that look primitive but provide a quick step-by-step process that works
+anywhere and requires only the bare minimum of software dependencies - a
+big advantage for security sensitive applications:
+
+.. image:: https://www.turnkeylinux.org/files/images/docs/inithooks/turnkey-init-root.png
+.. alt: root password dialog
+.. width: 580px
+
+All software is potentially buggy but we can minimize the risk by
+intentionally favoring simplicity over fancy eye candy.
+
+The configuration dialogs run in one of two places:
+
+1) **The boot console on first boot** on build types (e.g., ISO, VM,
+   VMDK) where the real or virtual machine usually provides access to
+   an interactive system console.
+
+2) **The first administration login** on build types running on
+   *headless* virtual machines (e.g., AWS marketplace, OpenStack,
+   Xen).  that don't provide the option to interact with the system at
+   boot time.
+   
+   After boot, a virtual fence redirects attempts to access
+   potentially vulnerable services to a web page explaining how to SSH
+   into the machine for the first time to initialize the system. After
+   initialization the virtual fence comes down and all services can be
+   accessed normally.
+
+Non-interactive system initialization
+-------------------------------------
+
+The `TurnKey Hub`_ streamlines deployment by preseeding system
+initialization settings with values the user provides before launching
+an instance through the Hub's cloud deployment web app.
+
+This means when the system boots for the first time it doesn't need to
+interact with the user through text dialogs.
+
+Preseeding is well documented and may be used by other hosting providers
+or private clouds in a similar way to streamline deployment.
+
+.. _TurnKey Hub: https://hub.turnkeylinux.org/
+
+Under the hood: everything you wanted to know but were afraid to ask
+====================================================================
+
+Stop! The preceding introduction explained everything mere mortals need
+to know about the system initialization process. 
+
+The rest of the documentation is intended for:
+
+- Appliance hackers interested in learning how TurnKey works under the
+  hood and developing their own configuration hooks.
+
+- Expert users who want to understand how system initialization works in
+  depth.
+
+- Hosting providers and private cloud fullstack ninjas interested in
   implementing tight integration between TurnKey and custom control
   panels. 
   
-  This isn't a requirement, just a bonus. TurnKey images can be deployed
-  like any other Debian or Debian-based image, using your existing
-  deployments scripts. If you can deploy Debian or Ubuntu it should
-  be trivial to deploy TurnKey.
+  This isn't a requirement, just a bonus. Without any special
+  integration, TurnKey images can be deployed like any other Debian or
+  Debian-based image, using your existing deployments scripts. If you
+  can deploy Debian or Ubuntu it should be trivial to deploy TurnKey.
   
-Inithook design goals 
----------------------
+Inithooks package design goals
+------------------------------
 
 The inithooks package executes system initialization scripts
 which:
