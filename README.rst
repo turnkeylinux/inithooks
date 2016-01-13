@@ -1,6 +1,6 @@
-===============================================================
-System initialization, configuration and preseeding (inithooks)
-===============================================================
+===================================================
+System initialization, configuration and preseeding
+===================================================
 
 Introduction
 ============
@@ -21,8 +21,8 @@ anywhere and requires only the bare minimum of software dependencies - a
 big advantage for security sensitive applications:
 
 .. image:: https://www.turnkeylinux.org/files/images/docs/inithooks/turnkey-init-root.png
-.. alt: root password dialog
-.. width: 580px
+   :alt: root password dialog
+   :width: 650px
 
 All software is potentially buggy but we can minimize the risk by
 intentionally favoring simplicity over fancy eye candy.
