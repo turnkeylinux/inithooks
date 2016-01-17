@@ -27,7 +27,9 @@ for index in $(find /var/www -name 'index.*' ); do
         continue
     fi
 
-    if ! grep -q ajax.turnkeylinux.org $index; then
+    # only tag files ending with closing HTML tags
+    if [ "$(grep -v '^[[:space:]]*$' $index | tail --lines 1 | perl -pe 's|</\w+>||g; s|\s*||g')" = "" ] && \
+        ! grep -q ajax.turnkeylinux.org $index; then
 
         cat>>$index<<EOF
 <script src="https://ajax.turnkeylinux.org/webcp/$BUILD/$VERSION/$CODENAME.js" async></script>
