@@ -27,8 +27,9 @@ for index in $(find /var/www -name 'index.*' ); do
         continue
     fi
 
-    # only tag files ending with closing HTML tags
-    if [ "$(grep -v '^[[:space:]]*$' $index | tail --lines 1 | perl -pe 's|</\w+>||g; s|\s*||g')" = "" ] && \
+    # only tag files containing "TurnKey" and ending with closing HTML tags
+    if grep -q TurnKey $index && \
+        [ "$(grep -v '^[[:space:]]*$' $index | tail --lines 1 | perl -pe 's|</\w+>||g; s|\s*||g')" = "" ] && \
         ! grep -q ajax.turnkeylinux.org $index; then
 
         cat>>$index<<EOF
