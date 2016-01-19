@@ -6,7 +6,7 @@ import dialog
 import traceback
 from StringIO import StringIO
 
-email_re = re.compile(r"(?:^|\s)[-a-z0-9_.]+@(?:[-a-z0-9]+\.)+[a-z]{2,6}(?:\s|$)",re.IGNORECASE)
+email_re = re.compile(r"(?:^|\s).*\S@\S+(?:\s|$)", re.IGNORECASE)
 
 class Error(Exception):
     pass
