@@ -47,7 +47,7 @@ ID=${PARTINFOX[6]}
 
 [ "$ID" != "8e" ] && exit 1
 
-if [ $((START + SIZE)) -lt $DEVSIZE ]; then
+if [ $((START + SIZE + 65536)) -lt $DEVSIZE ]; then
  [ -e /var/tmp/autogrow.size ] && [ $(cat /var/tmp/autogrow.size) -eq $DEVSIZE ] && exit 1
  echo $DEVSIZE >/var/tmp/autogrow.size
  sfdisk -d -uS $AUTOGROW_DEV | grep -v $AUTOGROW_PART | grep -v "unit: sectors" >/tmp/sfdisk.dump
