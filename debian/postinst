@@ -8,5 +8,14 @@ if [ -f /etc/default/turnkey-init-fence ]; then
     fi
 fi
 
+cat << EOF >> /etc/ssh/sshd_config
+
+# Please do not edit match or banner line. Commands may be added AFTER
+# banner line, otherwise sudoadmin may not work as expected.
+Match user "root"
+#    Banner "/var/lib/inithooks/sudoadmin/root_ssh_banner"
+EOF
+
+
 #DEBHELPER#
 exit 0

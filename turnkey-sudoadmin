@@ -147,6 +147,18 @@ permitrootlogin_ssh() {
     sed -i "s/^${key} .*/$key $val/" $cfg
 }
 
+set_root_login_banner() {
+    info $FUNCNAME $@
+    val=$1
+    key='Match user "root"'
+    cfg="/etc/ssh/sshd_config"
+    if [ -z $val ]; then
+        sed -i "/${key}/{n;s/^[^(#?.\s*?Banner)]/#/}" $cfg
+    else
+        sed -i "/${key}/{N; s|\n.*Banner.*|\n    Banner \"$val\"|}" $cfg
+    fi
+}
+
 user_state() {
     info $FUNCNAME $@
     username=$1
@@ -191,6 +203,7 @@ case $1 in
         user_state "admin" "unlock";
         user_state "root" "lock";
         permitrootlogin_ssh "no";
+        set_root_login_banner "/var/lib/inithooks/sudoadmin/root_ssh_banner";
         restart_sshd;
         [ "$2" == "--disable-setpass" ] || setpass "admin";
         ;;
@@ -205,6 +218,7 @@ case $1 in
         permitrootlogin_ssh "yes";
         user_state "root" "unlock";
         user_state "admin" "lock";
+        set_root_login_banner "";
         restart_sshd;
         [ "$2" == "--disable-setpass" ] || setpass "root";
         ;;
