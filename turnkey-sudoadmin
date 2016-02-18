@@ -149,13 +149,31 @@ permitrootlogin_ssh() {
 
 set_root_login_banner() {
     info $FUNCNAME $@
-    val=$1
-    key='Match user "root"'
+    banner_file=$1
+    banner='Please user "admin" user rather than "root".'
+
+    [ -f $banner_file ] || echo $banner > $banner_file
+
+    block=$(cat <<EOF
+
+# Manually editing the following block could cause unexpected
+# issues in sudoadmin
+
+## START SUDOADMIN BLOCK
+Match user "root"
+    Banner "$banner_file"
+## END SUDOADMIN BLOCK
+EOF
+    )
+    range='/## START SUDOADMIN BLOCK/,/## END SUDOADMIN BLOCK/'
     cfg="/etc/ssh/sshd_config"
-    if [ -z $val ]; then
-        sed -i "/${key}/{n;s/^[^(#?.\s*?Banner)]/#/}" $cfg
+
+    (grep '## START SUDOADMIN BLOCK' $cfg && grep '## END SUDOADMIN BLOCK' $cfg) || echo "$block" >> $cfg
+
+    if [ -z $banner_file ]; then
+        sed -i "$range s|^\([^#]\)|#\1|" $cfg
     else
-        sed -i "/${key}/{N; s|\n.*Banner.*|\n    Banner \"$val\"|}" $cfg
+        sed -i "$range s|^#\([^#]\)|\1|" $cfg
     fi
 }
 
