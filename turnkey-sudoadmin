@@ -149,10 +149,10 @@ permitrootlogin_ssh() {
 
 set_root_login_banner() {
     info $FUNCNAME $@
-    banner_file=$1
-    banner='Please user "admin" user rather than "root".'
+    banner=$1
+    banner_file='/root/.ssh/banner'
 
-    [ -f $banner_file ] || echo $banner > $banner_file
+    echo $banner > $banner_file
 
     block=$(cat <<EOF
 
@@ -162,19 +162,13 @@ set_root_login_banner() {
 ## START SUDOADMIN BLOCK
 Match user "root"
     Banner "$banner_file"
+Match user "*"
 ## END SUDOADMIN BLOCK
 EOF
     )
-    range='/## START SUDOADMIN BLOCK/,/## END SUDOADMIN BLOCK/'
     cfg="/etc/ssh/sshd_config"
 
     (grep '## START SUDOADMIN BLOCK' $cfg && grep '## END SUDOADMIN BLOCK' $cfg) || echo "$block" >> $cfg
-
-    if [ -z $banner_file ]; then
-        sed -i "$range s|^\([^#]\)|#\1|" $cfg
-    else
-        sed -i "$range s|^#\([^#]\)|\1|" $cfg
-    fi
 }
 
 user_state() {
@@ -221,7 +215,7 @@ case $1 in
         user_state "admin" "unlock";
         user_state "root" "lock";
         permitrootlogin_ssh "no";
-        set_root_login_banner "/var/lib/inithooks/sudoadmin/root_ssh_banner";
+        set_root_login_banner 'Please login as user "admin" rather than user "root".';
         restart_sshd;
         [ "$2" == "--disable-setpass" ] || setpass "admin";
         ;;
