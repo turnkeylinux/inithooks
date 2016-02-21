@@ -27,6 +27,7 @@ On:
     - merges root .ssh/authorized_keys with admin
     - locks the root user
     - disables root ssh access
+    - sets root ssh login banner
     - restarts ssh daemon
     - sets admin password interactively (unless --disable-setpass)
 
@@ -36,6 +37,7 @@ Off:
     - merges admin .ssh/authorized_keys with root
     - enables root ssh access
     - locks admin user
+    - unsets root ssh login banner
     - restarts ssh daemon
     - sets root password interactively (unless --disable-setpass)
 
@@ -147,28 +149,12 @@ permitrootlogin_ssh() {
     sed -i "s/^${key} .*/$key $val/" $cfg
 }
 
-set_root_login_banner() {
+set_sshrootbanner() {
     info $FUNCNAME $@
-    banner=$1
-    banner_file='/root/.ssh/banner'
-
-    echo $banner > $banner_file
-
-    block=$(cat <<EOF
-
-# Manually editing the following block could cause unexpected
-# issues in sudoadmin
-
-## START SUDOADMIN BLOCK
-Match user "root"
-    Banner "$banner_file"
-Match user "*"
-## END SUDOADMIN BLOCK
-EOF
-    )
-    cfg="/etc/ssh/sshd_config"
-
-    (grep '## START SUDOADMIN BLOCK' $cfg && grep '## END SUDOADMIN BLOCK' $cfg) || echo "$block" >> $cfg
+    content=$1
+    banner_path="/root/.ssh/banner"
+    mkdir -p $(dirname $banner_path)
+    echo $content > $banner_path
 }
 
 user_state() {
@@ -215,7 +201,7 @@ case $1 in
         user_state "admin" "unlock";
         user_state "root" "lock";
         permitrootlogin_ssh "no";
-        set_root_login_banner 'Please login as user "admin" rather than user "root".';
+        set_sshrootbanner 'Please login as user "admin" rather than user "root".';
         restart_sshd;
         [ "$2" == "--disable-setpass" ] || setpass "admin";
         ;;
@@ -230,7 +216,7 @@ case $1 in
         permitrootlogin_ssh "yes";
         user_state "root" "unlock";
         user_state "admin" "lock";
-        set_root_login_banner "";
+        set_sshrootbanner "";
         restart_sshd;
         [ "$2" == "--disable-setpass" ] || setpass "root";
         ;;
