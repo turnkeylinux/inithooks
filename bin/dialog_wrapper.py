@@ -107,9 +107,10 @@ class Dialog:
         return choice
 
     def get_password(self, title, text, pass_req=8, min_complexity=3):
+	req_string = '\n\nPassword Requirements\n - must be atleast %d characters long\n - must contain characters from at least %d of the following catagories: uppercase, lowercase, numbers, symbols' % (pass_req, min_complexity)
         def ask(title, text):
-            return self.wrapper('passwordbox', text, title=title,
-                                ok_label='OK', no_cancel='True')[1]
+            return self.wrapper('passwordbox', text+req_string, title=title,
+                                ok_label='OK', no_cancel='True', height = self._calc_height(text+req_string)+3)[1]
 
         while 1:
             password = ask(title, text)
