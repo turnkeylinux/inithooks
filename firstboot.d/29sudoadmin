@@ -5,5 +5,7 @@
 . /etc/default/inithooks
 if [ "$(echo $SUDOADMIN | tr [A-Z] [a-z] )" = "true" ]; then
     turnkey-sudoadmin on --disable-setpass
+elif [ "$(echo $SUDOADMIN | tr [A-Z] [a-z] )" = "false" ]; then
+    turnkey-sudoadmin off --disable-setpass
 fi
 
