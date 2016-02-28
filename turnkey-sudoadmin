@@ -28,7 +28,7 @@ On:
     - locks the root user
     - disables root ssh access
     - sets root ssh login banner
-    - restarts ssh daemon
+    - restarts ssh daemon, if it is running
     - sets admin password interactively (unless --disable-setpass)
 
 Off:
@@ -38,7 +38,7 @@ Off:
     - enables root ssh access
     - locks admin user
     - unsets root ssh login banner
-    - restarts ssh daemon
+    - restarts ssh daemon, if it is running
     - sets root password interactively (unless --disable-setpass)
 
 EOF
@@ -172,7 +172,9 @@ user_state() {
 
 restart_sshd() {
     info $FUNCNAME $@
-    /etc/init.d/ssh status >/dev/null && /etc/init.d/ssh restart
+    if [ -e /var/run/sshd.pid ]; then
+        /etc/init.d/ssh restart
+    fi
 }
 
 setpass() {
