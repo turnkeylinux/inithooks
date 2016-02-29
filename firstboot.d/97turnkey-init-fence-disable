@@ -14,3 +14,5 @@ for home in /root /home/admin; do
 done
 
 chmod -x /usr/lib/inithooks/firstboot.d/??turnkey-init-fence*
+
+echo 'turnkey-init-fence is down'

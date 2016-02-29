@@ -27,7 +27,8 @@ On:
     - merges root .ssh/authorized_keys with admin
     - locks the root user
     - disables root ssh access
-    - restarts ssh daemon
+    - sets root ssh login banner
+    - restarts ssh daemon, if it is running
     - sets admin password interactively (unless --disable-setpass)
 
 Off:
@@ -36,7 +37,8 @@ Off:
     - merges admin .ssh/authorized_keys with root
     - enables root ssh access
     - locks admin user
-    - restarts ssh daemon
+    - unsets root ssh login banner
+    - restarts ssh daemon, if it is running
     - sets root password interactively (unless --disable-setpass)
 
 EOF
@@ -147,6 +149,14 @@ permitrootlogin_ssh() {
     sed -i "s/^${key} .*/$key $val/" $cfg
 }
 
+set_sshrootbanner() {
+    info $FUNCNAME $@
+    content=$1
+    banner_path="/root/.ssh/banner"
+    mkdir -p $(dirname $banner_path)
+    echo $content > $banner_path
+}
+
 user_state() {
     info $FUNCNAME $@
     username=$1
@@ -162,7 +172,9 @@ user_state() {
 
 restart_sshd() {
     info $FUNCNAME $@
-    /etc/init.d/ssh status >/dev/null && /etc/init.d/ssh restart
+    if [ -e /var/run/sshd.pid ]; then
+        /etc/init.d/ssh restart
+    fi
 }
 
 setpass() {
@@ -191,6 +203,7 @@ case $1 in
         user_state "admin" "unlock";
         user_state "root" "lock";
         permitrootlogin_ssh "no";
+        set_sshrootbanner 'Please login as user "admin" rather than user "root".';
         restart_sshd;
         [ "$2" == "--disable-setpass" ] || setpass "admin";
         ;;
@@ -205,6 +218,7 @@ case $1 in
         permitrootlogin_ssh "yes";
         user_state "root" "unlock";
         user_state "admin" "lock";
+        set_sshrootbanner "";
         restart_sshd;
         [ "$2" == "--disable-setpass" ] || setpass "root";
         ;;

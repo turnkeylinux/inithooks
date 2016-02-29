@@ -12,3 +12,4 @@ PROFILE_FIRSTLOGIN=$(eval printf ~$USERNAME)/.profile.d/turnkey-init-fence
 
 update-rc.d turnkey-init-fence defaults
 /etc/init.d/turnkey-init-fence start
+echo 'turnkey-init-fence is up'

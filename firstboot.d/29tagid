@@ -20,6 +20,8 @@ EOF
 	
 fi
 
+[ -d /var/www ] || exit 0
+
 ### control panel - tag the first index we find
 for index in $(find /var/www -name 'index.*' ); do
 
