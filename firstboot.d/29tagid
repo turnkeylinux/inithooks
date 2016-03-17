@@ -19,29 +19,3 @@ if ! grep -q ajax.turnkeylinux.org $INITFENCE_INDEX; then
 EOF
 	
 fi
-
-[ -d /var/www ] || exit 0
-
-### control panel - tag the first index we find
-for index in $(find /var/www -name 'index.*' ); do
-
-    if ! echo $index | grep -q '.\(html\|php\|aspx\)'; then
-        continue
-    fi
-
-    # only tag files containing "TurnKey" and ending with closing HTML tags
-    if grep -q TurnKey $index && \
-        [ "$(grep -v '^[[:space:]]*$' $index | tail --lines 1 | perl -pe 's|</\w+>||g; s|\s*||g')" = "" ] && \
-        ! grep -q ajax.turnkeylinux.org $index; then
-
-        cat>>$index<<EOF
-<script src="https://ajax.turnkeylinux.org/webcp/$BUILD/$VERSION/$CODENAME.js" async></script>
-<script src="https://ajax.turnkeylinux.org/webcp/$BUILD/$VERSION/$CODENAME.direct" async></script>
-EOF
-        
-    fi
-
-    # only tag one file
-    break;
-
-done
