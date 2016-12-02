@@ -315,10 +315,12 @@ Common to all appliances:
     30rootpass              ROOT_PASS
     50auto-apt-archive      AUTO_APT_ARCHIVE        [ SKIP ]
     80tklbam                HUB_APIKEY              [ SKIP ]
+    85secalerts             SEC_ALERTS              [ SKIP ]
     92etckeeper             ETCKEEPER_COMMIT        [ SKIP ]
     95secupdates            SEC_UPDATES             [ SKIP | FORCE ]
 
-Specific to headless builds
+Specific to headless builds:
+::
 
     29preseed               INITFENCE               [ SKIP ]
 
