@@ -1,6 +1,7 @@
 [Unit]
 Description=inithooks: firstboot and everyboot initialization scripts
-After=getty@tty8.service
+After=basic.target getty@tty8.service
+Before=default.target
 ConditionKernelCommandLine=!noinithooks
 
 [Service]
@@ -17,4 +18,4 @@ ExecStart=/bin/sh -c '\
     chvt $FGCONSOLE'
 
 [Install]
-WantedBy=basic.target
+WantedBy=default.target
