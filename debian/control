@@ -2,12 +2,17 @@ Source: inithooks
 Section: admin
 Priority: optional
 Maintainer: Alon Swartz <alon@turnkeylinux.org>
-Build-Depends: debhelper (>> 4.2.0), dh-systemd
+Build-Depends:
+ debhelper (>> 4.2.0),
+ dh-systemd,
 Standards-Version: 3.6.1
 
 Package: inithooks
 Architecture: all
-Depends: kbd, turnkey-pylib
-Recommends: confconsole (>= 0.9.4+36+g2256734)
+Depends:
+ kbd,
+ turnkey-pylib,
+Recommends:
+ confconsole (>= 0.9.4+36+g2256734),
 Section: admin
 Description: Executes firstboot and everyboot scripts
