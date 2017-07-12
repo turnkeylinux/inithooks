@@ -7,11 +7,5 @@ INITHOOKS_DIR = debian/$(DEB_SOURCE)/usr/lib
 %:
 	dh $@ --with=systemd,python2
 
-override_dh_auto_install:
-	mkdir -p $(INITHOOKS_DIR)/firstboot.d
-	mkdir -p $(INITHOOKS_DIR)/everyboot.d
-	touch $(INITHOOKS_DIR)/firstboot.d/.anchor
-	touch $(INITHOOKS_DIR)/everyboot.d/.anchor
-
 override_dh_installinit:
 	dh_installinit -r --no-start -- start 15 2 .
