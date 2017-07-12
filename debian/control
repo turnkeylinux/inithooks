@@ -11,6 +11,7 @@ Package: inithooks
 Architecture: all
 Depends:
  kbd,
+ ${misc:Depends},
  turnkey-pylib,
 Recommends:
  confconsole (>= 0.9.4+36+g2256734),
