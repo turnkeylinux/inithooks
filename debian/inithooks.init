@@ -19,7 +19,8 @@ NAME=inithooks
 fgconsole >/dev/null 2>&1 && INITHOOKS_CHVT=y
 
 . /lib/lsb/init-functions
-. /etc/default/inithooks
+
+[ -r /etc/default/inithooks ] && . /etc/default/inithooks
 
 # don't run the hooks if noinithooks is passed as a boot param
 for x in $(cat /proc/cmdline); do
