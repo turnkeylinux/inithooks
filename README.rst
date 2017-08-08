@@ -329,33 +329,87 @@ Appliance specific:
 
     35mysqlpass             DB_PASS
     35pgsqlpass             DB_PASS
-    
-    40mldonkey              APP_PASS
-    40fileserver            APP_PASS
-    40moodle                APP_PASS
-    40mediawiki             APP_PASS
-    40trac                  APP_PASS
-    40otrs                  APP_PASS
-    40tomcat                APP_PASS
-    40wordpress             APP_PASS, APP_EMAIL
-    40bugzilla              APP_PASS, APP_EMAIL
-    40joomla                APP_PASS, APP_EMAIL
-    40mantis                APP_PASS, APP_EMAIL
-    40gallery               APP_PASS, APP_EMAIL
-    40deki                  APP_PASS, APP_EMAIL
-    40django                APP_PASS, APP_EMAIL
-    40dokuwiki              APP_PASS, APP_EMAIL
-    40moinmoin              APP_PASS, APP_EMAIL
-    40roundup               APP_PASS, APP_EMAIL
-    40redmine               APP_PASS, APP_EMAIL
-    40phpbb                 APP_PASS, APP_EMAIL
-    40twiki                 APP_PASS, APP_EMAIL
-    40vtiger                APP_PASS, APP_EMAIL
-    40prestashop            APP_PASS, APP_EMAIL
-    40magento               APP_PASS, APP_EMAIL, APP_DOMAIN
-    40statusnet             APP_PASS, APP_EMAIL, APP_DOMAIN
-    40ejabberd              APP_PASS, APP_DOMAIN
-    40domain-controller     APP_PASS, APP_DOMAIN
+
+    40ansible               APP_PASS
+    40couchdb               APP_PASS
+    40espocrm               APP_PASS
+    40etherpad              APP_PASS
+    40githttp               APP_PASS
+    40icesecretset          APP_PASS
+    40jenkins               APP_PASS
+    40mediawiki                    APP_PASS
+    40mibew                        APP_PASS
+    40mongodb                      APP_PASS
+    40moodle                       APP_PASS
+    40mumblesupw                   APP_PASS
+    40observium                    APP_PASS
+    40odoo                         APP_PASS
+    40openvas                      APP_PASS
+    40orangehrm                    APP_PASS
+    40otrs                         APP_PASS
+    40phpmumbleadmin               APP_PASS
+    40plone                        APP_PASS
+    40sugarcrm                     APP_PASS
+    40suitecrm                     APP_PASS
+    40torrentserver                APP_PASS
+    40trac                         APP_PASS
+    40typo3                        APP_PASS
+    40zoneminder                   APP_PASS
+    40nextcloud                    APP_PASS, APP_DOMAIN
+    40openldap                     APP_PASS, APP_DOMAIN
+    40owncloud                     APP_PASS, APP_DOMAIN
+    40zurmo                        APP_PASS, APP_DOMAIN
+    40domain-controller            APP_PASS, APP_DOMAIN [, APP_REALM]
+    40b2evolution                  APP_PASS, APP_EMAIL
+    40collabtive                   APP_PASS, APP_EMAIL
+    40concrete5                    APP_PASS, APP_EMAIL
+    40django                       APP_PASS, APP_EMAIL
+    40dokuwiki                     APP_PASS, APP_EMAIL
+    40drupal7                      APP_PASS, APP_EMAIL
+    40e107                         APP_PASS, APP_EMAIL
+    40ezplatform                   APP_PASS, APP_EMAIL
+    40gallery                      APP_PASS, APP_EMAIL
+    40joomla                       APP_PASS, APP_EMAIL
+    40kliqqi                       APP_PASS, APP_EMAIL
+    40limesurvey                   APP_PASS, APP_EMAIL
+    40mahara                       APP_PASS, APP_EMAIL
+    40mambo                        APP_PASS, APP_EMAIL
+    40mantis                       APP_PASS, APP_EMAIL
+    40mattermost                   APP_PASS, APP_EMAIL
+    40mayan                        APP_PASS, APP_EMAIL
+    40moinmoin                     APP_PASS, APP_EMAIL
+    40omeka                        APP_PASS, APP_EMAIL
+    40oscommerce                   APP_PASS, APP_EMAIL
+    40phpbb                        APP_PASS, APP_EMAIL
+    40processmaker                 APP_PASS, APP_EMAIL
+    40redmine                      APP_PASS, APP_EMAIL
+    40roundup                      APP_PASS, APP_EMAIL
+    40silverstripe                 APP_PASS, APP_EMAIL
+    40simpleinvoices               APP_PASS, APP_EMAIL
+    40sitracker                    APP_PASS, APP_EMAIL
+    40twiki                        APP_PASS, APP_EMAIL
+    40ushahidi                     APP_PASS, APP_EMAIL
+    40vanilla                      APP_PASS, APP_EMAIL
+    40vtiger                       APP_PASS, APP_EMAIL
+    40wordpress                    APP_PASS, APP_EMAIL
+    40xoops                        APP_PASS, APP_EMAIL
+    40canvas                       APP_PASS, APP_EMAIL, APP_DOMAIN
+    40drupal8                      APP_PASS, APP_EMAIL, APP_DOMAIN
+    40elgg                         APP_PASS, APP_EMAIL, APP_DOMAIN
+    40gitlab                       APP_PASS, APP_EMAIL, APP_DOMAIN
+    40gnusocial                    APP_PASS, APP_EMAIL, APP_DOMAIN
+    40icescrum                     APP_PASS, APP_EMAIL, APP_DOMAIN
+    40phplist                      APP_PASS, APP_EMAIL, APP_DOMAIN
+    40piwik                        APP_PASS, APP_EMAIL, APP_DOMAIN
+    40prestashop                   APP_PASS, APP_EMAIL, APP_DOMAIN
+    40punbb                        APP_PASS, APP_EMAIL, APP_DOMAIN
+    40simplemachines               APP_PASS, APP_EMAIL, APP_DOMAIN
+    40zencart                      APP_PASS, APP_EMAIL, APP_DOMAIN
+    40magento                      APP_PASS, APP_EMAIL, APP_DOMAIN [, APP_PRIVKEY, APP_PUBKEY]
+    40bugzilla                     APP_PASS, APP_EMAIL [, APP_OUTMAIL]
+    40foodsoft                     APP_PASS, APP_EMAIL [, APP_VARIANT]
+    40ghost                        APP_PASS, APP_EMAIL, APP_DOMAIN [, APP_UNAME]
+
 
  
 If not preseeded, the user will be asked interactively. The SKIP
