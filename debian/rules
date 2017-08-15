@@ -1,37 +1,7 @@
 #! /usr/bin/make -f
 
-progname=$(shell awk '/^Source/ {print $$2}' debian/control)
-buildroot=debian/$(progname)
-inithooks_dir=$(buildroot)/usr/lib/$(progname)
+%:
+	dh $@ --with=systemd,python2
 
-clean:
-	dh_clean
-
-build:
-	true
-
-install: 
-	dh_testdir
-	dh_testroot
-	dh_clean -k
-	mkdir -p $(inithooks_dir)/firstboot.d
-	mkdir -p $(inithooks_dir)/everyboot.d
-	touch $(inithooks_dir)/firstboot.d/.anchor
-	touch $(inithooks_dir)/everyboot.d/.anchor
-
-binary-indep: install
-	dh_testdir
-	dh_testroot
-	dh_install
-	dh_systemd_enable
+override_dh_installinit:
 	dh_installinit -r --no-start -- start 15 2 .
-	dh_installdocs docs/
-	dh_installdeb
-	dh_gencontrol
-	dh_md5sums 
-	dh_builddeb
-
-binary-arch: install
-
-binary: binary-indep binary-arch
-.PHONY: clean binary-indep binary-arch binary install

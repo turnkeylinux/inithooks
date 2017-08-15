@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -e
+
 mkdir -p /var/run/turnkey-init-fence
 if [ -f /etc/default/turnkey-init-fence ]; then
     RUNAS=$(sed -n 's/^RUNAS=//p' /etc/default/turnkey-init-fence)
@@ -9,4 +11,5 @@ if [ -f /etc/default/turnkey-init-fence ]; then
 fi
 
 #DEBHELPER#
+
 exit 0
