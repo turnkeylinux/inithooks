@@ -15,7 +15,7 @@ info() { echo "INFO [$(basename $0)]: $@"; }
 
 usage() {
 cat<<EOF
-Syntax: $(basename $0) on|off [--disable-setpass]
+Syntax: $(basename $0) on|off|status [--disable-setpass]
 Configure system to use admin user with sudo, or root
 
 On:
@@ -40,6 +40,13 @@ Off:
     - unsets root ssh login banner
     - restarts ssh daemon, if it is running
     - sets root password interactively (unless --disable-setpass)
+
+Status:
+
+    - checks turnkey-sudoadmin status, returns one of the following:
+        - unconfigured
+        - on
+        - off
 
 EOF
 exit 1
@@ -222,6 +229,11 @@ case $1 in
         restart_sshd;
         [ "$2" == "--disable-setpass" ] || setpass "root";
         ;;
+
+    status)
+        check_status;
+        ;;
+
     *)  
         usage;;
 esac
