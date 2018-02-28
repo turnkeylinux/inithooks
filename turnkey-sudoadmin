@@ -9,13 +9,15 @@
 # Free Software Foundation; either version 3 of the License, or (at your
 # option) any later version.
 # 
+SUDOADMIN_STATE=/etc/sudoadmin/state
+
 fatal() { echo "FATAL [$(basename $0)]: $@" 1>&2; exit 1; }
 warn() { echo "WARN [$(basename $0)]: $@"; }
 info() { echo "INFO [$(basename $0)]: $@"; }
 
 usage() {
 cat<<EOF
-Syntax: $(basename $0) on|off [--disable-setpass]
+Syntax: $(basename $0) on|off|status [--disable-setpass]
 Configure system to use admin user with sudo, or root
 
 On:
@@ -40,6 +42,13 @@ Off:
     - unsets root ssh login banner
     - restarts ssh daemon, if it is running
     - sets root password interactively (unless --disable-setpass)
+
+Status:
+
+    - checks turnkey-sudoadmin status, returns one of the following:
+        - unconfigured
+        - on
+        - off
 
 EOF
 exit 1
@@ -189,6 +198,23 @@ setpass() {
     fi
 }
 
+set_status() {
+    if [ ! -d $(dirname $SUDOADMIN_STATE) ]; then
+        mkdir $(dirname $SUDOADMIN_STATE)
+    fi
+    cat > $SUDOADMIN_STATE <<EOF
+# This is an automatically generated file, do not edit manually
+state=$1
+EOF
+}
+check_status() {
+    if [ ! -f $SUDOADMIN_STATE ]; then
+        echo 'unconfigured'
+    else
+        sed -rn 's/state=(.*)/\1/p' "$SUDOADMIN_STATE"
+    fi
+}
+
 case $1 in
     on)
         [ "$(id -u)" != "0" ] && fatal "must be run with root permissions"
@@ -205,6 +231,7 @@ case $1 in
         permitrootlogin_ssh "no";
         set_sshrootbanner 'Please login as user "admin" rather than user "root".';
         restart_sshd;
+        set_status "on"
         [ "$2" == "--disable-setpass" ] || setpass "admin";
         ;;
 
@@ -220,8 +247,14 @@ case $1 in
         user_state "admin" "lock";
         set_sshrootbanner "";
         restart_sshd;
+        set_status "off"
         [ "$2" == "--disable-setpass" ] || setpass "root";
         ;;
+
+    status)
+        check_status;
+        ;;
+
     *)  
         usage;;
 esac
