@@ -44,7 +44,6 @@ Off:
     - sets root password interactively (unless --disable-setpass)
 
 Status:
-
     - checks turnkey-sudoadmin status, returns one of the following:
         - unconfigured
         - on
