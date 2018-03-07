@@ -64,7 +64,7 @@ create_user() {
     info $FUNCNAME $@
     username=$1
     grep -q ^${username}: /etc/passwd && return
-    useradd --create-home --shell /bin/bash ${username}
+    useradd --create-home --skel /etc/skel --shell /bin/bash ${username}
     echo ${username}:$(mcookie) | chpasswd
 }
 
