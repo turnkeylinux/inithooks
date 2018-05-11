@@ -1,0 +1,13 @@
+[Unit]
+Description=inithooks-lxc: firstboot and everyboot initialization scripts (lxc)
+After=console-getty.service
+ConditionKernelCommandLine=!noinithooks
+ConditionVirtualization=lxc
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/default/inithooks
+ExecStart=/bin/sh -c '${INITHOOKS_PATH}/run'
+
+[Install]
+WantedBy=basic.target
