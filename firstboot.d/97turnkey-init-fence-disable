@@ -2,10 +2,10 @@
 
 [ -z "$_TURNKEY_INIT" ] && exit 0; # ONLY run from within turnkey-init
 
-if [ -x /etc/init.d/turnkey-init-fence ]; then
+if systemctl is-active --quiet turnkey-init-fence; then
 
-    update-rc.d turnkey-init-fence remove; 
-    /etc/init.d/turnkey-init-fence stop;
+    systemctl disable turnkey-init-fence
+    systemctl stop turnkey-init-fence
 
 fi
 
