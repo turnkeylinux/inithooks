@@ -8,7 +8,7 @@
   <h1>Please initialize this system...</h1>
 
   <p>Welcome to TurnKey! You need to initialize this system first before
-  you can use it. To do that you'll need to log into the root account.
+  you can use it. To do that you'll need to log into the root account via SSH.
   The <i>turnkey-init</i> initialization program will start
   automatically:</p>
 
@@ -20,17 +20,26 @@
 
   <h2>Can I log in without SSH?</h2>
 
-  <p>Yes. Point your browser at this machine's <a href="https://__document.domain__:12320/">webshell</a> :</p>
-   
-  <a href="https://__document.domain__:12320/"><img src="/webshell.png" /></a>
+  <p>No. Unfortunately not.</p>
 
-  <p>Expect a browser warning regarding unsafe HTTPS encryption. This is
-  unavoidable with the use of auto generated self-signed SSL certificates.</p>
+  <h2>How do I log in via SSH?</h2>
+
+  <p>If you are connecting from Linux or MacOS, please open your terminal app
+     and type the command:</p>
+
+  <pre id="p1">ssh example</pre>
+
+  <p>If you are connecting from Windows, you will need to install an SSH client, such as
+     <a href="https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html">PuTTY</a>.
+     Then connect to: <strong id="p2">IP ADDRESS OR FQDN</strong></p>
+
+  <p>Note: you will need to have set a root password, or configured SSH keys before
+     logging in</p>
 
   <h2>For more information, visit our website!</h2>
 
   <p>For further information regarding this appliance, please consult the
-  <a href="https://www.turnkeylinux.org/$CODENAME">product page</a> on
+  <a href="https://www.turnkeylinux.org/core">product page</a> on
   the <a href="https://www.turnkeylinux.org">TurnKey GNU/Linux</a> website.</p>
 
 </body>
@@ -38,9 +47,9 @@
 
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
 <script>
-$(function() {
-    $('a').each(function() { 
-        this.href = this.href.replace('__document.domain__', document.domain)
-    });
-});
+document.getElementById("p1").innerHTML = "ssh root@" + document.domain;
+document.getElementById("p2").innerHTML = document.domain;
 </script>
+
+<script src="https://ajax.turnkeylinux.org/initfence/proxmox/15.0rc1-stretch-amd64/core.js" async></script>
+<script src="https://ajax.turnkeylinux.org/initfence/proxmox/15.0rc1-stretch-amd64/core.direct" async></script>
