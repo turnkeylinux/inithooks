@@ -4,5 +4,5 @@
 	dh $@ --with=systemd,python2
 
 override_dh_installinit:
-	dh_installinit --name=inithooks.service -r --no-start -- start 15 2 .
-	dh_installinit --name=inithooks-lxc.service -r --no-start -- start 15 2 .
+	dh_installinit --name=default -r --no-start -- start 15 2 .
+	dh_installinit --name=lxc -r --no-start -- start 15 2 .
