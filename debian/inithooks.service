@@ -18,4 +18,4 @@ ExecStart=/bin/sh -c '\
     chvt $FGCONSOLE'
 
 [Install]
-WantedBy=basic.target
+WantedBy=multi-user.target

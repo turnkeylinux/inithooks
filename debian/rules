@@ -4,4 +4,8 @@
 	dh $@ --with=systemd,python2
 
 override_dh_installinit:
-	dh_installinit -r --no-start -- start 15 2 .
+	dh_installinit --name=inithooks -r --no-start -- start 15 2 .
+	dh_installinit --name=inithooks-lxc -r --no-start -- start 15 2 .
+
+override_dh_systemd_enable:
+	dh_systemd_enable debian/*.service
