@@ -2,6 +2,7 @@
 Description=inithooks: firstboot and everyboot initialization scripts
 After=getty@tty8.service
 ConditionKernelCommandLine=!noinithooks
+ConditionVirtualization=!lxc
 
 [Service]
 Type=oneshot

@@ -10,6 +10,6 @@ USERNAME=root
 PROFILE_FIRSTLOGIN=$(eval printf ~$USERNAME)/.profile.d/turnkey-init-fence
 [ -f $PROFILE_FIRSTLOGIN ] && chmod +x $PROFILE_FIRSTLOGIN
 
-update-rc.d turnkey-init-fence defaults
-/etc/init.d/turnkey-init-fence start
+systemctl enable turnkey-init-fence
+systemctl start turnkey-init-fence
 echo 'turnkey-init-fence is up'
