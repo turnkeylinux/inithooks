@@ -5,4 +5,4 @@
 
 override_dh_installinit:
 	dh_installinit --name=inithooks -r --no-start
-	dh_installinit --name=inithooks-lxc -r --no-start
+	dh_installinit --name=inithooks-lxc
