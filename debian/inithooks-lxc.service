@@ -10,4 +10,4 @@ EnvironmentFile=/etc/default/inithooks
 ExecStart=/bin/sh -c '${INITHOOKS_PATH}/run'
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=basic.target
