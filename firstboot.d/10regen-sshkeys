@@ -7,4 +7,4 @@
 echo "* Regenerating SSH cryptographic keys"
 
 rm -f /etc/ssh/*_key{,.pub}
-dpkg-reconfigure openssh-server
+dpkg-reconfigure --frontend=noninteractive --no-reload openssh-server
