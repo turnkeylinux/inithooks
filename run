@@ -9,7 +9,6 @@ if [ "$(echo $REDIRECT_OUTPUT | tr [A-Z] [a-z] )" = "true" ]; then
     LOGFILE=/var/log/inithooks.log
     touch $LOGFILE; chmod 640 $LOGFILE
     echo "Redirecting output to $LOGFILE"
-    exec > >(tee $LOGFILE|logger -t inithooks -s 2>/dev/console) 2>&1
 fi
 
 exec_scripts() {
