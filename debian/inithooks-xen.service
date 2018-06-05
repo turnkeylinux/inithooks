@@ -9,8 +9,8 @@ ConditionPathExists=/var/lib/turnkey-info/inithooks.service/xen
 Type=oneshot
 EnvironmentFile=/etc/default/inithooks
 ExecStart=/bin/sh -c '${INITHOOKS_PATH}/run'
-StandardOutput=syslog
-StandardError=syslog
+StandardOutput=syslog+console
+StandardError=syslog+console
 SyslogIdentifier=inithooks
 
 [Install]
