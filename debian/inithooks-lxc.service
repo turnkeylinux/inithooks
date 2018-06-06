@@ -1,6 +1,6 @@
 [Unit]
 Description=inithooks-lxc: firstboot and everyboot initialization scripts (lxc)
-After=console-getty.service
+Before=container-getty@1.service
 ConditionKernelCommandLine=!noinithooks
 ConditionVirtualization=lxc
 ConditionPathExists=!/var/lib/turnkey-info/inithooks.service/xen
@@ -9,6 +9,9 @@ ConditionPathExists=!/var/lib/turnkey-info/inithooks.service/xen
 Type=oneshot
 EnvironmentFile=/etc/default/inithooks
 ExecStart=/bin/sh -c '${INITHOOKS_PATH}/run'
+StandardOutput=syslog+console
+StandardError=syslog+console
+SyslogIdentifier=inithooks
 
 [Install]
 WantedBy=basic.target
