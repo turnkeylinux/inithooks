@@ -6,16 +6,18 @@ INITHOOKS_DEFAULT=/etc/default/inithooks
 
 TKLINFO=/var/lib/turnkey-info/inithooks.service
 
+unset PID
+
 if [ "$(echo $REDIRECT_OUTPUT | tr [A-Z] [a-z] )" = "true" ]; then
     # redirect stdout/stderr (use when preseeding headless deployments)
     LOGFILE=/var/log/inithooks.log
     touch $LOGFILE; chmod 640 $LOGFILE
 
     # on xen redirection is performed by the inithooks-xen service
-    # on lxc redirection is handled below
+    # on lxc and other headless deployments, redirection is handled below
     # otherwise redirection is handled by inithooks service and redirected to tty8
 
-    if [ -f "$TKLINFO/lxc" ]; then
+    if [ ! -f "$TKLINFO/xen" ]; then
         TTY=$(cat /sys/devices/virtual/tty/tty0/active)
         [ -z $TTY ] && TTY=console
         tail -f $LOGFILE > /dev/$TTY &
