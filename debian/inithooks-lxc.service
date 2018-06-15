@@ -2,8 +2,7 @@
 Description=inithooks-lxc: firstboot and everyboot initialization scripts (lxc)
 Before=container-getty@1.service
 ConditionKernelCommandLine=!noinithooks
-ConditionVirtualization=lxc
-ConditionPathExists=!/var/lib/turnkey-info/inithooks.service/xen
+ConditionPathExists=/var/lib/turnkey-info/inithooks.service/lxc
 
 [Service]
 Type=oneshot
