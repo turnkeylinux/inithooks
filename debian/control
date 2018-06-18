@@ -17,6 +17,7 @@ Depends:
  ${misc:Depends},
  ${python:Depends},
  turnkey-pylib,
+ rsyslog,
 Recommends:
  confconsole (>= 0.9.4+36+g2256734),
 Description: Executes firstboot and everyboot scripts

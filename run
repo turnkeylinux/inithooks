@@ -4,12 +4,25 @@
 INITHOOKS_DEFAULT=/etc/default/inithooks
 . $INITHOOKS_DEFAULT
 
+TKLINFO=/var/lib/turnkey-info/inithooks.service
+
+unset PID
+
 if [ "$(echo $REDIRECT_OUTPUT | tr [A-Z] [a-z] )" = "true" ]; then
     # redirect stdout/stderr (use when preseeding headless deployments)
     LOGFILE=/var/log/inithooks.log
     touch $LOGFILE; chmod 640 $LOGFILE
-    echo "Redirecting output to $LOGFILE"
-    exec > >(tee $LOGFILE|logger -t inithooks -s 2>/dev/console) 2>&1
+
+    # on xen redirection is performed by the inithooks-xen service
+    # on lxc and other headless deployments, redirection is handled below
+    # otherwise redirection is handled by inithooks service and redirected to tty8
+
+    if [ ! -f "$TKLINFO/xen" ]; then
+        TTY=$(cat /sys/devices/virtual/tty/tty0/active)
+        [ -z $TTY ] && TTY=console
+        tail -f $LOGFILE > /dev/$TTY &
+        PID="$!"
+    fi
 fi
 
 exec_scripts() {
@@ -18,8 +31,9 @@ exec_scripts() {
     for SCRIPT in $(find $SCRIPT_DIR -type f -or -type l | sort); do
         [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
         [ -x $SCRIPT ] || continue
-        echo "# $SCRIPT"
+        echo "# running $SCRIPT"
         $SCRIPT
+        echo "# completed $SCRIPT - exit code $?"
     done
     return 0
 }
@@ -31,5 +45,9 @@ if [ "$(echo $RUN_FIRSTBOOT | tr [A-Z] [a-z] )" = "true" ]; then
     exec_scripts $INITHOOKS_PATH/firstboot.d
 fi
 exec_scripts $INITHOOKS_PATH/everyboot.d
+
+if [ -n "$PID" ];  then
+    kill -9 $PID || true
+fi
 
 exit 0
