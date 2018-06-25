@@ -108,10 +108,11 @@ setup_initfence() {
 
 update_confconsole_services() {
     info $FUNCNAME $@
-    username=$1
+    new_uname=$1
+    old_uname=$2
     cfg="/etc/confconsole/services.txt"
     [ -e $cfg ] || return 0
-    sed -i "s|\S*@|${username}@|g" $cfg
+    sed -i "s|${old_uname}@|${new_uname}@|g" $cfg
 }
 
 ssh_authorizedkeys_inithook() {
@@ -222,7 +223,7 @@ case $1 in
         passwordless_sudo "admin";
         inithooks_sudoadmin "true";
         setup_initfence "admin";
-        update_confconsole_services "admin";
+        update_confconsole_services "admin" "root";
         ssh_authorizedkeys_inithook "admin";
         ssh_authorizedkeys_merge "admin" "root";
         user_state "admin" "unlock";
@@ -238,7 +239,7 @@ case $1 in
         [ "$(id -u)" != "0" ] && fatal "must be run with root permissions"
         inithooks_sudoadmin "false";
         setup_initfence "root";
-        update_confconsole_services "root";
+        update_confconsole_services "root" "admin";
         ssh_authorizedkeys_inithook "root";
         ssh_authorizedkeys_merge "root" "admin";
         permitrootlogin_ssh "yes";
