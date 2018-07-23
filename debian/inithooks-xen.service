@@ -1,5 +1,5 @@
 [Unit]
-Description=inithooks-lxc: firstboot and everyboot initialization scripts (lxc)
+Description=inithooks-xen: firstboot and everyboot initialization scripts (xen)
 Before=serial-getty@hvc0.service
 ConditionKernelCommandLine=!noinithooks
 ConditionPathExists=/var/lib/turnkey-info/inithooks.service/xen
