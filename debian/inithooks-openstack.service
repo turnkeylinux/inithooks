@@ -1,8 +1,8 @@
 [Unit]
-Description=inithooks-xen: firstboot and everyboot initialization scripts (xen)
-Before=serial-getty@hvc0.service
+Description=inithooks-openstack: firstboot and everyboot initialization scripts (openstack)
+Before=getty@tty1.service
 ConditionKernelCommandLine=!noinithooks
-ConditionPathExists=/var/lib/turnkey-info/inithooks.service/xen
+ConditionPathExists=/var/lib/turnkey-info/inithooks.service/openstack
 
 [Service]
 Type=oneshot
