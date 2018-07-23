@@ -4,6 +4,7 @@ After=getty@tty8.service
 ConditionKernelCommandLine=!noinithooks
 ConditionPathExists=!/var/lib/turnkey-info/inithooks.service/xen
 ConditionPathExists=!/var/lib/turnkey-info/inithooks.service/lxc
+ConditionPathExists=!/var/lib/turnkey-info/inithooks.service/openstack
 
 [Service]
 Type=oneshot

@@ -1,0 +1,16 @@
+[Unit]
+Description=inithooks-openstack: firstboot and everyboot initialization scripts (openstack)
+Before=getty@tty1.service
+ConditionKernelCommandLine=!noinithooks
+ConditionPathExists=/var/lib/turnkey-info/inithooks.service/openstack
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/default/inithooks
+ExecStart=/bin/sh -c '${INITHOOKS_PATH}/run'
+StandardOutput=syslog+console
+StandardError=syslog+console
+SyslogIdentifier=inithooks
+
+[Install]
+WantedBy=basic.target
