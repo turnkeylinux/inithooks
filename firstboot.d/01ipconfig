@@ -10,6 +10,11 @@
 
 ifdown --exclude=lo -a
 
+# since debian 8 (systemd) ifdown does no longer take the interface down
+# if we change between manual, static or dhcp this does not work anymore
+# as ifup won't do anything
+ip link set eth0 down
+
 echo "# interfaces(5) file used by ifup(8) and ifdown(8)" >/etc/network/interfaces
 echo >>/etc/network/interfaces
 echo "auto lo" >>/etc/network/interfaces
