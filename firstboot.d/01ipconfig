@@ -8,6 +8,9 @@
 [ "$IP_CONFIG" != "manual" ] && [ "$IP_CONFIG" != "static" ] && [ "$IP_CONFIG" != "dhcp" ] && exit 1
 [ ! -e /etc/network/interfaces ] && exit 1
 
+# if IP_CONFIG is not changed skip this script and avoid a interface reconfiguration
+grep "iface eth0 inet $IP_CONFIG" /etc/network/interfaces >/dev/null && exit 0
+
 ifdown --exclude=lo -a
 
 # since debian 8 (systemd) ifdown does no longer take the interface down
