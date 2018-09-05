@@ -33,7 +33,10 @@ exec_scripts() {
         [ -x $SCRIPT ] || continue
         echo "# running $SCRIPT"
         $SCRIPT
-        echo "# completed $SCRIPT - exit code $?"
+        RET=$?
+        echo "# completed $SCRIPT - exit code $RET"
+        # the script requested a reboot before we can continue
+        [ $RET -eq 42 ] && init 6 && exit 0
     done
     return 0
 }

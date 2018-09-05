@@ -1,0 +1,37 @@
+#!/bin/bash
+
+[ ! -e /etc/crontab ] && exit 0
+[ -n "$_TURNKEY_INIT" ] && exit 0
+
+getrnd() {
+    echo $(($(hexdump -n 2 -e '"%1u"' /dev/urandom) % $1))
+}
+
+HOURLY_MINUTE=$(($(getrnd 50) + 10))   # 10 - 59
+DAILY_MINUTE=$((HOURLY_MINUTE + 8))    # 18 - 67
+WEEKLY_MINUTE=$((HOURLY_MINUTE + 30))  # 40 - 89
+MONTHLY_MINUTE=$((HOURLY_MINUTE + 35)) # 45 - 94
+HOUR=$(getrnd 6) # 0 - 5
+DAILY_HOUR=${HOUR}
+if [ "${DAILY_MINUTE}" -ge 60 ]; then
+    DAILY_MINUTE=$(printf "%2d" "$((DAILY_MINUTE % 60))")
+    DAILY_HOUR=$((DAILY_HOUR + 1))
+fi
+WEEKLY_HOUR=${HOUR}
+if [ "${WEEKLY_MINUTE}" -ge 60 ]; then
+    WEEKLY_MINUTE=$(printf "%2d" "$((WEEKLY_MINUTE % 60))")
+    WEEKLY_HOUR=$((WEEKLY_HOUR + 1))
+fi
+MONTHLY_HOUR=${HOUR}
+if [ "${MONTHLY_MINUTE}" -ge 60 ]; then
+    MONTHLY_MINUTE=$(printf "%2d" "$((MONTHLY_MINUTE % 60))")
+    MONTHLY_HOUR=$((MONTHLY_HOUR + 1))
+fi
+
+sed --in-place --regexp-extended \
+    --expression="s/17(\s*)\*(\s*)\*(\s*)\*(\s*)\*(\s*)root/${HOURLY_MINUTE}\1*\2*\3*\4*\5root/g" \
+    --expression="s/25(\s*)6(\s*)\*(\s*)\*(\s*)\*(\s*)root/${DAILY_MINUTE}\1${DAILY_HOUR}\2*\3*\4*\5root/g" \
+    --expression="s/47(\s*)6(\s*)\*(\s*)\*(\s*)7(\s*)root/${WEEKLY_MINUTE}\1${WEEKLY_HOUR}\2*\3*\47\5root/g" \
+    --expression="s/52(\s*)6(\s*)1(\s*)\*(\s*)\*(\s*)root/${MONTHLY_MINUTE}\1${MONTHLY_HOUR}\21\3*\4*\5root/g" \
+    /etc/crontab
+

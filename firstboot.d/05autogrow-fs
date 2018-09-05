@@ -39,7 +39,7 @@ PARTINFOX=(${PARTINFO})
 [ "${PARTINFOX[0]}" != "$AUTOGROW_PART" ] && exit 1
 [ "${PARTINFOX[1]}" != "start" ] && exit 1
 [ "${PARTINFOX[3]}" != "size" ] && exit 1
-[ "${PARTINFOX[5]}" != "Id" ] && exit 1
+[ "${PARTINFOX[5]}" != "Id" ] && [ "${PARTINFOX[5]}" != "type" ] && exit 1
 
 START=${PARTINFOX[2]}
 SIZE=${PARTINFOX[4]}
@@ -50,9 +50,9 @@ ID=${PARTINFOX[6]}
 if [ $((START + SIZE + 65536)) -lt $DEVSIZE ]; then
  [ -e /var/tmp/autogrow.size ] && [ $(cat /var/tmp/autogrow.size) -eq $DEVSIZE ] && exit 1
  echo $DEVSIZE >/var/tmp/autogrow.size
- sfdisk -d -uS $AUTOGROW_DEV | grep -v $AUTOGROW_PART | grep -v "unit: sectors" >/tmp/sfdisk.dump
- echo "$AUTOGROW_PART : start= $START, size= $((DEVSIZE - START)), Id=$ID" >>/tmp/sfdisk.dump
- cat /tmp/sfdisk.dump | sort | sfdisk -uS --no-reread --force $AUTOGROW_DEV
+ sfdisk -d -uS $AUTOGROW_DEV | grep "${AUTOGROW_DEV}1" >/tmp/sfdisk.dump
+ echo "$AUTOGROW_PART : start= $START, size= $((DEVSIZE - START)), ${PARTINFOX[5]}= $ID">>/tmp/sfdisk.dump
+ cat /tmp/sfdisk.dump | sfdisk -uS --no-reread --force $AUTOGROW_DEV
  exit 42
 else
  if [ "$AUTOGROW_FS" != "SKIP" ]; then
