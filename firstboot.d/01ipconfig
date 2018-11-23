@@ -8,7 +8,7 @@
 [ "$IP_CONFIG" != "manual" ] && [ "$IP_CONFIG" != "static" ] && [ "$IP_CONFIG" != "dhcp" ] && exit 1
 [ ! -e /etc/network/interfaces ] && exit 1
 
-APP=$(turnkey-version | cut -d "-" -f 2)
+APP=$(turnkey-version | sed 's/turnkey-\(.*\)-[0-9]\+\.[0-9]\+-.*$/\1/')
 
 IP_IFACE="eth0"
 [ "$APP" == "lxc" ] && IP_IFACE="br0"
