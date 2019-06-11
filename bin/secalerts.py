@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """Enable system alerts and notifications
 
 Options:
@@ -13,7 +13,7 @@ import getopt
 import signal
 
 from dialog_wrapper import Dialog, email_re
-from executil import system
+from subprocess import call
 
 TITLE = "System Notifications and Critical Security Alerts"
 
@@ -27,17 +27,17 @@ Email:
 """
 
 def fatal(e):
-    print >> sys.stderr, "Error:", e
+    print("Error:", e, file=sys.stderr)
     sys.exit(1)
 
 def warn(e):
-    print >> sys.stderr, "Warning:", e
+    print("Warning:", e, file=sys.stderr)
 
 def usage(s=None):
     if s:
-        print >> sys.stderr, "Error:", s
-    print >> sys.stderr, "Syntax: %s [options]" % sys.argv[0]
-    print >> sys.stderr, __doc__
+        print("Error:", s, file=sys.stderr)
+    print("Syntax: %s [options]" % sys.argv[0], file=sys.stderr)
+    print(__doc__, file=sys.stderr)
     sys.exit(1)
 
 def main():
@@ -85,7 +85,7 @@ def main():
 
     if email:
         cmd = os.path.join(os.path.dirname(__file__), 'secalerts.sh')
-        system(cmd, email)
+        call(cmd, email)
 
 
 if __name__ == "__main__":

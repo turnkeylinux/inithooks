@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # Copyright (c) 2011 Alon Swartz <alon@turnkeylinux.org>
 """Initialize Hub Services (TKLBAM, HubDNS)
 
@@ -11,7 +11,9 @@ import sys
 import getopt
 import signal
 
-from executil import ExecError, getoutput, system
+#from executil import ExecError, getoutput, system
+from os import system
+from subprocess import check_output, CalledProcessError
 from dialog_wrapper import Dialog
 
 TEXT_SERVICES = """1) TurnKey Backup and Migration: saves changes to files,
@@ -72,9 +74,9 @@ Please try again once your network settings are configured, either via the Webmi
 
 def usage(s=None):
     if s:
-        print >> sys.stderr, "Error:", s
-    print >> sys.stderr, "Syntax: %s [options]" % sys.argv[0]
-    print >> sys.stderr, __doc__
+        print("Error:", s, file=sys.stderr)
+    print("Syntax: %s [options]" % sys.argv[0], file=sys.stderr)
+    print(__doc__, file=sys.stderr)
     sys.exit(1)
 
 def main():
@@ -116,13 +118,13 @@ def main():
         d.infobox("Linking TKLBAM to the TurnKey Hub...")
 
         try:
-            getoutput("host -W 2 hub.turnkeylinux.org")
-        except ExecError, e:
+            check_output(["host", "-W", "2", "hub.turnkeylinux.org"])
+        except CalledProcessError, e:
             d.error(CONNECTIVITY_ERROR)
             break
 
         try:
-            getoutput('tklbam-init', apikey)
+            check_output(['tklbam-init', apikey])
             d.msgbox('Success! Linked TKLBAM to Hub', SUCCESS_TKLBAM)
             initialized_tklbam = True
             break
@@ -142,8 +144,8 @@ def main():
             d.infobox("Linking HubDNS to the TurnKey Hub...")
 
             try:
-                getoutput('hubdns-init', apikey, fqdn)
-                getoutput('hubdns-update')
+                check_output(['hubdns-init', apikey, fqdn])
+                check_output(['hubdns-update'])
                 d.msgbox('Success! Assigned %s' % fqdn, SUCCESS_HUBDNS)
                 break
 

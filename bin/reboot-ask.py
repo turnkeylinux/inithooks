@@ -1,11 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """Reboot to install kernel upgrade"""
 
 import sys
 import getopt
 import signal
 
-from executil import ExecError, getoutput
 from dialog_wrapper import Dialog
 
 TEXT = """A security update to the kernel requires a reboot to go into effect.
@@ -15,9 +14,9 @@ For maximum protection, we recommend rebooting now.
 
 def usage(s=None):
     if s:
-        print >> sys.stderr, "Error:", s
-    print >> sys.stderr, "Syntax: %s [options]" % sys.argv[0]
-    print >> sys.stderr, __doc__
+        print("Error:", s, file=sys.stderr)
+    print("Syntax: %s [options]" % sys.argv[0], file=sys.stderr)
+    print(__doc__, file=sys.stderr)
     sys.exit(1)
 
 def main():

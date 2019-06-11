@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """Interface to inithooks cache
 
 Arguments:
@@ -16,14 +16,14 @@ import os
 import sys
 
 def fatal(e):
-    print >> sys.stderr, "Error:", e
+    print("Error:", e, file=sys.stderr)
     sys.exit(1)
 
 def usage(s=None):
     if s:
-        print >> sys.stderr, "Error:", s
-    print >> sys.stderr, "Syntax: %s <key> [value]" % sys.argv[0]
-    print >> sys.stderr, __doc__
+        print("Error:", e, file=sys.stderr)
+    print("Syntax: %s <key> [value]" % sys.argv[0], file=sys.stderr)
+    print(__doc__, file=sys.stderr)
     sys.exit(1)
 
 class KeyStore:
@@ -36,16 +36,17 @@ class KeyStore:
         keypath = os.path.join(self.path, key)
 
         if os.path.exists(keypath):
-            return file(keypath, 'r').read()
+            with open(keypath, 'r') as fob:
+                data = fob.read()
+            return data
 
         return None
 
     def write(self, key, val):
         keypath = os.path.join(self.path, key)
 
-        fh = file(keypath, 'w')
-        fh.write(val)
-        fh.close()
+        with open(keypath, 'w') as fob:
+            fob.write(val)
 
 #convenience functions
 CACHE_DIR = os.environ.get('INITHOOKS_CACHE', '/var/lib/inithooks/cache')

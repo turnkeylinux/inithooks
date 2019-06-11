@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # Copyright (c) 2010 Alon Swartz <alon@turnkeylinux.org>
 """Set account password
 
@@ -16,14 +16,14 @@ from subprocess import PIPE
 import signal
 
 def fatal(s):
-    print >> sys.stderr, "Error:", s
+    print("Error:", s, file=sys.stderr)
     sys.exit(1)
 
 def usage(s=None):
     if s:
-        print >> sys.stderr, "Error:", s
-    print >> sys.stderr, "Syntax: %s <username> [options]" % sys.argv[0]
-    print >> sys.stderr, __doc__
+        print("Error:", s, file=sys.stderr)
+    print("Syntax: %s <username> [options]" % sys.argv[0], file=sys.stderr)
+    print(__doc__, file=sys.stderr)
     sys.exit(1)
 
 def main():

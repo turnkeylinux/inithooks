@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # Copyright (c) 2010 Alon Swartz <alon@turnkeylinux.org>
 """Install security updates"""
 
@@ -7,6 +7,7 @@ import getopt
 import signal
 
 from executil import ExecError, getoutput
+from subprocess import check_output, CalledProcessError
 from dialog_wrapper import Dialog
 
 TEXT = """By default, this system is configured to automatically install security updates on a daily basis:
@@ -27,9 +28,9 @@ Please try again once your network settings are configured by using the followin
 
 def usage(s=None):
     if s:
-        print >> sys.stderr, "Error:", s
-    print >> sys.stderr, "Syntax: %s [options]" % sys.argv[0]
-    print >> sys.stderr, __doc__
+        print("Error:", s, file=sys.stderr)
+    print("Syntax: %s [options]" % sys.argv[0], file=sys.stderr)
+    print(__doc__, file=sys.stderr)
     sys.exit(1)
 
 def main():
@@ -50,8 +51,8 @@ def main():
         sys.exit(1)
 
     try:
-        getoutput("host -W 2 archive.turnkeylinux.org")
-    except ExecError, e:
+        check_output(["host", "-W", "2", "archive.turnkeylinux.org"])
+    except CalledProcessError, e:
         d.error(CONNECTIVITY_ERROR)
         sys.exit(1)
 
