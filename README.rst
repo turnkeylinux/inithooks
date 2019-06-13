@@ -355,6 +355,7 @@ Appliance specific:
     40trac                  APP_PASS
     40typo3                 APP_PASS
     40zoneminder            APP_PASS
+    40redis                 APP_PASS [, APP_IP_BIND, APP_PROTECTED]
     40nextcloud             APP_PASS, APP_DOMAIN
     40openldap              APP_PASS, APP_DOMAIN
     40owncloud              APP_PASS, APP_DOMAIN
@@ -425,7 +426,7 @@ hooks. Awesome! Here are some examples to get you going.
 Non-interactive inithook
 ''''''''''''''''''''''''
 
-The following example is used in the Joomla15 appliance. It
+The following example is used in the Joomla3 appliance. It
 regenerates the *secret*, and sets a random mysql password for the
 joomla user.
  
