@@ -369,6 +369,7 @@ Appliance specific:
     40drupal7               APP_PASS, APP_EMAIL
     40e107                  APP_PASS, APP_EMAIL
     40ezplatform            APP_PASS, APP_EMAIL
+    40foodsoft              APP_PASS, APP_EMAIL
     40gallery               APP_PASS, APP_EMAIL
     40joomla                APP_PASS, APP_EMAIL
     40kliqqi                APP_PASS, APP_EMAIL
@@ -409,7 +410,6 @@ Appliance specific:
     40zencart               APP_PASS, APP_EMAIL, APP_DOMAIN
     40magento               APP_PASS, APP_EMAIL, APP_DOMAIN [, APP_PRIVKEY, APP_PUBKEY]
     40bugzilla              APP_PASS, APP_EMAIL [, APP_OUTMAIL]
-    40foodsoft              APP_PASS, APP_EMAIL [, APP_VARIANT]
     40ghost                 APP_PASS, APP_EMAIL, APP_DOMAIN [, APP_UNAME]
 
 
