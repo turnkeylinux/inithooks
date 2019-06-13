@@ -402,6 +402,7 @@ Appliance specific:
     40icescrum              APP_PASS, APP_EMAIL, APP_DOMAIN
     40matomo                APP_PASS, APP_EMAIL, APP_DOMAIN
     40phplist               APP_PASS, APP_EMAIL, APP_DOMAIN
+    40opencart              APP_PASS, APP_EMAIL, APP_DOMAIN
     40prestashop            APP_PASS, APP_EMAIL, APP_DOMAIN
     40punbb                 APP_PASS, APP_EMAIL, APP_DOMAIN
     40simplemachines        APP_PASS, APP_EMAIL, APP_DOMAIN
