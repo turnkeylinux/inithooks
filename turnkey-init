@@ -1,6 +1,7 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 #
 # Copyright (c) 2012-2015 Alon Swartz <alon@turnkeylinux.org>
+# Copyright (c) 2016-2019 TurnKey GNU/Linux https://www.turnkeylinux.org
 #
 # This file is part of InitHooks.
 #
@@ -24,18 +25,18 @@ from conffile import ConfFile
 from executil import system, ExecError
 
 def fatal(e):
-    print >> sys.stderr, "error: " + str(e)
+    print("error: " + str(e), file=sys.stderr)
     sys.exit(1)
 
 def usage(e=None):
     if e:
-        print >> sys.stderr, "error: " + str(e)
+        print("error: " + str(e), file=sys.stderr)
 
-    print >> sys.stderr, "Syntax: %s" % (sys.argv[0])
-    print >> sys.stderr, __doc__.strip()
-    print >> sys.stderr, "\nBlacklist:\n"
+    print("Syntax: %s" % (sys.argv[0]), file=sys.stderr)
+    print(__doc__.strip(), file=sys.stderr)
+    print("\nBlacklist:\n", file=sys.stderr)
     for script in BLACKLIST:
-        print >> sys.stderr, "    %s" % script
+        print("    %s" % script, file=sys.stderr)
     sys.exit(1)
 
 # deprecated: hooks can use _TURNKEY_INIT to detect if they're running under turnkey-init
