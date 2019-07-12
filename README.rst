@@ -360,7 +360,7 @@ Appliance specific:
     40openldap              APP_PASS, APP_DOMAIN
     40owncloud              APP_PASS, APP_DOMAIN
     40zurmo                 APP_PASS, APP_DOMAIN
-    40domain-controller     APP_PASS, APP_DOMAIN [, APP_REALM]
+    40domain-controller     APP_PASS, APP_DOMAIN [, APP_REALM, APP_JOIN, APP_JOIN_NS]]
     40b2evolution           APP_PASS, APP_EMAIL
     40collabtive            APP_PASS, APP_EMAIL
     40concrete5             APP_PASS, APP_EMAIL
@@ -398,6 +398,7 @@ Appliance specific:
     40canvas                APP_PASS, APP_EMAIL, APP_DOMAIN
     40drupal8               APP_PASS, APP_EMAIL, APP_DOMAIN
     40elgg                  APP_PASS, APP_EMAIL, APP_DOMAIN
+    40foswiki               APP_PASS, APP_EMAIL, APP_DOMAIN
     40gitlab                APP_PASS, APP_EMAIL, APP_DOMAIN
     40gnusocial             APP_PASS, APP_EMAIL, APP_DOMAIN
     40icescrum              APP_PASS, APP_EMAIL, APP_DOMAIN
