@@ -1,7 +1,7 @@
 #! /usr/bin/make -f
 
 %:
-	dh $@ --with=systemd,python2
+	dh $@ --with=systemd,python3
 
 override_dh_installinit:
 	dh_installinit --name=inithooks -r --no-start -- start 15 2 .
