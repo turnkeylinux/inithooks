@@ -23,7 +23,7 @@ def main():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     try:
         opts, args = getopt.gnu_getopt(sys.argv[1:], "h", ['help'])
-    except getopt.GetoptError, e:
+    except getopt.GetoptError as e:
         usage(e)
 
     for opt, val in opts:

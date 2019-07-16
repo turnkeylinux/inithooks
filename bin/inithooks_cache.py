@@ -21,7 +21,7 @@ def fatal(e):
 
 def usage(s=None):
     if s:
-        print("Error:", e, file=sys.stderr)
+        print("Error:", s, file=sys.stderr)
     print("Syntax: %s <key> [value]" % sys.argv[0], file=sys.stderr)
     print(__doc__, file=sys.stderr)
     sys.exit(1)
@@ -63,7 +63,7 @@ if __name__ == "__main__":
 
     try:
         opts, args = getopt.gnu_getopt(sys.argv[1:], "h", ["help"])
-    except getopt.GetoptError, e:
+    except getopt.GetoptError as e:
         usage(e)
 
     for opt, val in opts:
@@ -79,7 +79,7 @@ if __name__ == "__main__":
     if len(args) == 1:
         val = read(args[0])
         if val:
-            print val
+            print(val)
 
     if len(args) == 2:
         write(args[0], args[1])

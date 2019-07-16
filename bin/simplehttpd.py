@@ -42,13 +42,13 @@ class Error(Exception):
     pass
 
 def fatal(e):
-    print >> sys.stderr, "error: " + str(e)
+    print("error: " + str(e), file=sys.stderr)
     sys.exit(1)
 
 def usage(e=None):
-    print >> sys.stderr, "Error: " + str(e)
-    print >> sys.stderr, "Syntax: %s [ -options ] path/to/webroot [address:]http-port [ [ssl-address:]ssl-port path/to/cert.pem [ path/to/cert.key ] ]" % sys.argv[0]
-    print >> sys.stderr, __doc__.strip()
+    print("Error: " + str(e), file=sys.stderr)
+    print("Syntax: %s [ -options ] path/to/webroot [address:]http-port [ [ssl-address:]ssl-port path/to/cert.pem [ path/to/cert.key ] ]" % sys.argv[0], file=sys.stderr)
+    print(__doc__.strip(), file=sys.stderr)
     sys.exit(1)
 
 def is_writeable(path):
@@ -63,7 +63,7 @@ def daemonize(pidfile, logfile=None):
 
     pid = os.fork()
     if pid != 0:
-        print >> file(pidfile, "w"), "%d" % pid
+        print("%d" % pid, file=file(pidfile, "w"))
         sys.exit(0)
 
     os.chdir("/")
@@ -143,7 +143,7 @@ class SimpleWebServer:
         CIPHERS='ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:DES-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA'
 
     class TempOwnedAs(str):
-        def __new__(cls, fpath, owner, chmod=0600):
+        def __new__(cls, fpath, owner, chmod=0o600):
 
             if not exists(fpath):
                 raise Error("file does not exist '%s'" % fpath)
@@ -238,7 +238,7 @@ def main():
     args = sys.argv[1:]
     try:
         opts, args = getopt.gnu_getopt(sys.argv[1:], 'h', ["daemonize=", "logfile=", "runas="])
-    except getopt.GetoptError, e:
+    except getopt.GetoptError as e:
         usage(e)
 
     daemonize_pidfile = None

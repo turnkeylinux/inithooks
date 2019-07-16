@@ -11,9 +11,9 @@ import sys
 import getopt
 import signal
 
-#from executil import ExecError, getoutput, system
 from os import system
 from subprocess import check_output, CalledProcessError
+
 from dialog_wrapper import Dialog
 
 TEXT_SERVICES = """1) TurnKey Backup and Migration: saves changes to files,
@@ -84,7 +84,7 @@ def main():
     try:
         opts, args = getopt.gnu_getopt(sys.argv[1:], "h",
                                        ['help', 'apikey=', 'fqdn='])
-    except getopt.GetoptError, e:
+    except getopt.GetoptError as e:
         usage(e)
 
     apikey = ""
@@ -119,7 +119,7 @@ def main():
 
         try:
             check_output(["host", "-W", "2", "hub.turnkeylinux.org"])
-        except CalledProcessError, e:
+        except CalledProcessError as e:
             d.error(CONNECTIVITY_ERROR)
             break
 
@@ -129,7 +129,7 @@ def main():
             initialized_tklbam = True
             break
 
-        except ExecError, e:
+        except CalledProcessError as e:
             d.msgbox('Failure', e.output)
             continue
 
@@ -149,7 +149,7 @@ def main():
                 d.msgbox('Success! Assigned %s' % fqdn, SUCCESS_HUBDNS)
                 break
 
-            except ExecError, e:
+            except CalledProcessError as e:
                 d.msgbox('Failure', e.output)
                 continue
 

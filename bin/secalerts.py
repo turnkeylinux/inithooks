@@ -45,7 +45,7 @@ def main():
     try:
         l_opts = ["help", "email=", "email-placeholder="]
         opts, args = getopt.gnu_getopt(sys.argv[1:], "h", l_opts)
-    except getopt.GetoptError, e:
+    except getopt.GetoptError as e:
         usage(e)
 
     email = ""

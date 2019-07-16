@@ -37,7 +37,7 @@ def main():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     try:
         opts, args = getopt.gnu_getopt(sys.argv[1:], "h", ['help'])
-    except getopt.GetoptError, e:
+    except getopt.GetoptError as e:
         usage(e)
 
     for opt, val in opts:
@@ -52,7 +52,7 @@ def main():
 
     try:
         check_output(["host", "-W", "2", "archive.turnkeylinux.org"])
-    except CalledProcessError, e:
+    except CalledProcessError as e:
         d.error(CONNECTIVITY_ERROR)
         sys.exit(1)
 
