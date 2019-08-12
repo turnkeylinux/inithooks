@@ -6,7 +6,7 @@
 [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
 
 # exit if running live
-grep -qs boot=casper /proc/cmdline && exit 2
+grep -qs boot=live /proc/cmdline && exit 2
 
 install_updates() {
     # if registered with hub, update with status
