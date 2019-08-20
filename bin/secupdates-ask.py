@@ -6,7 +6,6 @@ import sys
 import getopt
 import signal
 
-from executil import ExecError, getoutput
 from subprocess import check_output, CalledProcessError
 from dialog_wrapper import Dialog
 

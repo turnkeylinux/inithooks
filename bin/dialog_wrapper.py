@@ -4,7 +4,7 @@ import re
 import sys
 import dialog
 import traceback
-from StringIO import StringIO
+from io import StringIO
 
 email_re = re.compile(r"(?:^|\s).*\S@\S+(?:\s|$)", re.IGNORECASE)
 

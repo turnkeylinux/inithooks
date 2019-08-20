@@ -478,7 +478,7 @@ enter a password interactively.
 
     /usr/lib/inithooks/bin/setpass.py
     
-    #!/usr/bin/python
+    #!/usr/bin/python3
     # Copyright (c) 2010 Alon Swartz <alon@turnkeylinux.org>
     """Set account password
     

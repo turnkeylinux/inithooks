@@ -22,7 +22,7 @@ import os
 import sys
 
 from conffile import ConfFile
-from executil import system, ExecError
+from subprocess import run, PIPE
 
 def fatal(e):
     print("error: " + str(e), file=sys.stderr)
@@ -39,11 +39,10 @@ def usage(e=None):
         print("    %s" % script, file=sys.stderr)
     sys.exit(1)
 
-# deprecated: hooks can use _TURNKEY_INIT to detect if they're running under turnkey-init
-BLACKLIST = [
-    '15regen-sslcert',
-    '92etckeeper',
-]
+# deprecated: hooks can use _TURNKEY_INIT to detect if they're running under
+# turnkey-init
+BLACKLIST = ['15regen-sslcert',
+             '92etckeeper',]
 
 class Config(ConfFile):
     CONF_FILE = "/etc/default/inithooks"
@@ -54,11 +53,10 @@ class InitHooks:
 
     @staticmethod
     def _exec(cmd):
-        try:
-            env = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-            system("%s %s" % (env, cmd))
-        except ExecError:
-            pass
+        run(['env',
+             'PATH=/usr/local/sbin:/usr/local/bin:'
+             '/usr/sbin:/usr/bin:/sbin:/bin',
+             cmd])
 
     def execute(self, dname):
         os.environ['_TURNKEY_INIT'] = '1'
@@ -86,11 +84,7 @@ def main():
 
     confconsole = '/usr/bin/confconsole'
     if os.path.exists(confconsole) and os.access(confconsole, os.X_OK):
-        try:
-            system(confconsole, '--usage')
-        except ExecError:
-            pass
+        run(confconsole, '--usage')
 
 if __name__ == "__main__":
     main()
-
