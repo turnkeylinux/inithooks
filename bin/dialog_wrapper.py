@@ -31,9 +31,9 @@ class Dialog:
         self.console.add_persistent_args(["--backtitle", title])
 
     def _handle_exitcode(self, retcode):
-        if retcode == 2: # ESC, ALT+?
+        if retcode == self.console.ESC: # ESC, ALT+?
             text = "Do you really want to quit?"
-            if self.console.yesno(text) == 0:
+            if self.console.yesno(text) == self.console.OK:
                 sys.exit(0)
             return False
         return True
@@ -41,7 +41,7 @@ class Dialog:
     def _calc_height(self, text):
         height = 6
         for line in text.splitlines():
-            height += (len(line) / self.width) + 1
+            height += (len(line) // self.width) + 1
 
         return height
 
@@ -53,11 +53,7 @@ class Dialog:
 
         while 1:
             try:
-                ret = method("\n" + text, *args, **kws)
-                if type(ret) is int:
-                    retcode = ret
-                else:
-                    retcode = ret[0]
+                retcode = method("\n" + text, *args, **kws)
 
                 if self._handle_exitcode(retcode):
                     break
@@ -65,10 +61,12 @@ class Dialog:
             except Exception:
                 sio = StringIO()
                 traceback.print_exc(file=sio)
+                #with open('/tmp/test', 'a') as fob:
+                #    fob.write(sio.getvalue())
 
                 self.msgbox("Caught exception", sio.getvalue())
 
-        return ret
+        return retcode
 
     def error(self, text):
         height = self._calc_height(text)
@@ -94,7 +92,7 @@ class Dialog:
         retcode = self.wrapper("yesno", text, height, self.width, title=title,
                                yes_label=yes_label, no_label=no_label)
 
-        return True if retcode is 0 else False
+        return True if retcode is dialog.OK else False
 
     def menu(self, title, text, choices):
         """choices: array of tuples
@@ -108,9 +106,10 @@ class Dialog:
 
     def get_password(self, title, text, pass_req=8, min_complexity=3):
         req_string = '\n\nPassword Requirements\n - must be at least %d characters long\n - must contain characters from at least %d of the following categories: uppercase, lowercase, numbers, symbols' % (pass_req, min_complexity)
+        height = self._calc_height(text+req_string) + 3
         def ask(title, text):
-            return self.wrapper('passwordbox', text+req_string, title=title,
-                                ok_label='OK', no_cancel='True', height = self._calc_height(text+req_string)+3)[1]
+            return self.wrapper('passwordbox', text+req_string, height, self.width, title=title,
+                                ok_label='OK', no_cancel='True')[1]
 
         while 1:
             password = ask(title, text)

@@ -56,7 +56,7 @@ def main():
     input = ":".join([username, password])
 
     p = subprocess.Popen(command, stdin=PIPE, shell=False)
-    p.stdin.write(input)
+    p.stdin.write(input.encode(sys.stdin.encoding))
     p.stdin.close()
     err = p.wait()
     if err:
