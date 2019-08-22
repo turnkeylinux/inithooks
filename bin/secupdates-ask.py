@@ -7,7 +7,7 @@ import getopt
 import signal
 
 from subprocess import check_output, CalledProcessError
-from dialog_wrapper import Dialog
+from dialog_wrapper import Dialog, _dia_log
 
 TEXT = """By default, this system is configured to automatically install security updates on a daily basis:
 
@@ -45,7 +45,7 @@ def main():
 
     d = Dialog("TurnKey GNU/Linux - First boot configuration")
     install = d.yesno("Security updates", TEXT, "Install", "Skip")
-
+    _dia_log("\nsecupdates.main()\n\tinstall:`{}'\n".format(install))
     if not install:
         sys.exit(1)
 
@@ -57,4 +57,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

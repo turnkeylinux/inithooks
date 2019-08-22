@@ -8,6 +8,19 @@ from io import StringIO
 
 email_re = re.compile(r"(?:^|\s).*\S@\S+(?:\s|$)", re.IGNORECASE)
 
+from os import environ
+from pathlib import Path
+logfile = Path('/var/log/dialog.log')
+
+def _dia_log(msg_str):
+    if 'DIALOG_DEBUG' not in environ.keys():
+        return
+    log_content = ''
+    if logfile.is_file():
+        log_content = logfile.read_text()
+    log_content = log_content + msg_str
+    logfile.write_text(log_content)
+
 class Error(Exception):
     pass
 
@@ -31,11 +44,14 @@ class Dialog:
         self.console.add_persistent_args(["--backtitle", title])
 
     def _handle_exitcode(self, retcode):
+        _dia_log("\n_handle_exitcode():\n\tretcode:`{}'".format(retcode))
         if retcode == self.console.ESC: # ESC, ALT+?
             text = "Do you really want to quit?"
             if self.console.yesno(text) == self.console.OK:
                 sys.exit(0)
             return False
+
+        _dia_log("\n\t[no conditions met, returning True]\n")
         return True
 
     def _calc_height(self, text):
@@ -46,6 +62,8 @@ class Dialog:
         return height
 
     def wrapper(self, dialog_name, text, *args, **kws):
+        _dia_log("\nwraper():\n\tdialog_name:`{}'\n\ttext:`<redacted>'\n\targs:`{}'\n\tkws:`{}'\n".format(
+               dialog_name, args, kws))
         try:
             method = getattr(self.console, dialog_name)
         except AttributeError:
@@ -54,6 +72,7 @@ class Dialog:
         while 1:
             try:
                 retcode = method("\n" + text, *args, **kws)
+                _dia_log("\tretcode:`{}'\n".format(retcode))
 
                 if self._handle_exitcode(retcode):
                     break
@@ -61,8 +80,7 @@ class Dialog:
             except Exception:
                 sio = StringIO()
                 traceback.print_exc(file=sio)
-                #with open('/tmp/test', 'a') as fob:
-                #    fob.write(sio.getvalue())
+                _dia_log("\tException:`{}'\n".format(sio.getvalue()))
 
                 self.msgbox("Caught exception", sio.getvalue())
 
@@ -74,15 +92,19 @@ class Dialog:
 
     def msgbox(self, title, text):
         height = self._calc_height(text)
+        _dia_log("\nmsgbox():\n\ttitle:`{}'\n\ttext:`<redacted>'\n".format(title))
         return self.wrapper("msgbox", text, height, self.width, title=title)
 
     def infobox(self, text):
         height = self._calc_height(text)
+        _dia_log("\ninfobox():\n\ttext:`{}'\n".format(text))
         return self.wrapper("infobox", text, height, self.width)
 
     def inputbox(self, title, text, init='', ok_label="OK", cancel_label="Cancel"):
+        _dia_log("\ninputbox():\n\ttitle:`{}'\n\ttext:`<redacted>'\n\tinit:`{}'\n\tok_label:`{}'\n\tcancel_label:`{}'".format(title, init, ok_label, cancel_label))
         height = self._calc_height(text) + 3
         no_cancel = True if cancel_label == "" else False
+        _dia_log("\n\theight:`{}'\n\tno_cancel:`{}'\n".format(height, no_cancel))
         return self.wrapper("inputbox", text, height, self.width, title=title,
                             init=init, ok_label=ok_label, cancel_label=cancel_label,
                             no_cancel=no_cancel)
@@ -91,8 +113,8 @@ class Dialog:
         height = self._calc_height(text)
         retcode = self.wrapper("yesno", text, height, self.width, title=title,
                                yes_label=yes_label, no_label=no_label)
-
-        return True if retcode is dialog.OK else False
+        _dia_log("\nyesno():\n\tretcode:`{}'\n".format(retcode))
+        return True if retcode == 'ok' else False
 
     def menu(self, title, text, choices):
         """choices: array of tuples
@@ -136,8 +158,10 @@ class Dialog:
             self.error('Password mismatch, please try again.')
 
     def get_email(self, title, text, init=''):
+        _dia_log("\nget_email():\n\ttitle:`{}'\n\ttext:`<redacted>'\n\tinit:`{}'\n".format(title, init))
         while 1:
             email = self.inputbox(title, text, init, "Apply", "")[1]
+            _dia_log("\n\temail:`{}'\n".format(email))
             if not email:
                 self.error('Email is required.')
                 continue
