@@ -6,6 +6,8 @@ INITHOOKS_DEFAULT=/etc/default/inithooks
 
 TKLINFO=/var/lib/turnkey-info/inithooks.service
 
+INITHOOKS_STARTED=0
+
 unset PID
 
 if [ "$(echo $REDIRECT_OUTPUT | tr [A-Z] [a-z] )" = "true" ]; then
@@ -31,6 +33,11 @@ exec_scripts() {
     for SCRIPT in $(find $SCRIPT_DIR -type f -or -type l | sort); do
         [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
         [ -x $SCRIPT ] || continue
+        if [[ $SCRIPT = *inithooks-started ]] \
+                && [[ $INITHOOKS_STARTED -eq 0 ]]; then
+            systemd-notify --status="Completed initial non-interactive hooks."
+            INITHOOKS_STARTED=1
+        fi
         echo "# running $SCRIPT"
         $SCRIPT
         RET=$?
