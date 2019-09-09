@@ -1,10 +1,22 @@
 #!/bin/bash -e
-# remove existing ssh keys and generate new ones
+# generate new SSH keys; add ssh restart to 98finalize inithook
 # note: ssh daemon needs to be restarted for changes to take effect
 
 [ -n "$_TURNKEY_INIT" ] && exit 0
 
-echo "* Regenerating SSH cryptographic keys"
+systemctl stop ssh.service
 
-rm -f /etc/ssh/*_key{,.pub}
-dpkg-reconfigure --frontend=noninteractive --no-reload openssh-server
+tmp_dir=/tmp/ssh_keys
+rm -rf $tmp_dir # just in case it already contains keys
+mkdir -p $tmp_dir
+keys="rsa ecdsa ed25519"
+for key in $keys; do
+   file=$tmp_dir/ssh_host_${key}_key
+   echo "Generating new SSH2 ${key^^} key; this may take a while..."
+   ssh-keygen -q -f "${file}" -N '' -t ${key}
+   ssh-keygen -l -f "${file}.pub"
+done
+
+mv ${tmp_dir}/* /etc/ssh/
+
+# ssh service restarted by 90restart_ssh

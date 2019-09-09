@@ -1,0 +1,5 @@
+#!/bin/bash -e
+
+systemctl restart ssh
+
+exit 0

@@ -302,9 +302,13 @@ run scripts or add files to the filesystem before the first boot.
 List of initialization hooks and preseeding configuration parameters
 --------------------------------------------------------------------
 
-Below is a list of interactive firstboot hooks. All interactive hooks
+Below is a list of firstboot hooks. All interactive hooks
 have preseeding options to support cloud deployment, hosting and ISV
 integration.
+
+Most inithooks that are configurable are interactive, however not all.
+Non-interactive hooks that can be adjusted via preseeding are marked
+below with an asterisk ('*').
 
 Note that almost all appliances have their own application specific
 secret-regeneration hooks. 
@@ -312,12 +316,30 @@ secret-regeneration hooks. 
 Common to all appliances:
 ::
 
+    15regen-sslcert         DH_BITS                 [ 1024 | 2048 | 4096 ]
     30rootpass              ROOT_PASS
     50auto-apt-archive      AUTO_APT_ARCHIVE        [ SKIP ]
     80tklbam                HUB_APIKEY              [ SKIP ]
     85secalerts             SEC_ALERTS              [ SKIP ]
-    92etckeeper             ETCKEEPER_COMMIT        [ SKIP ]
+    92etckeeper*            ETCKEEPER_COMMIT        [ SKIP ]
     95secupdates            SEC_UPDATES             [ SKIP | FORCE ]
+
+
+Notes:
+
+    - DH_BITS refers to the number of bits used when generating Diffie-Hellman
+      parameters used in TLS (i.e. HTTPS) _`Diffie-Hellman key exchange`. 2048
+      is recommended but can be slow to generate, particularly on low resource
+      servers. 4096 is another option but may take hours. 1024 is default (so
+      firstboot isn't too slow...). Note this one doesn't have an interactive
+      counterpart at the moment, but can be re-run from the commandline::
+
+            export DH_BITS=2048 # or alternatively DH_BITS=4096
+            /usr/lib/inithooks/firstboot.d/15regen-dhparams
+
+    - ETCKEEPER_COMMIT refers to whether (or not) etckeeper commits the current
+      state of /etc. If not set it will be.
+
 
 Specific to headless builds:
 ::
@@ -543,4 +565,4 @@ enter a password interactively.
     if __name__ == "__main__":
         main()
 
-
+.. _Diffie-Hellman key exchange: https://en.wikipedia.org/wiki/Diffie-Hellman_key_exchange
