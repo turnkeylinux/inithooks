@@ -6,17 +6,17 @@
 
 systemctl stop ssh.service
 
-tmp_dir=/tmp/ssh_keys
+tmp_dir=/etc/ssh/tmp_keys
 rm -rf $tmp_dir # just in case it already contains keys
 mkdir -p $tmp_dir
 keys="rsa ecdsa ed25519"
 for key in $keys; do
    file=$tmp_dir/ssh_host_${key}_key
    echo "Generating new SSH2 ${key^^} key; this may take a while..."
-   ssh-keygen -q -f "${file}" -N '' -t ${key}
-   ssh-keygen -l -f "${file}.pub"
+   ssh-keygen -f "${file}" -N '' -t ${key}
 done
 
-mv ${tmp_dir}/* /etc/ssh/
+mv ${tmp_dir}/*{key,key.pub} /etc/ssh/
+rm -rf $tmp_dir
 
 # ssh service restarted by 90restart_ssh
