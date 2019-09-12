@@ -13,7 +13,7 @@ keys="rsa ecdsa ed25519"
 for key in $keys; do
    file=$tmp_dir/ssh_host_${key}_key
    echo "Generating new SSH2 ${key^^} key; this may take a while..."
-   ssh-keygen -f "${file}" -N '' -t ${key}
+   ssh-keygen -q -f "${file}" -N '' -t ${key}
 done
 
 mv ${tmp_dir}/*{key,key.pub} /etc/ssh/

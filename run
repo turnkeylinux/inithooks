@@ -6,9 +6,15 @@ INITHOOKS_DEFAULT=/etc/default/inithooks
 
 TKLINFO=/var/lib/turnkey-info/inithooks.service
 
-INITHOOKS_STARTED=0
+unset PID LOGFILE
 
-unset PID
+log() {
+    # log to journal as well as $LOGFILE
+    LEVEL=$1 # err|warn|info|debug
+    shift
+    logger -t inithooks -p $LEVEL "$@"
+    [ -n "$LOGFILE" ] && echo "${LEVEL^^}: $@" >> "$LOGFILE"
+}
 
 if [ "$(echo $REDIRECT_OUTPUT | tr [A-Z] [a-z] )" = "true" ]; then
     # redirect stdout/stderr (use when preseeding headless deployments)
@@ -33,15 +39,14 @@ exec_scripts() {
     for SCRIPT in $(find $SCRIPT_DIR -type f -or -type l | sort); do
         [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
         [ -x $SCRIPT ] || continue
-        if [[ $SCRIPT = *inithooks-started ]] \
-                && [[ $INITHOOKS_STARTED -eq 0 ]]; then
-            systemd-notify --status="Completed initial non-interactive hooks."
-            INITHOOKS_STARTED=1
-        fi
-        echo "# running $SCRIPT"
+        log info "running $SCRIPT"
         $SCRIPT
         RET=$?
-        echo "# completed $SCRIPT - exit code $RET"
+        if [ "$RET" -eq 0 ]; then
+            log info "successfully completed $SCRIPT"
+        else
+            log warn "completed $SCRIPT - exit code $RET"
+        fi
         # the script requested a reboot before we can continue
         [ $RET -eq 42 ] && init 6 && exit 0
     done
@@ -59,5 +64,7 @@ exec_scripts $INITHOOKS_PATH/everyboot.d
 if [ -n "$PID" ];  then
     kill -9 $PID || true
 fi
+
+log info "Inithook run completed, now exiting"
 
 exit 0
