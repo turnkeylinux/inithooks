@@ -44,11 +44,18 @@ exec_scripts() {
         RET=$?
         if [ "$RET" -eq 0 ]; then
             log info "successfully completed $SCRIPT"
+        elif [ "$(basename $SCRIPT)" = "95secupdates" ] && [ "$RET" -eq 2 ]; then
+            log info "running live, so skipping security updates"
         else
             log warn "completed $SCRIPT - exit code $RET"
         fi
         # the script requested a reboot before we can continue
-        [ $RET -eq 42 ] && init 6 && exit 0
+        if [ $RET -eq 42 ]; then
+            log warn "Exit code 42 indicates a reboot is required"
+            log err 'Rebooting now!'
+            systemctl reboot
+            exit 0
+        fi
     done
     return 0
 }
