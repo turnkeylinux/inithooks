@@ -7,7 +7,7 @@ ConditionPathExists=!/var/lib/turnkey-info/inithooks.service/lxc
 ConditionPathExists=!/var/lib/turnkey-info/inithooks.service/openstack
 
 [Service]
-Type=simple
+Type=oneshot
 StandardInput=tty-force
 TTYPath=/dev/tty8
 TTYReset=yes
