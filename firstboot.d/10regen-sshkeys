@@ -1,9 +1,10 @@
 #!/bin/bash -e
-# generate new SSH keys; add ssh restart to 98finalize inithook
+# generate new SSH keys
 # note: ssh daemon needs to be restarted for changes to take effect
 
 [ -n "$_TURNKEY_INIT" ] && exit 0
 
+echo "Stopping SSH service to regenerate new keys"
 systemctl stop ssh.service
 
 tmp_dir=/etc/ssh/tmp_keys
@@ -16,7 +17,11 @@ for key in $keys; do
    ssh-keygen -q -f "${file}" -N '' -t ${key}
 done
 
+echo "Moving keys into place"
 mv ${tmp_dir}/*{key,key.pub} /etc/ssh/
 rm -rf $tmp_dir
 
-# ssh service restarted by 90restart_ssh
+echo "Restarting SSH service"
+systemctl start ssh.service
+
+exit 0
