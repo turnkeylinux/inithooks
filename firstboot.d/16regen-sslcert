@@ -1,0 +1,43 @@
+#!/bin/bash -e
+# Regenerate self-signed TLS (aka SSL) keys and certificates
+
+[ -n "$_TURNKEY_INIT" ] && exit 0
+
+# dhparams generation moved to separate firstboot script
+
+echo "Regenerating self-signed TLS (aka SSL) keys and certificates..."
+
+# Use turnkey-make-ssl-cert to generate default server cert
+# This script should be provided by common/overlays/turnkey.d/sslcert
+if which turnkey-make-ssl-cert >/dev/null; then
+    /usr/local/bin/turnkey-make-ssl-cert --default --force-overwrite
+else
+    echo "fatal: turnkey-make-ssl-cert not found"
+    exit 1
+fi
+
+# Restart relevant services
+SERVICENAMES="\
+    nginx
+    apache2
+    lighttpd
+    tomcat8
+    stunnel4@webmin
+    stunnel4@shellinabox"
+
+echo "(re)starting relevant services"
+for servicename in $SERVICENAMES; do
+    if systemctl list-units --full -all | grep -Fq $servicename.service; then
+        echo "$servicename.service found; (re)starting..."
+        if systemctl is-active --quiet $servicename.service; then
+            systemctl restart --quiet $servicename.service
+        else
+            systemctl start --quiet $servicename.service
+        fi
+    fi
+done
+
+# final tidy up
+update-ca-certificates
+
+exit 0
