@@ -131,7 +131,7 @@ class Dialog:
         height = self._calc_height(text+req_string) + 3
         def ask(title, text):
             return self.wrapper('passwordbox', text+req_string, height, self.width, title=title,
-                                ok_label='OK', no_cancel='True')[1]
+                                ok_label='OK', no_cancel='True', insecure=True)[1]
 
         while 1:
             password = ask(title, text)
