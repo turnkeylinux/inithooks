@@ -84,7 +84,7 @@ def main():
 
     confconsole = '/usr/bin/confconsole'
     if os.path.exists(confconsole) and os.access(confconsole, os.X_OK):
-        run(confconsole, '--usage')
+        run([confconsole, '--usage'])
 
 if __name__ == "__main__":
     main()
