@@ -1,6 +1,7 @@
 [Unit]
 Description=inithooks: firstboot and everyboot initialization scripts
 After=getty@tty8.service
+Before=getty@tty1.service
 ConditionKernelCommandLine=!noinithooks
 ConditionPathExists=!/var/lib/turnkey-info/inithooks.service/xen
 ConditionPathExists=!/var/lib/turnkey-info/inithooks.service/lxc
