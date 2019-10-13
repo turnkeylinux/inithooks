@@ -72,6 +72,9 @@ if [ -n "$PID" ];  then
     kill -9 $PID || true
 fi
 
-log info "Inithook run completed, now exiting"
+log info "Inithook run completed, now starting confconsole"
+sleep 2 # anyway to replace this?
+confconsole --usage
+log info "Confconsole completed, now exiting"
 
 exit 0
