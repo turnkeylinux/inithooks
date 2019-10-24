@@ -12,12 +12,14 @@ TEXT = """A security update to the kernel requires a reboot to go into effect.
 For maximum protection, we recommend rebooting now.
 """
 
+
 def usage(s=None):
     if s:
         print("Error:", s, file=sys.stderr)
     print("Syntax: %s [options]" % sys.argv[0], file=sys.stderr)
     print(__doc__, file=sys.stderr)
     sys.exit(1)
+
 
 def main():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -31,11 +33,11 @@ def main():
             usage()
 
     d = Dialog("TurnKey GNU/Linux - Reboot after kernel update")
-    reboot  = d.yesno("Reboot now?", TEXT, "Reboot", "Skip")
+    reboot = d.yesno("Reboot now?", TEXT, "Reboot", "Skip")
 
     if not reboot:
         sys.exit(1)
 
+
 if __name__ == "__main__":
     main()
-

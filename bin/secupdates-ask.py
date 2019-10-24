@@ -9,21 +9,18 @@ import signal
 from subprocess import check_output, CalledProcessError
 from dialog_wrapper import Dialog, _dia_log
 
-TEXT = """By default, this system is configured to automatically install security updates on a daily basis:
+TEXT = ("By default, this system is configured to automatically install "
+        "security updates on a daily basis:\n\n"
+        "https://www.turnkeylinux.org/security-updates\n\n"
+        "For maximum protection, we also recommend installing the latest "
+        "security updates right now.\n\n"
+        "This can take a few minutes. You need to be online.")
 
-https://www.turnkeylinux.org/security-updates
+CONNECTIVITY_ERROR = ("Unable to connect to package archive.\n\n"
+                      "Please try again once your network settings are "
+                      "configured by using the following shell command:\n\n"
+                      "    turnkey-install-security-updates")
 
-For maximum protection, we also recommend installing the latest security updates right now.
-
-This can take a few minutes. You need to be online.
-"""
-
-CONNECTIVITY_ERROR = """Unable to connect to package archive.
-
-Please try again once your network settings are configured by using the following shell command:
-
-    turnkey-install-security-updates
-"""
 
 def usage(s=None):
     if s:
@@ -31,6 +28,7 @@ def usage(s=None):
     print("Syntax: %s [options]" % sys.argv[0], file=sys.stderr)
     print(__doc__, file=sys.stderr)
     sys.exit(1)
+
 
 def main():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -54,6 +52,7 @@ def main():
     except CalledProcessError as e:
         d.error(CONNECTIVITY_ERROR)
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

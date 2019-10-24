@@ -15,9 +15,11 @@ import subprocess
 from subprocess import PIPE
 import signal
 
+
 def fatal(s):
     print("Error:", s, file=sys.stderr)
     sys.exit(1)
+
 
 def usage(s=None):
     if s:
@@ -25,6 +27,7 @@ def usage(s=None):
     print("Syntax: %s <username> [options]" % sys.argv[0], file=sys.stderr)
     print(__doc__, file=sys.stderr)
     sys.exit(1)
+
 
 def main():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -51,7 +54,6 @@ def main():
             "%s Password" % username.capitalize(),
             "Please enter new password for the %s account." % username)
 
-
     command = ["chpasswd"]
     input = ":".join([username, password])
 
@@ -62,6 +64,6 @@ def main():
     if err:
         fatal(err)
 
+
 if __name__ == "__main__":
     main()
-

@@ -17,21 +17,24 @@ from subprocess import run
 
 TITLE = "System Notifications and Critical Security Alerts"
 
-TEXT = """Enable local system notifications (root@localhost) to be forwarded to your regular inbox. Notifications include security updates and system messages.
+TEXT = ("Enable local system notifications (root@localhost) to be forwarded "
+        "to your regular inbox. Notifications include security updates and "
+        "system messages.\n\n"
+        "You will also be subscribed to receive critical security and bug "
+        "alerts through a low-traffic Security and News announcements "
+        "newsletter. You can unsubscribe at any time.\n\n"
+        "https://www.turnkeylinux.org/security-alerts\n\n"
+        "Email:")
 
-You will also be subscribed to receive critical security and bug alerts through a low-traffic Security and News announcements newsletter. You can unsubscribe at any time.
-
-https://www.turnkeylinux.org/security-alerts
-
-Email:
-"""
 
 def fatal(e):
     print("Error:", e, file=sys.stderr)
     sys.exit(1)
 
+
 def warn(e):
     print("Warning:", e, file=sys.stderr)
+
 
 def usage(s=None):
     if s:
@@ -39,6 +42,7 @@ def usage(s=None):
     print("Syntax: %s [options]" % sys.argv[0], file=sys.stderr)
     print(__doc__, file=sys.stderr)
     sys.exit(1)
+
 
 def main():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -72,7 +76,8 @@ def main():
                 "Enable",
                 "Skip")
 
-            _dia_log("\n\nsecalerts.main():\n\tretcode:`{}'\n\temail:`{}'\n".format(retcode, email))
+            _dia_log("\n\nsecalerts.main():\n\tretcode:`{}'\n\temail:`{}'\n"
+                     "".format(retcode, email))
             if retcode == 'cancel':
                 email = ""
                 break
@@ -92,4 +97,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -5,12 +5,12 @@ import sys
 import dialog
 import traceback
 from io import StringIO
-
-email_re = re.compile(r"(?:^|\s).*\S@\S+(?:\s|$)", re.IGNORECASE)
-
 from os import environ
 from pathlib import Path
+
+email_re = re.compile(r"(?:^|\s).*\S@\S+(?:\s|$)", re.IGNORECASE)
 logfile = Path('/var/log/dialog.log')
+
 
 def _dia_log(msg_str):
     if 'DIALOG_DEBUG' not in environ.keys():
@@ -21,8 +21,10 @@ def _dia_log(msg_str):
     log_content = log_content + msg_str
     logfile.write_text(log_content)
 
+
 class Error(Exception):
     pass
+
 
 def password_complexity(password):
     """return password complexity score from 0 (invalid) to 4 (strong)"""
@@ -33,6 +35,7 @@ def password_complexity(password):
     nonalpha = re.search('\W', password) is not None
 
     return sum([lowercase, uppercase, number, nonalpha])
+
 
 class Dialog:
     def __init__(self, title, width=60, height=20):
@@ -45,7 +48,7 @@ class Dialog:
 
     def _handle_exitcode(self, retcode):
         _dia_log("\n_handle_exitcode():\n\tretcode:`{}'".format(retcode))
-        if retcode == self.console.ESC: # ESC, ALT+?
+        if retcode == self.console.ESC:  # ESC, ALT+?
             text = "Do you really want to quit?"
             if self.console.yesno(text) == self.console.OK:
                 sys.exit(0)
@@ -62,8 +65,8 @@ class Dialog:
         return height
 
     def wrapper(self, dialog_name, text, *args, **kws):
-        _dia_log("\nwraper():\n\tdialog_name:`{}'\n\ttext:`<redacted>'\n\targs:`{}'\n\tkws:`{}'\n".format(
-               dialog_name, args, kws))
+        _dia_log("\nwraper():\n\tdialog_name:`{}'\n\ttext:`<redacted>'\n"
+                 "\targs:`{}'\n\tkws:`{}'\n".format(dialog_name, args, kws))
         try:
             method = getattr(self.console, dialog_name)
         except AttributeError:
@@ -92,7 +95,8 @@ class Dialog:
 
     def msgbox(self, title, text):
         height = self._calc_height(text)
-        _dia_log("\nmsgbox():\n\ttitle:`{}'\n\ttext:`<redacted>'\n".format(title))
+        _dia_log("\nmsgbox():\n\ttitle:`{}'\n\ttext:`<redacted>'\n"
+                 "".format(title))
         return self.wrapper("msgbox", text, height, self.width, title=title)
 
     def infobox(self, text):
@@ -100,14 +104,18 @@ class Dialog:
         _dia_log("\ninfobox():\n\ttext:`{}'\n".format(text))
         return self.wrapper("infobox", text, height, self.width)
 
-    def inputbox(self, title, text, init='', ok_label="OK", cancel_label="Cancel"):
-        _dia_log("\ninputbox():\n\ttitle:`{}'\n\ttext:`<redacted>'\n\tinit:`{}'\n\tok_label:`{}'\n\tcancel_label:`{}'".format(title, init, ok_label, cancel_label))
+    def inputbox(self, title, text, init='', ok_label="OK",
+                 cancel_label="Cancel"):
+        _dia_log("\ninputbox():\n\ttitle:`{}'\n\ttext:`<redacted>'\n"
+                 "\tinit:`{}'\n\tok_label:`{}'\n\tcancel_label:`{}'"
+                 "".format(title, init, ok_label, cancel_label))
         height = self._calc_height(text) + 3
         no_cancel = True if cancel_label == "" else False
-        _dia_log("\n\theight:`{}'\n\tno_cancel:`{}'\n".format(height, no_cancel))
+        _dia_log("\n\theight:`{}'\n\tno_cancel:`{}'\n"
+                 "".format(height, no_cancel))
         return self.wrapper("inputbox", text, height, self.width, title=title,
-                            init=init, ok_label=ok_label, cancel_label=cancel_label,
-                            no_cancel=no_cancel)
+                            init=init, ok_label=ok_label,
+                            cancel_label=cancel_label, no_cancel=no_cancel)
 
     def yesno(self, title, text, yes_label="Yes", no_label="No"):
         height = self._calc_height(text)
@@ -127,11 +135,17 @@ class Dialog:
         return choice
 
     def get_password(self, title, text, pass_req=8, min_complexity=3):
-        req_string = '\n\nPassword Requirements\n - must be at least %d characters long\n - must contain characters from at least %d of the following categories: uppercase, lowercase, numbers, symbols' % (pass_req, min_complexity)
+        req_string = ('\n\nPassword Requirements\n - must be at least %d '
+                      'characters long\n - must contain characters from at '
+                      'least %d of the following categories: uppercase, '
+                      'lowercase, numbers, symbols'
+                      % (pass_req, min_complexity))
         height = self._calc_height(text+req_string) + 3
+
         def ask(title, text):
-            return self.wrapper('passwordbox', text+req_string, height, self.width, title=title,
-                                ok_label='OK', no_cancel='True', insecure=True)[1]
+            return self.wrapper('passwordbox', text+req_string, height,
+                                self.width, title=title, ok_label='OK',
+                                no_cancel='True', insecure=True)[1]
 
         while 1:
             password = ask(title, text)
@@ -141,15 +155,20 @@ class Dialog:
 
             if isinstance(pass_req, int):
                 if len(password) < pass_req:
-                    self.error("Password must be at least %s characters." % pass_req)
+                    self.error("Password must be at least %s characters."
+                               % pass_req)
                     continue
             else:
                 if not re.match(pass_req, password):
-                    self.error("Password does not match complexity requirements.")
+                    self.error("Password does not match complexity "
+                               "requirements.")
                     continue
 
             if password_complexity(password) < min_complexity:
-                self.error("Insecure password! Mix uppercase, lowercase, and at least one number. Multiple words and punctuation are highly recommended but not strictly required.")
+                self.error("Insecure password! Mix uppercase, lowercase, and "
+                           "at least one number. Multiple words and "
+                           "punctuation are highly recommended but not "
+                           "strictly required.")
                 continue
 
             if password == ask(title, 'Confirm password'):
@@ -158,7 +177,8 @@ class Dialog:
             self.error('Password mismatch, please try again.')
 
     def get_email(self, title, text, init=''):
-        _dia_log("\nget_email():\n\ttitle:`{}'\n\ttext:`<redacted>'\n\tinit:`{}'\n".format(title, init))
+        _dia_log("\nget_email():\n\ttitle:`{}'\n\ttext:`<redacted>'\n"
+                 "\tinit:`{}'\n".format(title, init))
         while 1:
             email = self.inputbox(title, text, init, "Apply", "")[1]
             _dia_log("\n\temail:`{}'\n".format(email))
@@ -180,4 +200,3 @@ class Dialog:
                 continue
 
             return s
-

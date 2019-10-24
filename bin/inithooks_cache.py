@@ -15,9 +15,11 @@ Environment:
 import os
 import sys
 
+
 def fatal(e):
     print("Error:", e, file=sys.stderr)
     sys.exit(1)
+
 
 def usage(s=None):
     if s:
@@ -25,6 +27,7 @@ def usage(s=None):
     print("Syntax: %s <key> [value]" % sys.argv[0], file=sys.stderr)
     print(__doc__, file=sys.stderr)
     sys.exit(1)
+
 
 class KeyStore:
     def __init__(self, path):
@@ -48,11 +51,14 @@ class KeyStore:
         with open(keypath, 'w') as fob:
             fob.write(val)
 
-#convenience functions
+
+# convenience functions
 CACHE_DIR = os.environ.get('INITHOOKS_CACHE', '/var/lib/inithooks/cache')
+
 
 def read(key):
     return KeyStore(CACHE_DIR).read(key)
+
 
 def write(key, value):
     return KeyStore(CACHE_DIR).write(key, value)
@@ -83,4 +89,3 @@ if __name__ == "__main__":
 
     if len(args) == 2:
         write(args[0], args[1])
-
