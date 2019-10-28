@@ -27,7 +27,7 @@ TEXT_SERVICES = ("1) TurnKey Backup and Migration: saves changes to files,\n"
                  "from the command line / Webmin)\n\n"
                  "API Key: (see https://hub.turnkeylinux.org/profile)")
 
-TEXT_HUBDNS = {"TurnKey supports dynamic DNS configuration, powered by Amazon "
+TEXT_HUBDNS = ("TurnKey supports dynamic DNS configuration, powered by Amazon "
                "Route 53, a robust cloud DNS service: "
                "https://www.turnkeylinux.org/dns\n\n"
                "You can assign a hostname under:\n\n"
