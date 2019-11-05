@@ -15,11 +15,8 @@ logfile = Path('/var/log/dialog.log')
 def dia_log(msg_str):
     if 'DIALOG_DEBUG' not in environ.keys():
         return
-    log_content = ''
-    if logfile.is_file():
-        log_content = logfile.read_text()
-    log_content = log_content + msg_str
-    logfile.write_text(log_content)
+    with logfile.open('a') as log_content
+        log_content.write(msg_str + '\n')
 
 
 class Error(Exception):
@@ -47,14 +44,14 @@ class Dialog:
         self.console.add_persistent_args(["--backtitle", title])
 
     def _handle_exitcode(self, retcode):
-        dia_log("\n_handle_exitcode():\n\tretcode:`{}'".format(retcode))
+        dia_log("_handle_exitcode():\n\tretcode:`{}'".format(retcode))
         if retcode == self.console.ESC:  # ESC, ALT+?
             text = "Do you really want to quit?"
             if self.console.yesno(text) == self.console.OK:
                 sys.exit(0)
             return False
 
-        dia_log("\n\t[no conditions met, returning True]\n")
+        dia_log("\t[no conditions met, returning True]\n")
         return True
 
     def _calc_height(self, text):
@@ -65,8 +62,8 @@ class Dialog:
         return height
 
     def wrapper(self, dialog_name, text, *args, **kws):
-        dia_log("\nwraper():\n\tdialog_name:`{}'\n\ttext:`<redacted>'\n"
-                 "\targs:`{}'\n\tkws:`{}'\n".format(dialog_name, args, kws))
+        dia_log("wraper():\n\tdialog_name:`{}'\n\ttext:`<redacted>'\n"
+                "\targs:`{}'\n\tkws:`{}'\n".format(dialog_name, args, kws))
         try:
             method = getattr(self.console, dialog_name)
         except AttributeError:
@@ -95,24 +92,22 @@ class Dialog:
 
     def msgbox(self, title, text):
         height = self._calc_height(text)
-        dia_log("\nmsgbox():\n\ttitle:`{}'\n\ttext:`<redacted>'\n"
-                 "".format(title))
+        dia_log("msgbox():\n\ttitle:`{}'\n\ttext:`<redacted>'\n".format(title))
         return self.wrapper("msgbox", text, height, self.width, title=title)
 
     def infobox(self, text):
         height = self._calc_height(text)
-        dia_log("\ninfobox():\n\ttext:`{}'\n".format(text))
+        dia_log("infobox():\n\ttext:`{}'\n".format(text))
         return self.wrapper("infobox", text, height, self.width)
 
     def inputbox(self, title, text, init='', ok_label="OK",
                  cancel_label="Cancel"):
-        dia_log("\ninputbox():\n\ttitle:`{}'\n\ttext:`<redacted>'\n"
+        dia_log("inputbox():\n\ttitle:`{}'\n\ttext:`<redacted>'\n"
                  "\tinit:`{}'\n\tok_label:`{}'\n\tcancel_label:`{}'"
                  "".format(title, init, ok_label, cancel_label))
         height = self._calc_height(text) + 3
         no_cancel = True if cancel_label == "" else False
-        dia_log("\n\theight:`{}'\n\tno_cancel:`{}'\n"
-                 "".format(height, no_cancel))
+        dia_log("\theight:`{}'\n\tno_cancel:`{}'\n".format(height, no_cancel))
         return self.wrapper("inputbox", text, height, self.width, title=title,
                             init=init, ok_label=ok_label,
                             cancel_label=cancel_label, no_cancel=no_cancel)
@@ -121,7 +116,7 @@ class Dialog:
         height = self._calc_height(text)
         retcode = self.wrapper("yesno", text, height, self.width, title=title,
                                yes_label=yes_label, no_label=no_label)
-        dia_log("\nyesno():\n\tretcode:`{}'\n".format(retcode))
+        dia_log("yesno():\n\tretcode:`{}'\n".format(retcode))
         return True if retcode == 'ok' else False
 
     def menu(self, title, text, choices):
@@ -177,11 +172,11 @@ class Dialog:
             self.error('Password mismatch, please try again.')
 
     def get_email(self, title, text, init=''):
-        dia_log("\nget_email():\n\ttitle:`{}'\n\ttext:`<redacted>'\n"
-                 "\tinit:`{}'\n".format(title, init))
+        dia_log("get_email():\n\ttitle:`{}'\n\ttext:`<redacted>'\n"
+                "\tinit:`{}'\n".format(title, init))
         while 1:
             email = self.inputbox(title, text, init, "Apply", "")[1]
-            dia_log("\n\temail:`{}'\n".format(email))
+            dia_log("\temail:`{}'\n".format(email))
             if not email:
                 self.error('Email is required.')
                 continue

@@ -43,7 +43,7 @@ def main():
 
     d = Dialog("TurnKey GNU/Linux - First boot configuration")
     install = d.yesno("Security updates", TEXT, "Install", "Skip")
-    dia_log("\nsecupdates.main()\n\tinstall:`{}'\n".format(install))
+    dia_log("secupdates.main()\n\tinstall:`{}'\n".format(install))
     if not install:
         sys.exit(1)
 

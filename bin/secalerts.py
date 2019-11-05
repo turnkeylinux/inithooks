@@ -76,7 +76,7 @@ def main():
                 "Enable",
                 "Skip")
 
-            dia_log("\n\nsecalerts.main():\n\tretcode:`{}'\n\temail:`{}'\n"
+            dia_log("\nsecalerts.main():\n\tretcode:`{}'\n\temail:`{}'\n"
                      "".format(retcode, email))
             if retcode == 'cancel':
                 email = ""
