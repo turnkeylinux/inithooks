@@ -22,11 +22,13 @@ import os
 import sys
 
 from conffile import ConfFile
-from subprocess import run, PIPE
+import subprocess
+
 
 def fatal(e):
     print("error: " + str(e), file=sys.stderr)
     sys.exit(1)
+
 
 def usage(e=None):
     if e:
@@ -39,13 +41,16 @@ def usage(e=None):
         print("    %s" % script, file=sys.stderr)
     sys.exit(1)
 
+
 # deprecated: hooks can use _TURNKEY_INIT to detect if they're running under
 # turnkey-init
 BLACKLIST = ['15regen-sslcert',
-             '92etckeeper',]
+             '92etckeeper', ]
+
 
 class Config(ConfFile):
     CONF_FILE = "/etc/default/inithooks"
+
 
 class InitHooks:
     def __init__(self):
@@ -53,10 +58,10 @@ class InitHooks:
 
     @staticmethod
     def _exec(cmd):
-        run(['env',
-             'PATH=/usr/local/sbin:/usr/local/bin:'
-             '/usr/sbin:/usr/bin:/sbin:/bin',
-             cmd])
+        subprocess.run(['env',
+                        'PATH=/usr/local/sbin:/usr/local/bin:'
+                        '/usr/sbin:/usr/bin:/sbin:/bin',
+                        cmd])
 
     def execute(self, dname):
         os.environ['_TURNKEY_INIT'] = '1'
@@ -68,8 +73,9 @@ class InitHooks:
         scripts.sort()
         for fname in scripts:
             fpath = os.path.join(dpath, fname)
-            if os.access(fpath, os.X_OK) and not fname in BLACKLIST:
+            if os.access(fpath, os.X_OK) and fname not in BLACKLIST:
                 self._exec(fpath)
+
 
 def main():
     args = sys.argv[1:]
@@ -84,7 +90,8 @@ def main():
 
     confconsole = '/usr/bin/confconsole'
     if os.path.exists(confconsole) and os.access(confconsole, os.X_OK):
-        run([confconsole, '--usage'])
+        subprocess.run([confconsole, '--usage'])
+
 
 if __name__ == "__main__":
     main()

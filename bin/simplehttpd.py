@@ -50,9 +50,9 @@ def fatal(e):
 
 def usage(e=None):
     print("Error: " + str(e), file=sys.stderr)
-    print("Syntax: %s [ -options ] path/to/webroot [address:]http-port [ "
-          "[ssl-address:]ssl-port path/to/cert.pem [ path/to/cert.key ] ]"
-          % sys.argv[0], file=sys.stderr)
+    print(("Syntax: %s [ -options ] path/to/webroot [address:]http-port ["
+           " [ssl-address:]ssl-port path/to/cert.pem [ path/to/cert.key ] ]"
+           ) % sys.argv[0], file=sys.stderr)
     print(__doc__.strip(), file=sys.stderr)
     sys.exit(1)
 

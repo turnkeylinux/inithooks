@@ -9,16 +9,16 @@ import signal
 from subprocess import check_output, CalledProcessError
 from dialog_wrapper import Dialog, dia_log
 
-TEXT = ("By default, this system is configured to automatically install "
-        "security updates on a daily basis:\n\n"
+TEXT = ("By default, this system is configured to automatically install"
+        " security updates on a daily basis:\n\n"
         "https://www.turnkeylinux.org/security-updates\n\n"
-        "For maximum protection, we also recommend installing the latest "
-        "security updates right now.\n\n"
+        "For maximum protection, we also recommend installing the latest"
+        " security updates right now.\n\n"
         "This can take a few minutes. You need to be online.")
 
 CONNECTIVITY_ERROR = ("Unable to connect to package archive.\n\n"
-                      "Please try again once your network settings are "
-                      "configured by using the following shell command:\n\n"
+                      "Please try again once your network settings are"
+                      " configured by using the following shell command:\n\n"
                       "    turnkey-install-security-updates")
 
 

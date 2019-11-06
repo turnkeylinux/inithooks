@@ -13,16 +13,16 @@ import getopt
 import signal
 
 from dialog_wrapper import Dialog, email_re, dia_log
-from subprocess import run
+import subprocess
 
 TITLE = "System Notifications and Critical Security Alerts"
 
-TEXT = ("Enable local system notifications (root@localhost) to be forwarded "
-        "to your regular inbox. Notifications include security updates and "
-        "system messages.\n\n"
-        "You will also be subscribed to receive critical security and bug "
-        "alerts through a low-traffic Security and News announcements "
-        "newsletter. You can unsubscribe at any time.\n\n"
+TEXT = ("Enable local system notifications (root@localhost) to be forwarded"
+        " to your regular inbox. Notifications include security updates and"
+        " system messages.\n\n"
+        "You will also be subscribed to receive critical security and bug"
+        " alerts through a low-traffic Security and News announcements"
+        " newsletter. You can unsubscribe at any time.\n\n"
         "https://www.turnkeylinux.org/security-alerts\n\n"
         "Email:")
 
@@ -76,8 +76,8 @@ def main():
                 "Enable",
                 "Skip")
 
-            dia_log("\nsecalerts.main():\n\tretcode:`{}'\n\temail:`{}'\n"
-                     "".format(retcode, email))
+            dia_log(("secalerts.main():\n\tretcode:`{}'\n\temail:`{}'"
+                    ).format(retcode, email))
             if retcode == 'cancel':
                 email = ""
                 break
@@ -91,8 +91,8 @@ def main():
 
     if email:
         cmd = os.path.join(os.path.dirname(__file__), 'secalerts.sh')
-        dia_log("\tcmd:`{}'\n".format(cmd))
-        run([cmd, email], check=True)
+        dia_log("\tcmd:`{}'".format(cmd))
+        subprocess.run([cmd, email], check=True)
 
 
 if __name__ == "__main__":
