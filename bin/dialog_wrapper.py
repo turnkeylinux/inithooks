@@ -15,7 +15,7 @@ logfile = Path('/var/log/dialog.log')
 def dia_log(msg_str):
     if 'DIALOG_DEBUG' not in environ.keys():
         return
-    with logfile.open('a') as log_content
+    with logfile.open('a') as log_content:
         log_content.write(msg_str + '\n')
 
 
