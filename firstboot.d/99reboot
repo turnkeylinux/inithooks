@@ -7,7 +7,7 @@ chmod -x $0 # self-deactivating
 . /etc/default/inithooks
 [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
 
-grep -qs boot=casper /proc/cmdline && exit 2
+grep -qs boot=live /proc/cmdline && exit 2
 
 [ "$REBOOT" == "SKIP" ] && exit 0
 

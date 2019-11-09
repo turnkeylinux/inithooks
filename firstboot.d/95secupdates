@@ -6,7 +6,7 @@
 [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
 
 # exit if running live
-grep -qs boot=casper /proc/cmdline && exit 2
+grep -qs boot=live /proc/cmdline && exit 2
 
 install_updates() {
     # if registered with hub, update with status
@@ -15,7 +15,9 @@ install_updates() {
     fi
 
     LOGFILE=/var/log/cron-apt/log
-    OLDMD5=$(ls -la /lib/modules /boot | md5sum)
+    # containers won't have /lib/modules; sending stderr to /dev/null avoids
+    # displaying error message about missing path
+    OLDMD5=$(ls -la /lib/modules /boot 2>/dev/null | md5sum)
     for actionfile in /etc/cron-apt/action.d/*; do
         while read aptcmd; do
             aptcmd=$(echo $aptcmd | sed "s|-q||")
@@ -23,7 +25,8 @@ install_updates() {
             DEBIAN_FRONTEND=noninteractive apt-get $aptcmd | tee -a $LOGFILE
         done < $actionfile
     done
-    NEWMD5=$(ls -la /lib/modules /boot | md5sum)
+    # per above note re containers
+    NEWMD5=$(ls -la /lib/modules /boot 2>/dev/null | md5sum)
     if [ "$NEWMD5" != "$OLDMD5" ]; then
         chmod +x $INITHOOKS_PATH/firstboot.d/99reboot
     fi
@@ -37,3 +40,4 @@ else
     $INITHOOKS_PATH/bin/secupdates-ask.py && install_updates
 fi
 
+exit 0

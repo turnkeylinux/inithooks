@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """Enable system alerts and notifications
 
 Options:
@@ -12,40 +12,44 @@ import sys
 import getopt
 import signal
 
-from dialog_wrapper import Dialog, email_re
-from executil import system
+from dialog_wrapper import Dialog, email_re, dia_log
+import subprocess
 
 TITLE = "System Notifications and Critical Security Alerts"
 
-TEXT = """Enable local system notifications (root@localhost) to be forwarded to your regular inbox. Notifications include security updates and system messages.
+TEXT = ("Enable local system notifications (root@localhost) to be forwarded"
+        " to your regular inbox. Notifications include security updates and"
+        " system messages.\n\n"
+        "You will also be subscribed to receive critical security and bug"
+        " alerts through a low-traffic Security and News announcements"
+        " newsletter. You can unsubscribe at any time.\n\n"
+        "https://www.turnkeylinux.org/security-alerts\n\n"
+        "Email:")
 
-You will also be subscribed to receive critical security and bug alerts through a low-traffic Security and News announcements newsletter. You can unsubscribe at any time.
-
-https://www.turnkeylinux.org/security-alerts
-
-Email:
-"""
 
 def fatal(e):
-    print >> sys.stderr, "Error:", e
+    print("Error:", e, file=sys.stderr)
     sys.exit(1)
 
+
 def warn(e):
-    print >> sys.stderr, "Warning:", e
+    print("Warning:", e, file=sys.stderr)
+
 
 def usage(s=None):
     if s:
-        print >> sys.stderr, "Error:", s
-    print >> sys.stderr, "Syntax: %s [options]" % sys.argv[0]
-    print >> sys.stderr, __doc__
+        print("Error:", s, file=sys.stderr)
+    print("Syntax: %s [options]" % sys.argv[0], file=sys.stderr)
+    print(__doc__, file=sys.stderr)
     sys.exit(1)
+
 
 def main():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     try:
         l_opts = ["help", "email=", "email-placeholder="]
         opts, args = getopt.gnu_getopt(sys.argv[1:], "h", l_opts)
-    except getopt.GetoptError, e:
+    except getopt.GetoptError as e:
         usage(e)
 
     email = ""
@@ -72,7 +76,9 @@ def main():
                 "Enable",
                 "Skip")
 
-            if retcode == 1:
+            dia_log(("secalerts.main():\n\tretcode:`{}'\n\temail:`{}'"
+                    ).format(retcode, email))
+            if retcode == 'cancel':
                 email = ""
                 break
 
@@ -85,9 +91,9 @@ def main():
 
     if email:
         cmd = os.path.join(os.path.dirname(__file__), 'secalerts.sh')
-        system(cmd, email)
+        dia_log("\tcmd:`{}'".format(cmd))
+        subprocess.run([cmd, email], check=True)
 
 
 if __name__ == "__main__":
     main()
-

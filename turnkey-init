@@ -1,6 +1,7 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 #
 # Copyright (c) 2012-2015 Alon Swartz <alon@turnkeylinux.org>
+# Copyright (c) 2016-2019 TurnKey GNU/Linux https://www.turnkeylinux.org
 #
 # This file is part of InitHooks.
 #
@@ -21,31 +22,35 @@ import os
 import sys
 
 from conffile import ConfFile
-from executil import system, ExecError
+import subprocess
+
 
 def fatal(e):
-    print >> sys.stderr, "error: " + str(e)
+    print("error: " + str(e), file=sys.stderr)
     sys.exit(1)
+
 
 def usage(e=None):
     if e:
-        print >> sys.stderr, "error: " + str(e)
+        print("error: " + str(e), file=sys.stderr)
 
-    print >> sys.stderr, "Syntax: %s" % (sys.argv[0])
-    print >> sys.stderr, __doc__.strip()
-    print >> sys.stderr, "\nBlacklist:\n"
+    print("Syntax: %s" % (sys.argv[0]), file=sys.stderr)
+    print(__doc__.strip(), file=sys.stderr)
+    print("\nBlacklist:\n", file=sys.stderr)
     for script in BLACKLIST:
-        print >> sys.stderr, "    %s" % script
+        print("    %s" % script, file=sys.stderr)
     sys.exit(1)
 
-# deprecated: hooks can use _TURNKEY_INIT to detect if they're running under turnkey-init
-BLACKLIST = [
-    '15regen-sslcert',
-    '92etckeeper',
-]
+
+# deprecated: hooks can use _TURNKEY_INIT to detect if they're running under
+# turnkey-init
+BLACKLIST = ['15regen-sslcert',
+             '92etckeeper', ]
+
 
 class Config(ConfFile):
     CONF_FILE = "/etc/default/inithooks"
+
 
 class InitHooks:
     def __init__(self):
@@ -53,11 +58,10 @@ class InitHooks:
 
     @staticmethod
     def _exec(cmd):
-        try:
-            env = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-            system("%s %s" % (env, cmd))
-        except ExecError:
-            pass
+        subprocess.run(['env',
+                        'PATH=/usr/local/sbin:/usr/local/bin:'
+                        '/usr/sbin:/usr/bin:/sbin:/bin',
+                        cmd])
 
     def execute(self, dname):
         os.environ['_TURNKEY_INIT'] = '1'
@@ -69,8 +73,9 @@ class InitHooks:
         scripts.sort()
         for fname in scripts:
             fpath = os.path.join(dpath, fname)
-            if os.access(fpath, os.X_OK) and not fname in BLACKLIST:
+            if os.access(fpath, os.X_OK) and fname not in BLACKLIST:
                 self._exec(fpath)
+
 
 def main():
     args = sys.argv[1:]
@@ -85,11 +90,8 @@ def main():
 
     confconsole = '/usr/bin/confconsole'
     if os.path.exists(confconsole) and os.access(confconsole, os.X_OK):
-        try:
-            system(confconsole, '--usage')
-        except ExecError:
-            pass
+        subprocess.run([confconsole, '--usage'])
+
 
 if __name__ == "__main__":
     main()
-

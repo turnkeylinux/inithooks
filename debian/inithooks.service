@@ -1,6 +1,6 @@
 [Unit]
 Description=inithooks: firstboot and everyboot initialization scripts
-After=getty@tty8.service
+After=getty@tty1.service
 ConditionKernelCommandLine=!noinithooks
 ConditionPathExists=!/var/lib/turnkey-info/inithooks.service/xen
 ConditionPathExists=!/var/lib/turnkey-info/inithooks.service/lxc
@@ -9,6 +9,7 @@ ConditionPathExists=!/var/lib/turnkey-info/inithooks.service/openstack
 [Service]
 Type=oneshot
 StandardInput=tty-force
+StandardOutput=inherit
 TTYPath=/dev/tty8
 TTYReset=yes
 TTYVHangup=yes
@@ -18,6 +19,7 @@ ExecStart=/bin/sh -c '\
     FGCONSOLE=$(fgconsole); \
     openvt -f -c 8 -s -w -- ${INITHOOKS_PATH}/run; \
     chvt $FGCONSOLE'
+TimeoutStartSec=infinity
 
 [Install]
-WantedBy=basic.target
+WantedBy=multi-user.target

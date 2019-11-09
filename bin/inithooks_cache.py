@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """Interface to inithooks cache
 
 Arguments:
@@ -15,16 +15,19 @@ Environment:
 import os
 import sys
 
+
 def fatal(e):
-    print >> sys.stderr, "Error:", e
+    print("Error:", e, file=sys.stderr)
     sys.exit(1)
+
 
 def usage(s=None):
     if s:
-        print >> sys.stderr, "Error:", s
-    print >> sys.stderr, "Syntax: %s <key> [value]" % sys.argv[0]
-    print >> sys.stderr, __doc__
+        print("Error:", s, file=sys.stderr)
+    print("Syntax: %s <key> [value]" % sys.argv[0], file=sys.stderr)
+    print(__doc__, file=sys.stderr)
     sys.exit(1)
+
 
 class KeyStore:
     def __init__(self, path):
@@ -36,22 +39,26 @@ class KeyStore:
         keypath = os.path.join(self.path, key)
 
         if os.path.exists(keypath):
-            return file(keypath, 'r').read()
+            with open(keypath, 'r') as fob:
+                data = fob.read()
+            return data
 
         return None
 
     def write(self, key, val):
         keypath = os.path.join(self.path, key)
 
-        fh = file(keypath, 'w')
-        fh.write(val)
-        fh.close()
+        with open(keypath, 'w') as fob:
+            fob.write(val)
 
-#convenience functions
+
+# convenience functions
 CACHE_DIR = os.environ.get('INITHOOKS_CACHE', '/var/lib/inithooks/cache')
+
 
 def read(key):
     return KeyStore(CACHE_DIR).read(key)
+
 
 def write(key, value):
     return KeyStore(CACHE_DIR).write(key, value)
@@ -62,7 +69,7 @@ if __name__ == "__main__":
 
     try:
         opts, args = getopt.gnu_getopt(sys.argv[1:], "h", ["help"])
-    except getopt.GetoptError, e:
+    except getopt.GetoptError as e:
         usage(e)
 
     for opt, val in opts:
@@ -78,8 +85,7 @@ if __name__ == "__main__":
     if len(args) == 1:
         val = read(args[0])
         if val:
-            print val
+            print(val)
 
     if len(args) == 2:
         write(args[0], args[1])
-

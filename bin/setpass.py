@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # Copyright (c) 2010 Alon Swartz <alon@turnkeylinux.org>
 """Set account password
 
@@ -15,22 +15,25 @@ import subprocess
 from subprocess import PIPE
 import signal
 
+
 def fatal(s):
-    print >> sys.stderr, "Error:", s
+    print("Error:", s, file=sys.stderr)
     sys.exit(1)
+
 
 def usage(s=None):
     if s:
-        print >> sys.stderr, "Error:", s
-    print >> sys.stderr, "Syntax: %s <username> [options]" % sys.argv[0]
-    print >> sys.stderr, __doc__
+        print("Error:", s, file=sys.stderr)
+    print("Syntax: %s <username> [options]" % sys.argv[0], file=sys.stderr)
+    print(__doc__, file=sys.stderr)
     sys.exit(1)
+
 
 def main():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     try:
         opts, args = getopt.gnu_getopt(sys.argv[1:], "hp:", ['help', 'pass='])
-    except getopt.GetoptError, e:
+    except getopt.GetoptError as e:
         usage(e)
 
     if len(args) != 1:
@@ -51,17 +54,16 @@ def main():
             "%s Password" % username.capitalize(),
             "Please enter new password for the %s account." % username)
 
-
     command = ["chpasswd"]
     input = ":".join([username, password])
 
     p = subprocess.Popen(command, stdin=PIPE, shell=False)
-    p.stdin.write(input)
+    p.stdin.write(input.encode(sys.stdin.encoding))
     p.stdin.close()
     err = p.wait()
     if err:
         fatal(err)
 
+
 if __name__ == "__main__":
     main()
-

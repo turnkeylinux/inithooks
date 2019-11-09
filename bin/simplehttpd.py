@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # Copyright (c) 2012-2015 Liraz Siri <liraz@turnkeylinux.org>
 
 """
@@ -38,18 +38,24 @@ import temp
 
 import signal
 
+
 class Error(Exception):
     pass
 
+
 def fatal(e):
-    print >> sys.stderr, "error: " + str(e)
+    print("error: " + str(e), file=sys.stderr)
     sys.exit(1)
 
+
 def usage(e=None):
-    print >> sys.stderr, "Error: " + str(e)
-    print >> sys.stderr, "Syntax: %s [ -options ] path/to/webroot [address:]http-port [ [ssl-address:]ssl-port path/to/cert.pem [ path/to/cert.key ] ]" % sys.argv[0]
-    print >> sys.stderr, __doc__.strip()
+    print("Error: " + str(e), file=sys.stderr)
+    print(("Syntax: %s [ -options ] path/to/webroot [address:]http-port ["
+           " [ssl-address:]ssl-port path/to/cert.pem [ path/to/cert.key ] ]"
+           ) % sys.argv[0], file=sys.stderr)
+    print(__doc__.strip(), file=sys.stderr)
     sys.exit(1)
+
 
 def is_writeable(path):
     if not os.path.exists(path):
@@ -57,13 +63,14 @@ def is_writeable(path):
 
     return os.access(path, os.W_OK)
 
+
 def daemonize(pidfile, logfile=None):
     if logfile is None:
         logfile = "/dev/null"
 
     pid = os.fork()
     if pid != 0:
-        print >> file(pidfile, "w"), "%d" % pid
+        print("%d" % pid, file=file(pidfile, "w"))
         sys.exit(0)
 
     os.chdir("/")
@@ -75,6 +82,7 @@ def daemonize(pidfile, logfile=None):
 
     devnull = file("/dev/null", "r")
     os.dup2(devnull.fileno(), sys.stdin.fileno())
+
 
 class SecureHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
     ALLOWED_EXTS = []
@@ -91,7 +99,9 @@ class SecureHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             if ext[1:] not in self.ALLOWED_EXTS:
                 return '/dev/null/doesntexist'
 
-        return SimpleHTTPServer.SimpleHTTPRequestHandler.translate_path(self, path)
+        return SimpleHTTPServer.SimpleHTTPRequestHandler.translate_path(self,
+                                                                        path)
+
 
 class SimpleWebServer:
 
@@ -99,7 +109,7 @@ class SimpleWebServer:
         allow_reuse_address = True
 
     class HTTPRequestHandler(SecureHTTPRequestHandler):
-        ALLOWED_EXTS = [ 'css', 'gif', 'html', 'js', 'png', 'jpg', 'txt' ]
+        ALLOWED_EXTS = ['css', 'gif', 'html', 'js', 'png', 'jpg', 'txt']
 
     class Address:
         @staticmethod
@@ -140,10 +150,10 @@ class SimpleWebServer:
                 raise Error("no such file '%s'" % fpath)
             return abspath(fpath)
 
-        CIPHERS='ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:DES-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA'
+        CIPHERS = 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:DES-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA'  # noqa
 
     class TempOwnedAs(str):
-        def __new__(cls, fpath, owner, chmod=0600):
+        def __new__(cls, fpath, owner, chmod=0o600):
 
             if not exists(fpath):
                 raise Error("file does not exist '%s'" % fpath)
@@ -164,7 +174,8 @@ class SimpleWebServer:
 
             return self
 
-    def __init__(self, webroot, http_address=None, https_conf=None, runas=None):
+    def __init__(self, webroot, http_address=None,
+                 https_conf=None, runas=None):
 
         self.httpd = self.TCPServer((http_address.host, http_address.port),
                                     self.HTTPRequestHandler) \
@@ -183,8 +194,10 @@ class SimpleWebServer:
             httpsd = self.TCPServer((https_conf.host, https_conf.port),
                                     self.HTTPRequestHandler)
 
-            httpsd.socket = ssl.wrap_socket(httpsd.socket, certfile=certfile, keyfile=keyfile,
-                                            server_side=True, ssl_version=ssl.PROTOCOL_TLSv1,
+            # XXX check SSL/TLS version support, should be using v1.2
+            httpsd.socket = ssl.wrap_socket(httpsd.socket, certfile=certfile,
+                                            keyfile=keyfile, server_side=True,
+                                            ssl_version=ssl.PROTOCOL_TLSv1,
                                             ciphers=https_conf.CIPHERS)
 
         if runas:
@@ -192,7 +205,6 @@ class SimpleWebServer:
 
         self.httpsd = httpsd
         self.webroot = webroot
-
 
     @staticmethod
     def drop_privileges(user):
@@ -218,7 +230,6 @@ class SimpleWebServer:
         httpd = self.httpd
         httpsd = self.httpsd
 
-
         if not httpsd and not httpd:
             raise Error("nothing to serve")
 
@@ -234,11 +245,13 @@ class SimpleWebServer:
         else:
             return httpd.serve_forever()
 
+
 def main():
     args = sys.argv[1:]
     try:
-        opts, args = getopt.gnu_getopt(sys.argv[1:], 'h', ["daemonize=", "logfile=", "runas="])
-    except getopt.GetoptError, e:
+        opts, args = getopt.gnu_getopt(sys.argv[1:], 'h',
+                                       ["daemonize=", "logfile=", "runas="])
+    except getopt.GetoptError as e:
         usage(e)
 
     daemonize_pidfile = None
@@ -310,6 +323,7 @@ def main():
         daemonize(daemonize_pidfile, logfile)
 
     server.serve_forever()
+
 
 if __name__ == "__main__":
     main()

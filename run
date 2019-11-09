@@ -6,7 +6,15 @@ INITHOOKS_DEFAULT=/etc/default/inithooks
 
 TKLINFO=/var/lib/turnkey-info/inithooks.service
 
-unset PID
+unset PID LOGFILE
+
+log() {
+    # log to journal as well as $LOGFILE
+    LEVEL=$1 # err|warn|info|debug
+    shift
+    logger -t inithooks -p $LEVEL "$@"
+    [ -n "$LOGFILE" ] && echo "${LEVEL^^}: $@" >> "$LOGFILE"
+}
 
 if [ "$(echo $REDIRECT_OUTPUT | tr [A-Z] [a-z] )" = "true" ]; then
     # redirect stdout/stderr (use when preseeding headless deployments)
@@ -31,12 +39,23 @@ exec_scripts() {
     for SCRIPT in $(find $SCRIPT_DIR -type f -or -type l | sort); do
         [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
         [ -x $SCRIPT ] || continue
-        echo "# running $SCRIPT"
+        log info "running $SCRIPT"
         $SCRIPT
         RET=$?
-        echo "# completed $SCRIPT - exit code $RET"
+        if [ "$RET" -eq 0 ]; then
+            log info "successfully completed $SCRIPT"
+        elif [ "$(basename $SCRIPT)" = "95secupdates" ] && [ "$RET" -eq 2 ]; then
+            log info "running live, so skipping security updates"
+        else
+            log warn "completed $SCRIPT - exit code $RET"
+        fi
         # the script requested a reboot before we can continue
-        [ $RET -eq 42 ] && init 6 && exit 0
+        if [ $RET -eq 42 ]; then
+            log warn "Exit code 42 indicates a reboot is required"
+            log err 'Rebooting now!'
+            systemctl reboot
+            exit 0
+        fi
     done
     return 0
 }
@@ -52,5 +71,10 @@ exec_scripts $INITHOOKS_PATH/everyboot.d
 if [ -n "$PID" ];  then
     kill -9 $PID || true
 fi
+
+log info "Inithook run completed, now starting confconsole"
+sleep 2 # anyway to replace this?
+confconsole --usage
+log info "Confconsole completed, now exiting"
 
 exit 0
