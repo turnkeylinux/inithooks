@@ -316,6 +316,9 @@ Most inithooks that are configurable are interactive, however not all.
 Non-interactive hooks that can be adjusted via preseeding are marked
 below with an asterisk ('*').
 
+Initihooks that are not relevant to a particular appliance or build will
+simply be ignored.
+
 Note that almost all appliances have their own application specific
 secret-regeneration hooks which will run regardless. 
 
@@ -323,11 +326,10 @@ Common to all appliances:
 ::
 
     15regen-sslcert         DH_BITS                 [ 1024 | 2048 | 4096 ]
-    30rootpass              ROOT_PASS
+    30rootpass*             ROOT_PASS
     50auto-apt-archive      AUTO_APT_ARCHIVE        [ SKIP ]
     80tklbam                HUB_APIKEY              [ SKIP ]
     85secalerts             SEC_ALERTS              [ SKIP ]
-    92etckeeper*            ETCKEEPER_COMMIT        [ SKIP ]
     95secupdates            SEC_UPDATES             [ SKIP | FORCE ]
 
 
@@ -343,8 +345,9 @@ Notes:
             export DH_BITS=2048 # or alternatively DH_BITS=4096
             /usr/lib/inithooks/firstboot.d/15regen-dhparams
 
-    - ETCKEEPER_COMMIT refers to whether (or not) etckeeper commits the current
-      state of /etc. If not set it will be.
+    - In LXC builds, the container root password is set via the host at
+      creation time. As such, 30rootpass is disabled and ROOT_PASS does not
+      apply.
 
 
 Specific to headless builds:
