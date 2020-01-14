@@ -327,7 +327,6 @@ Common to all appliances:
 
     15regen-sslcert         DH_BITS                 [ 1024 | 2048 | 4096 ]
     30rootpass*             ROOT_PASS
-    50auto-apt-archive      AUTO_APT_ARCHIVE        [ SKIP ]
     80tklbam                HUB_APIKEY              [ SKIP ]
     85secalerts             SEC_ALERTS              [ SKIP ]
     95secupdates            SEC_UPDATES             [ SKIP | FORCE ]
