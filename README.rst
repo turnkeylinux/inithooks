@@ -300,19 +300,24 @@ many virtualization platforms provide a facility through which you can
 run scripts or add files to the filesystem before the first boot.
 
 List of initialization hooks and preseeding configuration parameters
+
 --------------------------------------------------------------------
 
 Below is a list of firstboot hooks. All interactive hooks
 have preseeding options to support cloud deployment, hosting and ISV
 integration.
 
+If not preseeded, the user will be asked interactively. The SKIP
+and FORCE options should be self explanatory. Note that secupdates
+is automatically skipped when in live demo mode.
+
 Most inithooks that are configurable are interactive, however not all.
 Non-interactive hooks that can be adjusted via preseeding are marked
 below with an asterisk ('*').
 
 Note that almost all appliances have their own application specific
-secret-regeneration hooks. 
- 
+secret-regeneration hooks which will run regardless. 
+
 Common to all appliances:
 ::
 
@@ -435,12 +440,26 @@ Appliance specific:
     40bugzilla              APP_PASS, APP_EMAIL [, APP_OUTMAIL]
     40ghost                 APP_PASS, APP_EMAIL, APP_DOMAIN [, APP_UNAME]
 
+Fileserver appliance specific - LXC only:
+::
 
- 
-If not preseeded, the user will be asked interactively. The SKIP
-and FORCE options should be self explanatory. Note that secupdates
-is automatically skipped when in live demo mode.
- 
+    35samba-container       APP_PASS
+
+Linux and Samba user management is separate and discrete. Previously by default
+Samba users were mapped 1-1 with Linux users and Samba supported syncronization
+of passwords between the Linux and Samba users (so essentially the difference
+between the 2 user management systems was hidden from the end user). However
+due to a significant security issue, this module has been removed. Samba4 has
+moved to prioritize support for AD integration (which uses a different
+paradigm - all Samba users are contained within a single Linux user account).
+
+To somewhat work around this limitation, on the TurnKey Fileserver appliance,
+when you set the root (Linux) user password, the Samba root user password is
+also set. However for an LXC container, the root password is set on the host,
+not the guest. So this workaround is not possible. Hence the Samba root
+password must be set separately.
+
+
 Development notes
 -----------------
 
