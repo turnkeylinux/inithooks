@@ -62,8 +62,10 @@ or private clouds in a similar way to streamline deployment.
 Under the hood: everything you wanted to know but were afraid to ask
 ====================================================================
 
-Stop! The preceding introduction explained everything mere mortals need
-to know about the system initialization process. 
+Users wishing to preseed headless builds (e.g. LXC) will find the
+`Preseeding`_ section below of value. Otherwise, the preceding introduction
+explained everything mere mortals need to know about the system
+initialization process.
 
 The rest of the documentation is intended for:
 
@@ -76,12 +78,12 @@ The rest of the documentation is intended for:
 - Hosting providers and private cloud fullstack ninjas interested in
   implementing tight integration between TurnKey and custom control
   panels. 
-  
+
   This isn't a requirement, just a bonus. Without any special
   integration, TurnKey images can be deployed like any other Debian or
   Debian-based image, using your existing deployments scripts. If you
   can deploy Debian or Ubuntu it should be trivial to deploy TurnKey.
-  
+
 Inithooks package design goals
 ------------------------------
 
@@ -300,7 +302,6 @@ many virtualization platforms provide a facility through which you can
 run scripts or add files to the filesystem before the first boot.
 
 List of initialization hooks and preseeding configuration parameters
-
 --------------------------------------------------------------------
 
 Below is a list of firstboot hooks. All interactive hooks
