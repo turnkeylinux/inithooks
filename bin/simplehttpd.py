@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 # Copyright (c) 2012-2015 Liraz Siri <liraz@turnkeylinux.org>
+# Copyright (c) 2015-2020 TurnKey GNU/Linux - https://www.turnkeylinux.org
 
 """
 Simple HTTP server
@@ -28,8 +29,8 @@ import posixpath
 import sys
 import getopt
 
-import SimpleHTTPServer
-import SocketServer
+import http.server
+import socketserver
 import ssl
 
 import pwd
@@ -84,7 +85,7 @@ def daemonize(pidfile, logfile=None):
     os.dup2(devnull.fileno(), sys.stdin.fileno())
 
 
-class SecureHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
+class SecureHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     ALLOWED_EXTS = []
 
     def list_directory(self, path):
@@ -99,13 +100,12 @@ class SecureHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             if ext[1:] not in self.ALLOWED_EXTS:
                 return '/dev/null/doesntexist'
 
-        return SimpleHTTPServer.SimpleHTTPRequestHandler.translate_path(self,
-                                                                        path)
+        return http.server.SimpleHTTPRequestHandler.translate_path(self, path)
 
 
 class SimpleWebServer:
 
-    class TCPServer(SocketServer.ForkingTCPServer):
+    class TCPServer(socketserver.ForkingTCPServer):
         allow_reuse_address = True
 
     class HTTPRequestHandler(SecureHTTPRequestHandler):
