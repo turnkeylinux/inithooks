@@ -138,6 +138,15 @@ do_stop()
 	# Many daemons don't delete their pidfiles when they exit.
 	rm -f $PIDFILE
 
+    # This hack is to ensure that any tmp files are cleaned up afterwards...
+    _hack_dir=/var/lib/inithooks/.tmp_files
+    if [ -d "$_hack_dir" ]; then
+        for _file in $hack_dir/*; do
+            rm -r "/tmp/$(basename $_file)"
+        done
+        rm -rf $_hack_dir
+    fi
+
 	return "$RETVAL"
 }
 

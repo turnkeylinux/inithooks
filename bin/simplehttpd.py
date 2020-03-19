@@ -22,9 +22,9 @@ Known bugs:
 
 """
 import os
-from os.path import exists, abspath, isdir
-
-import posixpath
+from os.path import abspath
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 import sys
 import getopt
@@ -35,12 +35,11 @@ import ssl
 
 import pwd
 import grp
-import temp
 
 import signal
 
 
-class Error(Exception):
+class SimpleWebServerError(Exception):
     pass
 
 
@@ -59,7 +58,7 @@ def usage(e=None):
 
 
 def is_writeable(path):
-    if not os.path.exists(path):
+    if not Path(path).exists():
         path = os.path.dirname(path)
 
     return os.access(path, os.W_OK)
@@ -71,17 +70,17 @@ def daemonize(pidfile, logfile=None):
 
     pid = os.fork()
     if pid != 0:
-        print("%d" % pid, file=file(pidfile, "w"))
+        print("%d" % pid, file=open(pidfile, "w"))
         sys.exit(0)
 
     os.chdir("/")
     os.setsid()
 
-    logfile = file(logfile, "w")
+    logfile = open(logfile, "w")
     os.dup2(logfile.fileno(), sys.stdout.fileno())
     os.dup2(logfile.fileno(), sys.stderr.fileno())
 
-    devnull = file("/dev/null", "r")
+    devnull = open("/dev/null", "r")
     os.dup2(devnull.fileno(), sys.stdin.fileno())
 
 
@@ -93,10 +92,9 @@ class SecureHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         return None
 
     def translate_path(self, path):
-        if not isdir(path):
-
-            base, ext = posixpath.splitext(path)
-            ext = ext.lower()
+        path = Path(path)
+        if not path.isdir():
+            ext = path.suffix.lower()
             if ext[1:] not in self.ALLOWED_EXTS:
                 return '/dev/null/doesntexist'
 
@@ -122,15 +120,14 @@ class SimpleWebServer:
 
             try:
                 port = int(port)
-                if not 0 < port < 65535:
-                    raise Exception
-            except:
-                raise Error("illegal port")
-
+                assert port > 0 and port < 65535
+            except (ValueError, AssertionError):
+                raise SimpleWebServerError("Illegal port: '{}' - must be"
+                                           " integer between 1 -> 65534"
+                                           "".format(port))
             return host, port
 
         def __init__(self, address):
-
             host, port = self.parse_address(address)
             self.host = host
             self.port = port
@@ -146,33 +143,50 @@ class SimpleWebServer:
 
         @staticmethod
         def _validate_path(fpath):
-            if not exists(fpath):
-                raise Error("no such file '%s'" % fpath)
-            return abspath(fpath)
+            if not Path(fpath).exists:
+                raise SimpleWebServerError("No such file '{}'.".format(fpath))
+            return str(Path(fpath).resolve())
 
         CIPHERS = 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:DES-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA'  # noqa
 
-    class TempOwnedAs(str):
-        def __new__(cls, fpath, owner, chmod=0o600):
-
-            if not exists(fpath):
-                raise Error("file does not exist '%s'" % fpath)
-
-            tempfile = temp.TempFile()
-
-            tempfile.write(file(fpath).read())
-            tempfile.close()
+    class TempOwnedAs:
+        def __init__(self, fpath, owner, chmod=0o600):
+            fpath = Path(fpath)
+            if not fpath.exists():
+                raise SimpleWebServerError("No such file '{}'.".format(fpath))
+            tempfile = NamedTemporaryFile(prefix='tmp')
+            with open(fpath) as fob:
+                tempfile.write(fob.read().encode())
+            tempfile.seek(0)
 
             pwent = pwd.getpwnam(owner)
 
-            os.chown(tempfile.path, pwent.pw_uid, pwent.pw_gid)
+            os.chown(tempfile.name, pwent.pw_uid, pwent.pw_gid)
             if chmod:
-                os.chmod(tempfile.path, chmod)
+                os.chmod(tempfile.name, chmod)
 
-            self = str.__new__(cls, tempfile.path)
             self.tempfile = tempfile
+            self._hack_delete()
 
-            return self
+        def name(self):
+            return str(self.tempfile.name)
+
+        def _hack_delete(self):
+            """temp files are not always being cleaned up. This hack creates a
+            file in /var/lib/inithooks/.tmp_files/ with the same name as the
+            temp file, so the daemon manager can clean them all up afterwards.
+            """
+            _tmp_hack = '/var/lib/inithooks/.tmp_files/'
+            _hack_dir = Path(_tmp_hack)
+            _hack_dir.mkdir(parents=True, exist_ok=True)
+            _hack_file = _hack_dir / self.name
+            _hack_file.open(mode='w')
+
+        def close(self):
+            self.__del__()
+
+        def __del__(self):
+            self.tempfile.close()
 
     def __init__(self, webroot, http_address=None,
                  https_conf=None, runas=None):
@@ -188,16 +202,17 @@ class SimpleWebServer:
             keyfile = https_conf.keyfile
 
             if runas:
-                certfile = self.TempOwnedAs(certfile, runas)
-                keyfile = self.TempOwnedAs(keyfile, runas)
+                _certfile = self.TempOwnedAs(certfile, runas)
+                _keyfile = self.TempOwnedAs(keyfile, runas)
+                certfile = _certfile.name()
+                keyfile = _keyfile.name()
 
             httpsd = self.TCPServer((https_conf.host, https_conf.port),
                                     self.HTTPRequestHandler)
 
-            # XXX check SSL/TLS version support, should be using v1.2
             httpsd.socket = ssl.wrap_socket(httpsd.socket, certfile=certfile,
                                             keyfile=keyfile, server_side=True,
-                                            ssl_version=ssl.PROTOCOL_TLSv1,
+                                            ssl_version=ssl.PROTOCOL_TLSv1_2,
                                             ciphers=https_conf.CIPHERS)
 
         if runas:
@@ -231,7 +246,7 @@ class SimpleWebServer:
         httpsd = self.httpsd
 
         if not httpsd and not httpd:
-            raise Error("nothing to serve")
+            raise SimpleWebServerError("Nothing to serve")
 
         if not httpsd and httpd:
             return httpd.serve_forever()
@@ -272,7 +287,7 @@ def main():
             try:
                 pwd.getpwnam(val)
             except KeyError:
-                fatal("no such user '%s'" % val)
+                fatal("No such user '{}'".format(val))
 
             runas = val
 

@@ -19,7 +19,6 @@ Depends:
  rsyslog,
  python3-dialog (>= 3.4.0~),
  dialog (>= 1.3~),
- turnkey-temp,
 Recommends:
  confconsole (>= 1.1.0~)
 Description: Executes firstboot and everyboot scripts
