@@ -22,7 +22,7 @@ Known bugs:
 
 """
 import os
-from os.path import abspath
+from os.path import exists, abspath
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -37,7 +37,6 @@ import pwd
 import grp
 
 import signal
-
 
 class SimpleWebServerError(Exception):
     pass
@@ -58,7 +57,7 @@ def usage(e=None):
 
 
 def is_writeable(path):
-    if not Path(path).exists():
+    if not os.path.exists(path):
         path = os.path.dirname(path)
 
     return os.access(path, os.W_OK)
@@ -93,12 +92,12 @@ class SecureHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def translate_path(self, path):
         path = Path(path)
-        if not path.isdir():
+        if not path.is_dir():
             ext = path.suffix.lower()
             if ext[1:] not in self.ALLOWED_EXTS:
                 return '/dev/null/doesntexist'
 
-        return http.server.SimpleHTTPRequestHandler.translate_path(self, path)
+        return http.server.SimpleHTTPRequestHandler.translate_path(self, str(path))
 
 
 class SimpleWebServer:
@@ -122,9 +121,9 @@ class SimpleWebServer:
                 port = int(port)
                 assert port > 0 and port < 65535
             except (ValueError, AssertionError):
-                raise SimpleWebServerError("Illegal port: '{}' - must be"
-                                           " integer between 1 -> 65534"
-                                           "".format(port))
+                raise SimpleWebServerError(("Illegal port: '{}' - must be"
+                                            " integer between 1 & 65534"
+                                            ).format(port))
             return host, port
 
         def __init__(self, address):
@@ -143,9 +142,9 @@ class SimpleWebServer:
 
         @staticmethod
         def _validate_path(fpath):
-            if not Path(fpath).exists:
+            if not exists(fpath):
                 raise SimpleWebServerError("No such file '{}'.".format(fpath))
-            return str(Path(fpath).resolve())
+            return abspath(fpath)
 
         CIPHERS = 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:DES-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA'  # noqa
 
@@ -154,39 +153,22 @@ class SimpleWebServer:
             fpath = Path(fpath)
             if not fpath.exists():
                 raise SimpleWebServerError("No such file '{}'.".format(fpath))
-            tempfile = NamedTemporaryFile(prefix='tmp')
-            with open(fpath) as fob:
-                tempfile.write(fob.read().encode())
-            tempfile.seek(0)
+            temp_file = NamedTemporaryFile(prefix='tmp')
+            with open(fpath, 'rb') as fob:
+                contents = fob.read()
+                temp_file.write(contents)
+            temp_file.seek(0)
 
             pwent = pwd.getpwnam(owner)
 
-            os.chown(tempfile.name, pwent.pw_uid, pwent.pw_gid)
+            os.chown(temp_file.name, pwent.pw_uid, pwent.pw_gid)
             if chmod:
-                os.chmod(tempfile.name, chmod)
+                os.chmod(temp_file.name, chmod)
 
-            self.tempfile = tempfile
-            self._hack_delete()
+            self.temp_file = temp_file
 
         def name(self):
-            return str(self.tempfile.name)
-
-        def _hack_delete(self):
-            """temp files are not always being cleaned up. This hack creates a
-            file in /var/lib/inithooks/.tmp_files/ with the same name as the
-            temp file, so the daemon manager can clean them all up afterwards.
-            """
-            _tmp_hack = '/var/lib/inithooks/.tmp_files/'
-            _hack_dir = Path(_tmp_hack)
-            _hack_dir.mkdir(parents=True, exist_ok=True)
-            _hack_file = _hack_dir / self.name
-            _hack_file.open(mode='w')
-
-        def close(self):
-            self.__del__()
-
-        def __del__(self):
-            self.tempfile.close()
+            return str(self.temp_file.name)
 
     def __init__(self, webroot, http_address=None,
                  https_conf=None, runas=None):
@@ -224,7 +206,7 @@ class SimpleWebServer:
     @staticmethod
     def drop_privileges(user):
         pwent = pwd.getpwnam(user)
-        uid, gid, home = pwent[2], pwent[3], pwent[5]
+        uid, gid, home = pwent.pw_uid, pwent.pw_gid, pwent.pw_dir
         os.unsetenv("XAUTHORITY")
         os.putenv("USER", user)
         os.putenv("HOME", home)
