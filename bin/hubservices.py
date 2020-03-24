@@ -11,7 +11,6 @@ import sys
 import getopt
 import signal
 
-from os import system
 from subprocess import check_output, CalledProcessError
 
 from dialog_wrapper import Dialog
@@ -88,11 +87,11 @@ def main():
             fqdn = val
 
     if apikey:
-        system('tklbam-init', apikey)
+        check_output(['tklbam-init', apikey])
 
         if fqdn:
-            system('hubdns-init', apikey, fqdn)
-            system('hubdns-update')
+            check_output(['hubdns-init', apikey, fqdn])
+            check_output(['hubdns-update'])
 
         return
 
