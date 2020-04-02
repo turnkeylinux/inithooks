@@ -19,7 +19,7 @@ echo "Note: a dhparams file of bit size >= 2048 is recommended."
 $turnkey_make_ssl_cert --default --force-overwrite --dh-bits $DH_BITS
 
 # Restart relevant services
-SERVICENAMES="\
+SERVICES="\
     nginx
     apache2
     lighttpd
@@ -27,14 +27,15 @@ SERVICENAMES="\
     stunnel4@webmin
     stunnel4@shellinabox"
 
-echo "Restarting relevant services."
-for servicename in $SERVICENAMES; do
-    if systemctl list-units --full -all | grep -Fq $servicename.service; then
-        echo "$servicename.service found; (re)starting..."
-        if systemctl is-active --quiet $servicename.service; then
-            systemctl restart --quiet $servicename.service
+info "Restarting relevant services."
+for service in $SERVICES; do
+    service="${service}.service"
+    if systemctl list-units --full -all | grep -Fq $service; then
+        info "$service found; (re)starting..."
+        if systemctl is-active --quiet $service; then
+            systemctl restart --quiet $service
         else
-            systemctl start --quiet $servicename.service
+            systemctl start --quiet $service
         fi
     fi
 done
