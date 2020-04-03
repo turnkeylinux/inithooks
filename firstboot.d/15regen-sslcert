@@ -1,0 +1,46 @@
+#!/bin/bash -e
+# Regenerate self-signed TLS/SSL cert, key & dhparams
+
+[ -n "$_TURNKEY_INIT" ] && exit 0
+
+# Support preseeding of DH_BITS
+[[ -e $INITHOOKS_CONF ]] && . $INITHOOKS_CONF
+
+fatal() { echo "fatal: $@" 1>&2 ; exit 1 }
+
+turnkey_make_ssl_cert=$(which turnkey-make-ssl-cert) \
+    || fatal "turnkey-make-ssl-cert executable not found."
+
+DH_BITS=${DH_BITS:-1024}
+# This script should be provided by common/overlays/turnkey.d/sslcert.
+# As of v16.0 will also generate a default dhparams file (1024 bits)
+echo "Generating SSL/TLS cert, key & default ($DH_BITS bit) dhparams file."
+echo "Note: a dhparams file of bit size >= 2048 is recommended."
+$turnkey_make_ssl_cert --default --force-overwrite --dh-bits $DH_BITS
+
+# Restart relevant services
+SERVICES="\
+    nginx
+    apache2
+    lighttpd
+    tomcat8
+    stunnel4@webmin
+    stunnel4@shellinabox"
+
+info "Restarting relevant services."
+for service in $SERVICES; do
+    service="${service}.service"
+    if systemctl list-units --full -all | grep -Fq $service; then
+        info "$service found; (re)starting..."
+        if systemctl is-active --quiet $service; then
+            systemctl restart --quiet $service
+        else
+            systemctl start --quiet $service
+        fi
+    fi
+done
+
+# final tidy up
+update-ca-certificates
+
+exit 0
