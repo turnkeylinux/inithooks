@@ -6,7 +6,7 @@
 # Support preseeding of DH_BITS
 [[ -e $INITHOOKS_CONF ]] && . $INITHOOKS_CONF
 
-fatal() { echo "fatal: $@" 1>&2 ; exit 1 }
+fatal() { echo "fatal: $@" 1>&2 ; exit 1 ; }
 
 turnkey_make_ssl_cert=$(which turnkey-make-ssl-cert) \
     || fatal "turnkey-make-ssl-cert executable not found."
