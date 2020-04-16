@@ -10,8 +10,8 @@ Options:
 import sys
 import getopt
 import signal
-
-from subprocess import check_output, CalledProcessError
+import subprocess
+from subprocess import check_output, CalledProcessError, PIPE
 
 from dialog_wrapper import Dialog
 
@@ -87,11 +87,12 @@ def main():
             fqdn = val
 
     if apikey:
-        check_output(['tklbam-init', apikey])
+        check_output(['tklbam-init', apikey], encoding=sys.stdin.encoding)
 
         if fqdn:
-            check_output(['hubdns-init', apikey, fqdn])
-            check_output(['hubdns-update'])
+            check_output(['hubdns-init', apikey, fqdn],
+                         encoding=sys.stdin.encoding)
+            check_output(['hubdns-update'], encoding=sys.stdin.encoding)
 
         return
 
@@ -107,19 +108,21 @@ def main():
         d.infobox("Linking TKLBAM to the TurnKey Hub...")
 
         try:
-            check_output(["host", "-W", "2", "hub.turnkeylinux.org"])
+            check_output(["host", "-W", "2", "hub.turnkeylinux.org"],
+                         encoding=sys.stdin.encoding)
         except CalledProcessError as e:
             d.error(CONNECTIVITY_ERROR)
             break
 
-        try:
-            check_output(['tklbam-init', apikey])
+        proc = subprocess.run(['tklbam-init', apikey],
+                              stderr=PIPE,
+                              encoding=sys.stdin.encoding)
+        if proc.returncode == 0:
             d.msgbox('Success! Linked TKLBAM to Hub', SUCCESS_TKLBAM)
             initialized_tklbam = True
             break
-
-        except CalledProcessError as e:
-            d.msgbox('Failure', e.output)
+        else:
+            d.msgbox('Failure', proc.stderr)
             continue
 
     if initialized_tklbam:
@@ -132,15 +135,20 @@ def main():
 
             d.infobox("Linking HubDNS to the TurnKey Hub...")
 
-            try:
-                check_output(['hubdns-init', apikey, fqdn])
-                check_output(['hubdns-update'])
-                d.msgbox('Success! Assigned %s' % fqdn, SUCCESS_HUBDNS)
-                break
-
-            except CalledProcessError as e:
-                d.msgbox('Failure', e.output)
+            proc1 = subprocess.run(['hubdns-init', apikey, fqdn],
+                                   stderr.PIPE,
+                                   encoding=sys.stdin.encoding)
+            proc2 = subprocess.run(['hubdns-update'],
+                                   stderr.PIPE,
+                                   encoding=sys.stdin.encoding)
+            if proc1 != 0:
+                d.msgbox('Failure', proc1.stderr)
                 continue
+            elif proc2 != 0:
+                d.msgbox('Failure', proc2.stderr)
+                continue
+            else:
+                d.msgbox('Success! Assigned %s' % fqdn, SUCCESS_HUBDNS)
 
 
 if __name__ == "__main__":
