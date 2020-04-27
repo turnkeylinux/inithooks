@@ -34,8 +34,11 @@ def usage(e=None):
     if e:
         print("error: " + str(e), file=sys.stderr)
 
-    print("Syntax: %s" % (sys.argv[0]), file=sys.stderr)
+    print("Syntax: %s [-h|--help] [-c|--full-confconsole]\n" % (sys.argv[0]), file=sys.stderr)
     print(__doc__.strip(), file=sys.stderr)
+    print("\nOptions:\n")
+    print("  -h|--help\t\t- print this help and exit")
+    print("  -c|--full-confconsole\t- after initialization open full confconsole (default is basic).")
     print("\nBlacklist:\n", file=sys.stderr)
     for script in BLACKLIST:
         print("    %s" % script, file=sys.stderr)
@@ -78,19 +81,29 @@ class InitHooks:
 
 
 def main():
-    args = sys.argv[1:]
-    if args and args[0] in ('-h', '--help'):
-        usage()
-
     if os.geteuid() != 0:
         fatal("turnkey-init must be run with root permissions")
+
+    confconsole = '/usr/bin/confconsole'
+    if os.path.exists(confconsole) and os.access(confconsole, os.X_OK):
+        confconsole = [confconsole, '--usage']
+    else:
+        # /bin/true ignores args and always returns true
+        confconsole = ['/bin/true', '--null']
+
+    args = sys.argv[1:]
+    confconsole = ['/usr/bin/confconsole', '--useage']
+    if args:
+        for arg in args:
+            if arg in ('-h', '--help'):
+                usage()
+            if arg in ('-c', '--full-confconsole'):
+                confconsole = confconsole[:-1]
 
     inithooks = InitHooks()
     inithooks.execute('firstboot.d')
 
-    confconsole = '/usr/bin/confconsole'
-    if os.path.exists(confconsole) and os.access(confconsole, os.X_OK):
-        subprocess.run([confconsole, '--usage'])
+    subprocess.run(confconsole)
 
 
 if __name__ == "__main__":
