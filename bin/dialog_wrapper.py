@@ -160,10 +160,16 @@ class Dialog:
                     continue
 
             if password_complexity(password) < min_complexity:
-                self.error("Insecure password! Mix uppercase, lowercase, and"
-                           " at least one number. Multiple words and"
-                           " punctuation are highly recommended but not"
-                           " strictly required.")
+                if min_complexity <= 3:
+                    self.error("Insecure password! Mix uppercase, lowercase,"
+                               " and at least one number. Multiple words and"
+                               " punctuation are highly recommended but not"
+                               " strictly required.")
+                elif min_complexity == 4:
+                    self.error("Insecure password! Mix uppercase, lowercase,"
+                               " numbers and at least one special/punctuation"
+                               " character. Multiple words are highly"
+                               " recommended but not strictly required.")
                 continue
 
             if password == ask(title, 'Confirm password'):
