@@ -129,12 +129,16 @@ class Dialog:
                                        no_cancel=True)
         return choice
 
-    def get_password(self, title, text, pass_req=8, min_complexity=3):
+    def get_password(self, title, text, pass_req=8,
+                     min_complexity=3, blacklist=[]):
         req_string = (('\n\nPassword Requirements\n - must be at least %d'
                        ' characters long\n - must contain characters from at'
                        ' least %d of the following categories: uppercase,'
                        ' lowercase, numbers, symbols'
                        ) % (pass_req, min_complexity))
+        if blacklist:
+            req_string = (('{}. Also must NOT contain these characters: {}'
+                          ).format(req_string, blacklist))
         height = self._calc_height(text+req_string) + 3
 
         def ask(title, text):
@@ -170,6 +174,15 @@ class Dialog:
                                " numbers and at least one special/punctuation"
                                " character. Multiple words are highly"
                                " recommended but not strictly required.")
+                continue
+
+            found_items = []
+            for item in blacklist:
+                if item in password:
+                    found_items.append(item)
+            if found_items:
+                self.error('Password can NOT include these characters: {}.'
+                           ' Found: {}.'.format(blacklist, found_items))
                 continue
 
             if password == ask(title, 'Confirm password'):
