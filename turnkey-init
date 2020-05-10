@@ -37,8 +37,9 @@ def usage(e=None):
     print("Syntax: %s [-h|--help] [-c|--full-confconsole]\n" % (sys.argv[0]), file=sys.stderr)
     print(__doc__.strip(), file=sys.stderr)
     print("\nOptions:\n")
-    print("  -h|--help\t\t- print this help and exit")
-    print("  -c|--full-confconsole\t- after initialization open full confconsole (default is basic).")
+    print("  -h|--help             - print this help and exit")
+    print("  -c|--full-confconsole - after initialization open full confconsole (default is basic).")
+    print("                          If Confconsole not installed, will be ignored.")
     print("\nBlacklist:\n", file=sys.stderr)
     for script in BLACKLIST:
         print("    %s" % script, file=sys.stderr)
@@ -92,7 +93,6 @@ def main():
         confconsole = ['/bin/true', '--null']
 
     args = sys.argv[1:]
-    confconsole = ['/usr/bin/confconsole', '--useage']
     if args:
         for arg in args:
             if arg in ('-h', '--help'):
