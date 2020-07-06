@@ -8,6 +8,8 @@ TKLINFO=/var/lib/turnkey-info/inithooks.service
 
 unset PID LOGFILE
 
+REDIRECT_OUTPUT=$(echo $REDIRECT_OUTPUT | tr [A-Z] [a-z])
+
 log() {
     # log to journal as well as $LOGFILE
     LEVEL=$1 # err|warn|info|debug
@@ -16,7 +18,7 @@ log() {
     [ -n "$LOGFILE" ] && echo "${LEVEL^^}: $@" >> "$LOGFILE"
 }
 
-if [ "$(echo $REDIRECT_OUTPUT | tr [A-Z] [a-z] )" = "true" ]; then
+if [ "$REDIRECT_OUTPUT" = "true" ]; then
     # redirect stdout/stderr (use when preseeding headless deployments)
     LOGFILE=/var/log/inithooks.log
     touch $LOGFILE; chmod 640 $LOGFILE
@@ -72,9 +74,13 @@ if [ -n "$PID" ];  then
     kill -9 $PID || true
 fi
 
-log info "Inithook run completed, now starting confconsole"
-sleep 2 # anyway to replace this?
-confconsole --usage
-log info "Confconsole completed, now exiting"
+if [ "$REDIRECT_OUTPUT" = "true" ]; then
+    log info "Inithook run completed, exiting."
+else
+    log info "Inithook run completed, now starting confconsole"
+    sleep 2 # anyway to replace this?
+    confconsole --usage
+    log info "Confconsole completed, now exiting"
+fi
 
 exit 0
