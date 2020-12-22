@@ -42,6 +42,7 @@ class Dialog:
         self.console = dialog.Dialog(dialog="dialog")
         self.console.add_persistent_args(["--no-collapse"])
         self.console.add_persistent_args(["--backtitle", title])
+        self.console.add_persistent_args(["--no-mouse"])
 
     def _handle_exitcode(self, retcode):
         dia_log("_handle_exitcode():\n\tretcode:`{}'".format(retcode))
