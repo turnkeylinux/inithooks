@@ -6,6 +6,7 @@ run                 /usr/lib/inithooks
 rsyslog.d/*         /etc/rsyslog.d
 
 turnkey-init-fence/turnkey-init-fence /etc/init.d
+turnkey-init-fence/turnkey-init-fence.service /lib/systemd/system
 turnkey-init-fence/htdocs /var/lib/inithooks/turnkey-init-fence
 
 turnkey-init                        /usr/sbin
