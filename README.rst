@@ -504,6 +504,17 @@ Interactive inithook
 The following example is used to set the root password in
 all appliances. If ROOTPASS is not set, the user will be asked to
 enter a password interactively.
+
+.. note::
+
+   A *very* basic debugging setup is present in dialog_wrapper.
+   If you're getting odd or unexpected output, dialogs you're expecting
+   to see are not present or are generally paranoid about the quality
+   of your code you can enable debug logging by setting the environment
+   variable ``DIALOG_DEBUG``.
+
+   When set extensive debugging output will be written to
+   ``/var/log/dialog.log``.
  
 ::
 
