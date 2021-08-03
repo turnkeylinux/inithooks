@@ -7,16 +7,19 @@ import traceback
 from io import StringIO
 from os import environ
 from pathlib import Path
+import logging
 
-email_re = re.compile(r"(?:^|\s).*\S@\S+(?:\s|$)", re.IGNORECASE)
-logfile = Path('/var/log/dialog.log')
+EMAIL_RE = re.compile(r"(?:^|\s).*\S@\S+(?:\s|$)", re.IGNORECASE)
 
+LOG_LEVEL = logging.INFO
+if 'DIALOG_DEBUG' in environ.keys():
+    LOG_LEVEL = logging.DEBUG
 
-def dia_log(msg_str):
-    if 'DIALOG_DEBUG' not in environ.keys():
-        return
-    with logfile.open('a') as log_content:
-        log_content.write(msg_str + '\n')
+logging.basicConfig(
+    filename='/var/log/dialog.log',
+    encoding='utf-8',
+    level=LOG_LEVEL
+)
 
 
 class Error(Exception):
@@ -45,14 +48,14 @@ class Dialog:
         self.console.add_persistent_args(["--no-mouse"])
 
     def _handle_exitcode(self, retcode):
-        dia_log("_handle_exitcode():\n\tretcode:`{}'".format(retcode))
+        logging.debug(f"_handle_exitcode(retcode={retcode!r})")
         if retcode == self.console.ESC:  # ESC, ALT+?
             text = "Do you really want to quit?"
             if self.console.yesno(text) == self.console.OK:
                 sys.exit(0)
             return False
 
-        dia_log("\t[no conditions met, returning True]\n")
+        logging.debug("_handle_exitcode(): [no conditions met, returning True]")
         return True
 
     def _calc_height(self, text):
@@ -63,26 +66,32 @@ class Dialog:
         return height
 
     def wrapper(self, dialog_name, text, *args, **kws):
-        dia_log("wraper():\n\tdialog_name:`{}'\n\ttext:`<redacted>'\n"
-                "\targs:`{}'\n\tkws:`{}'".format(dialog_name, args, kws))
+        logging.debug(
+            f"wrapper(dialog_name={dialog_name!r}, text=<redacted>,"
+            +f" *{args!r}, **{kws!r})")
         try:
             method = getattr(self.console, dialog_name)
-        except AttributeError:
+        except AttributeError as e:
+            logging.error(
+                    f"wrapper(dialog_name={dialog_name!r}, ...) raised exception",
+                    exc_info=e)
             raise Error("dialog not supported: " + dialog_name)
 
         while 1:
             try:
                 retcode = method("\n" + text, *args, **kws)
-                dia_log("\tretcode:`{}'".format(retcode))
+                logging.debug(
+                    f"wrapper(dialog_name={dialog_name!r}, ...) -> {retcode!r}")
 
                 if self._handle_exitcode(retcode):
                     break
 
-            except Exception:
+            except Exception as e:
                 sio = StringIO()
                 traceback.print_exc(file=sio)
-                dia_log("\tException:`{}'".format(sio.getvalue()))
-
+                logging.error(
+                    f"wrapper(dialog_name={dialog_name!r}) raised exception",
+                    exc_info=e)
                 self.msgbox("Caught exception", sio.getvalue())
 
         return retcode
@@ -93,22 +102,25 @@ class Dialog:
 
     def msgbox(self, title, text):
         height = self._calc_height(text)
-        dia_log("msgbox():\n\ttitle:`{}'\n\ttext:`<redacted>'".format(title))
+        logging.debug(f"msgbox(title={title!r}, text=<redacted>)")
         return self.wrapper("msgbox", text, height, self.width, title=title)
 
     def infobox(self, text):
         height = self._calc_height(text)
-        dia_log("infobox():\n\ttext:`{}'".format(text))
+        logging.debug(f"infobox(text={text!r}")
         return self.wrapper("infobox", text, height, self.width)
 
     def inputbox(self, title, text, init='', ok_label="OK",
                  cancel_label="Cancel"):
-        dia_log(("inputbox():\n\ttitle:`{}'\n\ttext:`<redacted>'\n"
-                 "\tinit:`{}'\n\tok_label:`{}'\n\tcancel_label:`{}'"
-                 ).format(title, init, ok_label, cancel_label))
+        logging.debug(
+                f"inputbox(title={title!r}, text=<redacted>,"
+                +f" init={init!r}, ok_label={ok_label!r},"
+                +f" cancel_label={cancel_label!r})")
+
         height = self._calc_height(text) + 3
         no_cancel = True if cancel_label == "" else False
-        dia_log("\theight:`{}'\n\tno_cancel:`{}'".format(height, no_cancel))
+        logging.debug(
+                f"inputbox(...) [calculated height={height}, no_cancel={no_cancel}]")
         return self.wrapper("inputbox", text, height, self.width, title=title,
                             init=init, ok_label=ok_label,
                             cancel_label=cancel_label, no_cancel=no_cancel)
@@ -117,7 +129,9 @@ class Dialog:
         height = self._calc_height(text)
         retcode = self.wrapper("yesno", text, height, self.width, title=title,
                                yes_label=yes_label, no_label=no_label)
-        dia_log("yesno():\n\tretcode:`{}'".format(retcode))
+        logging.debug(
+                f"yesno(title={title!r}, text=<redacted>,"
+                +f" yes_label={init!r}, no_label={ok_label!r}) -> {!retcode}")
         return True if retcode == 'ok' else False
 
     def menu(self, title, text, choices):
@@ -132,14 +146,15 @@ class Dialog:
 
     def get_password(self, title, text, pass_req=8,
                      min_complexity=3, blacklist=[]):
-        req_string = (('\n\nPassword Requirements\n - must be at least %d'
-                       ' characters long\n - must contain characters from at'
-                       ' least %d of the following categories: uppercase,'
-                       ' lowercase, numbers, symbols'
-                       ) % (pass_req, min_complexity))
+        req_string = (
+            f'\n\nPassword Requirements\n - must be at least {pass_req}'
+            +' characters long\n - must contain characters from at'
+            +f' least {min_complexity} of the following categories: uppercase,'
+            +' lowercase, numbers, symbols'
+        )
         if blacklist:
-            req_string = (('{}. Also must NOT contain these characters: {}'
-                          ).format(req_string, blacklist))
+            req_string =\
+                f'{req_string}. Also must NOT contain these characters: {blacklist}'
         height = self._calc_height(text+req_string) + 3
 
         def ask(title, text):
@@ -155,26 +170,25 @@ class Dialog:
 
             if isinstance(pass_req, int):
                 if len(password) < pass_req:
-                    self.error(("Password must be at least %s characters."
-                               ) % pass_req)
+                    self.error(f"Password must be at least {pass_req} characters.")
                     continue
             else:
                 if not re.match(pass_req, password):
                     self.error("Password does not match complexity"
-                               " requirements.")
+                               +" requirements.")
                     continue
 
             if password_complexity(password) < min_complexity:
                 if min_complexity <= 3:
                     self.error("Insecure password! Mix uppercase, lowercase,"
-                               " and at least one number. Multiple words and"
-                               " punctuation are highly recommended but not"
-                               " strictly required.")
+                               +" and at least one number. Multiple words and"
+                               +" punctuation are highly recommended but not"
+                               +" strictly required.")
                 elif min_complexity == 4:
                     self.error("Insecure password! Mix uppercase, lowercase,"
-                               " numbers and at least one special/punctuation"
-                               " character. Multiple words are highly"
-                               " recommended but not strictly required.")
+                               +" numbers and at least one special/punctuation"
+                               +" character. Multiple words are highly"
+                               +" recommended but not strictly required.")
                 continue
 
             found_items = []
@@ -182,8 +196,9 @@ class Dialog:
                 if item in password:
                     found_items.append(item)
             if found_items:
-                self.error('Password can NOT include these characters: {}.'
-                           ' Found: {}.'.format(blacklist, found_items))
+                self.error(
+                        f'Password can NOT include these characters: {blacklist}.'
+                        +f' Found {found_items}')
                 continue
 
             if password == ask(title, 'Confirm password'):
@@ -192,16 +207,15 @@ class Dialog:
             self.error('Password mismatch, please try again.')
 
     def get_email(self, title, text, init=''):
-        dia_log("get_email():\n\ttitle:`{}'\n\ttext:`<redacted>'\n"
-                "\tinit:`{}'".format(title, init))
+        logging.debug(f'get_email(title={title!r}, text=<redacted>, init={init!r})')
         while 1:
             email = self.inputbox(title, text, init, "Apply", "")[1]
-            dia_log("\temail:`{}'".format(email))
+            logging.debug(f'get_email(...) email={email!r}')
             if not email:
                 self.error('Email is required.')
                 continue
 
-            if not email_re.match(email):
+            if not EMAIL_RE.match(email):
                 self.error('Email is not valid')
                 continue
 
@@ -211,7 +225,7 @@ class Dialog:
         while 1:
             s = self.inputbox(title, text, init, "Apply", "")[1]
             if not s:
-                self.error('%s is required.' % title)
+                self.error(f'{title} is required.')
                 continue
 
             return s
