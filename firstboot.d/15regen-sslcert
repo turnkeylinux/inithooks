@@ -33,7 +33,7 @@ SERVICES="\
 info "Restarting relevant services."
 for service in $SERVICES; do
     service="${service}.service"
-    if systemctl list-units --full -all | grep -Fq $service; then
+    if systemctl list-units --full --all | grep -Fq $service; then
         info "$service found; (re)starting..."
         if systemctl is-active --quiet $service; then
             systemctl restart --quiet $service
