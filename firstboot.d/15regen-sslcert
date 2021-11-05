@@ -1,9 +1,8 @@
 #!/bin/bash -e
-# Regenerate self-signed TLS/SSL cert, key & dhparams
+# Regenerate self-signed TLS/SSL cert & key
 
 [ -n "$_TURNKEY_INIT" ] && exit 0
 
-# Support preseeding of DH_BITS
 [[ -e $INITHOOKS_CONF ]] && . $INITHOOKS_CONF
 
 _hook=$(basename $0)
@@ -11,15 +10,15 @@ _hook=$(basename $0)
 fatal() { echo "FATAL: [$_hook] $@" 1>&2 ; exit 1 ; }
 info() { echo "INFO: [$_hook] $@" ; }
 
+# Check for 'turnkey-make-ssl-cert' - should be provided by
+# common/overlays/turnkey.d/sslcert.
 turnkey_make_ssl_cert=$(which turnkey-make-ssl-cert) \
     || fatal "turnkey-make-ssl-cert executable not found."
 
-DH_BITS=${DH_BITS:-1024}
-# This script should be provided by common/overlays/turnkey.d/sslcert.
-# As of v16.0 will also generate a default dhparams file (1024 bits)
-info "Generating SSL/TLS cert, key & default ($DH_BITS bit) dhparams file."
-info "Note: a dhparams file of bit size >= 2048 is recommended."
-$turnkey_make_ssl_cert --default --force-overwrite --dh-bits $DH_BITS
+# As of v17.0 a predefined 4096 bits default dhparams file is provided. Please
+# see https://github.com/turnkeylinux/tracker/issues/1653 for more info.
+info "Generating SSL/TLS cert & key."
+$turnkey_make_ssl_cert --default --force-overwrite
 
 # Restart relevant services
 SERVICES="\
