@@ -11,9 +11,10 @@ import os
 import sys
 import getopt
 import signal
-
-from dialog_wrapper import Dialog, EMAIL_RE, dia_log
+import logging
 import subprocess
+
+from dialog_wrapper import Dialog, EMAIL_RE
 
 TITLE = "System Notifications and Critical Security Alerts"
 
@@ -76,8 +77,7 @@ def main():
                 "Enable",
                 "Skip")
 
-            dia_log(("secalerts.main():\n\tretcode:`{}'\n\temail:`{}'"
-                    ).format(retcode, email))
+            logging.debug(f"secalerts.main():\n\tretcode:`{retcode}'\n\temail:`{email}'")
             if retcode == 'cancel':
                 email = ""
                 break
@@ -91,7 +91,7 @@ def main():
 
     if email:
         cmd = os.path.join(os.path.dirname(__file__), 'secalerts.sh')
-        dia_log("\tcmd:`{}'".format(cmd))
+        logging.debug(f"\tcmd:`{cmd}'")
         subprocess.run([cmd, email], check=True)
 
 
