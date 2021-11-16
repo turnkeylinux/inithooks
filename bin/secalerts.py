@@ -12,7 +12,7 @@ import sys
 import getopt
 import signal
 
-from dialog_wrapper import Dialog, email_re, dia_log
+from dialog_wrapper import Dialog, EMAIL_RE, dia_log
 import subprocess
 
 TITLE = "System Notifications and Critical Security Alerts"
@@ -62,7 +62,7 @@ def main():
         elif opt == "--email-placeholder":
             email_placeholder = val
 
-    if email and not email_re.match(email):
+    if email and not EMAIL_RE.match(email):
         fatal("email is not valid")
 
     if not email:
@@ -82,7 +82,7 @@ def main():
                 email = ""
                 break
 
-            if not email_re.match(email):
+            if not EMAIL_RE.match(email):
                 d.error('Email is not valid')
                 continue
 
