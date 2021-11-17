@@ -48,7 +48,7 @@ def main():
             password = val
 
     if not password:
-        from dialog_wrapper import Dialog
+        from libinithooks.dialog_wrapper import Dialog
         d = Dialog('TurnKey GNU/Linux - First boot configuration')
         password = d.get_password(
             "%s Password" % username.capitalize(),
