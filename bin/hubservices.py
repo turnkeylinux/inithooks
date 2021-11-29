@@ -13,7 +13,7 @@ import signal
 import subprocess
 from subprocess import check_output, CalledProcessError, PIPE
 
-from dialog_wrapper import Dialog
+from libinithooks.dialog_wrapper import Dialog
 
 TEXT_SERVICES = ("1) TurnKey Backup and Migration: saves changes to files,\n"
                  "   databases and package management to encrypted storage\n"

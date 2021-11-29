@@ -14,7 +14,7 @@ import signal
 import logging
 import subprocess
 
-from dialog_wrapper import Dialog, EMAIL_RE
+from libinithooks.dialog_wrapper import Dialog, EMAIL_RE
 
 TITLE = "System Notifications and Critical Security Alerts"
 

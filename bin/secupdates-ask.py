@@ -8,7 +8,7 @@ import signal
 import logging
 
 from subprocess import check_output, CalledProcessError
-from dialog_wrapper import Dialog
+from libinithooks.dialog_wrapper import Dialog
 
 TEXT = ("By default, this system is configured to automatically install"
         " security updates on a daily basis:\n\n"
