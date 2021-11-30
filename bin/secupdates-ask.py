@@ -5,9 +5,10 @@
 import sys
 import getopt
 import signal
+import logging
 
 from subprocess import check_output, CalledProcessError
-from dialog_wrapper import Dialog, dia_log
+from libinithooks.dialog_wrapper import Dialog
 
 TEXT = ("By default, this system is configured to automatically install"
         " security updates on a daily basis:\n\n"
@@ -43,7 +44,7 @@ def main():
 
     d = Dialog("TurnKey GNU/Linux - First boot configuration")
     install = d.yesno("Security updates", TEXT, "Install", "Skip")
-    dia_log("secupdates.main()\n\tinstall:`{}'\n".format(install))
+    logging.debug(f"secupdates.main()\n\tinstall:`{install}'\n")
     if not install:
         sys.exit(1)
 

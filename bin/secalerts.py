@@ -11,9 +11,10 @@ import os
 import sys
 import getopt
 import signal
-
-from dialog_wrapper import Dialog, email_re, dia_log
+import logging
 import subprocess
+
+from libinithooks.dialog_wrapper import Dialog, EMAIL_RE
 
 TITLE = "System Notifications and Critical Security Alerts"
 
@@ -62,7 +63,7 @@ def main():
         elif opt == "--email-placeholder":
             email_placeholder = val
 
-    if email and not email_re.match(email):
+    if email and not EMAIL_RE.match(email):
         fatal("email is not valid")
 
     if not email:
@@ -76,13 +77,12 @@ def main():
                 "Enable",
                 "Skip")
 
-            dia_log(("secalerts.main():\n\tretcode:`{}'\n\temail:`{}'"
-                    ).format(retcode, email))
+            logging.debug(f"secalerts.main():\n\tretcode:`{retcode}'\n\temail:`{email}'")
             if retcode == 'cancel':
                 email = ""
                 break
 
-            if not email_re.match(email):
+            if not EMAIL_RE.match(email):
                 d.error('Email is not valid')
                 continue
 
@@ -91,7 +91,7 @@ def main():
 
     if email:
         cmd = os.path.join(os.path.dirname(__file__), 'secalerts.sh')
-        dia_log("\tcmd:`{}'".format(cmd))
+        logging.debug(f"\tcmd:`{cmd}'")
         subprocess.run([cmd, email], check=True)
 
 

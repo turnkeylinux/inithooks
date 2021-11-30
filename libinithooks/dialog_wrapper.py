@@ -131,7 +131,8 @@ class Dialog:
                                yes_label=yes_label, no_label=no_label)
         logging.debug(
                 f"yesno(title={title!r}, text=<redacted>,"
-                +f" yes_label={init!r}, no_label={ok_label!r}) -> {!retcode}")
+                f" yes_label={yes_label!r}, no_label={no_label!r})"
+                f" -> {retcode}")
         return True if retcode == 'ok' else False
 
     def menu(self, title, text, choices):

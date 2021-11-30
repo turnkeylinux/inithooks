@@ -549,7 +549,7 @@ enter a password interactively.
     import subprocess
     from subprocess import PIPE
     
-    from dialog_wrapper import Dialog
+    from libinithooks.dialog_wrapper import Dialog
     
     def fatal(s):
         print >> sys.stderr, "Error:", s

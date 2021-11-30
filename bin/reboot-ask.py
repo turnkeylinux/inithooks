@@ -5,7 +5,7 @@ import sys
 import getopt
 import signal
 
-from dialog_wrapper import Dialog
+from libinithooks.dialog_wrapper import Dialog
 
 TEXT = """A security update to the kernel requires a reboot to go into effect.
 
