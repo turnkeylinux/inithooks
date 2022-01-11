@@ -6,22 +6,22 @@ INITHOOKS_DEFAULT=/etc/default/inithooks
 
 TKLINFO=/var/lib/turnkey-info/inithooks.service
 
-unset PID LOGFILE
+unset PID INITHOOKS_LOGFILE
 
 REDIRECT_OUTPUT=$(echo $REDIRECT_OUTPUT | tr [A-Z] [a-z])
 
 log() {
-    # log to journal as well as $LOGFILE
+    # log to journal as well as $INITHOOKS_LOGFILE
     LEVEL=$1 # err|warn|info|debug
     shift
     logger -t inithooks -p $LEVEL "$@"
-    [ -n "$LOGFILE" ] && echo "${LEVEL^^}: $@" >> "$LOGFILE"
+    [ -n "$INITHOOKS_LOGFILE" ] && echo "${LEVEL^^}: $@" >> "$INITHOOKS_LOGFILE"
 }
 
 if [ "$REDIRECT_OUTPUT" = "true" ]; then
     # redirect stdout/stderr (use when preseeding headless deployments)
-    LOGFILE=/var/log/inithooks.log
-    touch $LOGFILE; chmod 640 $LOGFILE
+    export INITHOOKS_LOGFILE=/var/log/inithooks.log
+    touch $INITHOOKS_LOGFILE; chmod 640 $INITHOOKS_LOGFILE
 
     # on xen redirection is performed by the inithooks-xen service
     # on lxc and other headless deployments, redirection is handled below
@@ -30,7 +30,7 @@ if [ "$REDIRECT_OUTPUT" = "true" ]; then
     if [ ! -f "$TKLINFO/xen" ]; then
         TTY=$(cat /sys/devices/virtual/tty/tty0/active)
         [ -z $TTY ] && TTY=console
-        tail -f $LOGFILE > /dev/$TTY &
+        tail -f $INITHOOKS_LOGFILE > /dev/$TTY &
         PID="$!"
     fi
 fi
@@ -49,7 +49,7 @@ exec_scripts() {
         elif [ "$(basename $SCRIPT)" = "95secupdates" ] && [ "$RET" -eq 2 ]; then
             log info "running live, so skipping security updates"
         else
-            log warn "completed $SCRIPT - exit code $RET"
+            log err "completed $SCRIPT - exit code $RET"
         fi
         # the script requested a reboot before we can continue
         if [ $RET -eq 42 ]; then
