@@ -14,7 +14,7 @@ def _log(level: str, message: str) -> None:
         m = sys.modules['__main__']
         err_msg = 'unknown log level in main'
         if hasattr(m, '__file__'):
-            err_msg += f' ({path.abspath(m.__file__}))'
+            err_msg += f' ({path.abspath(m.__file__)})'
         error(err_msg)
     else:
         args.extend(['-p', level])
