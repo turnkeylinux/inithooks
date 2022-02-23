@@ -1,4 +1,8 @@
 #! /usr/bin/make -f
+export PYBUILD_BEFORE_BUILD=\
+	echo usr/lib/python{version.major}/dist-packages/libinithooks/inithooks_cache.py \
+	usr/lib/inithooks/bin/inithooks_cache.py \
+	> debian/inithooks.links
 
 %:
 	dh $@ --with=python3 --buildsystem=pybuild
