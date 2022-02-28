@@ -10,6 +10,8 @@ if [ -f /etc/default/turnkey-init-fence ]; then
     fi
 fi
 
+chmod 755 /usr/lib/inithooks/bin/inithooks_cache.py
+
 #DEBHELPER#
 
 exit 0
