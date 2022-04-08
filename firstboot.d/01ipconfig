@@ -25,6 +25,7 @@ echo "iface lo inet loopback" >>/etc/network/interfaces
 echo >>/etc/network/interfaces
 echo "auto eth0" >>/etc/network/interfaces
 echo "iface eth0 inet $IP_CONFIG" >>/etc/network/interfaces
+echo " hostname $(head -1 /etc/hostname)" >>/etc/network/interfaces
 
 if [ "$IP_CONFIG" = "static" ]; then
  echo " address $IP_ADDRESS" >>/etc/network/interfaces
