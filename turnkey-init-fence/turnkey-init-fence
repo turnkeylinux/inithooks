@@ -56,7 +56,6 @@ iptables_delete_redirect()
 
     while true; do
         (2>&1 iptables -t nat -D PREROUTING -p tcp --dport $dport -j REDIRECT --to-port $to_port) > /dev/null || break
-            
     done
 }
 
@@ -69,15 +68,36 @@ iptables_add_redirect()
     iptables -t nat -A PREROUTING -p tcp --dport $dport -j REDIRECT --to-port $to_port
 }
 
+iptables_unensure_accept()
+{
+    # remove ACCEPT line for fence ports (used in appliances that have a
+    # `filter` policy of `DROP`)
+    dport=$1
+    while true; do
+        (2>&1 iptables -t filter -D INPUT -p tcp -m tcp --dport $dport -j ACCEPT) > /dev/null || break
+    done
+}
+
+iptables_ensure_accept()
+{
+    # add ACCEPT line for fence ports (used in appliances that have a
+    # `filter` policy of `DROP`)
+    dport=$1
+    iptables_unensure_accept $1
+    iptables -t filter -A INPUT -p tcp -m tcp --dport $dport -j ACCEPT
+}
+
 
 iptables_redirect()
 {
     case "$1" in
       start)
           op=iptables_add_redirect
+          mop=iptables_ensure_accept
         ;;
       stop)
           op=iptables_delete_redirect
+          mop=iptables_unensure_accept
         ;;
     esac
 
@@ -88,6 +108,9 @@ iptables_redirect()
     for port in $HTTPS_PORTS; do
         $op $port $HTTPS_FENCE_PORT
     done
+
+    $mop $HTTP_FENCE_PORT
+    $mop $HTTPS_FENCE_PORT
 }
 
 #
