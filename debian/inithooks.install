@@ -4,7 +4,6 @@ firstboot.d/*       /usr/lib/inithooks/firstboot.d
 everyboot.d/*       /usr/lib/inithooks/everyboot.d
 run                 /usr/lib/inithooks
 rsyslog.d/*         /etc/rsyslog.d
-systemd/*           /etc/systemd
 
 turnkey-init-fence/turnkey-init-fence           /etc/init.d
 turnkey-init-fence/htdocs                       /var/lib/inithooks/turnkey-init-fence
@@ -12,3 +11,6 @@ turnkey-init-fence/htdocs                       /var/lib/inithooks/turnkey-init-
 turnkey-init                        /usr/sbin
 turnkey-sudoadmin                   /usr/sbin
 turnkey-install-security-updates    /usr/sbin
+
+10-getty-tkl-login.conf /etc/systemd/system/getty@tty1.service.d
+10-container-getty-tkl-login.conf /etc/systemd/system/container-getty@1.service.d
