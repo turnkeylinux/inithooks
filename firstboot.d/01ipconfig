@@ -24,7 +24,7 @@ grep "iface $IP_IFACE inet $IP_CONFIG" /etc/network/interfaces >/dev/null \
     && exit 0
 
 # since debian 8 (systemd) ifdown no longer takes the interface down if we
-change between manual, static or dhcp so using 'ip' instead
+# change between manual, static or dhcp so using 'ip' instead
 ip link set $IP_IFACE down
 
 cat > /etc/network/interfaces <<EOF
