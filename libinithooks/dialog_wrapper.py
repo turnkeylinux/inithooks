@@ -154,8 +154,9 @@ class Dialog:
             +' lowercase, numbers, symbols'
         )
         if blacklist:
-            req_string =\
-                f'{req_string}. Also must NOT contain these characters: {blacklist}'
+            req_string = (
+                f'{req_string}. Also must NOT contain these characters:'
+                f' {" ".join(blacklist)}')
         height = self._calc_height(text+req_string) + 3
 
         def ask(title, text):
