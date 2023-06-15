@@ -12,5 +12,4 @@ turnkey-init                        /usr/sbin
 turnkey-sudoadmin                   /usr/sbin
 turnkey-install-security-updates    /usr/sbin
 
-10-getty-tkl-login.conf /etc/systemd/system/getty@tty1.service.d
-10-container-getty-tkl-login.conf /etc/systemd/system/container-getty@1.service.d
+systemd                             /etc
