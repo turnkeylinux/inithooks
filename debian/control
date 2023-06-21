@@ -15,7 +15,7 @@ Depends:
  kbd,
  ${misc:Depends},
  ${python3:Depends},
- rsyslog,
+ turnkey-ssl,
  python3-dialog (>= 3.4.0~),
  dialog (>= 1.3~),
 Recommends:
