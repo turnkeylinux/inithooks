@@ -40,6 +40,7 @@ EOF
 
 if [[ "$IP_CONFIG" == "static" ]]; then
     cat > /etc/network/interfaces <<EOF
+    hostname $(head -1 /etc/hostname)
     address $IP_ADDRESS
     netmask $IP_NETMASK
     gateway $IP_GW
