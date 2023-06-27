@@ -1,10 +1,12 @@
 #!/bin/bash
 # Executed by init script
 
+TERM=${TERM:-linux}
+
 INITHOOKS_DEFAULT=/etc/default/inithooks
 . $INITHOOKS_DEFAULT
 
-TKLINFO=/var/lib/turnkey-info/inithooks.service
+TKLINFO=/var/lib/turnkey-info
 
 unset PID INITHOOKS_LOGFILE
 
@@ -15,7 +17,8 @@ log() {
     LEVEL=$1 # err|warn|info|debug
     shift
     logger -t inithooks -p $LEVEL "$@"
-    [ -n "$INITHOOKS_LOGFILE" ] && echo "${LEVEL^^}: $@" >> "$INITHOOKS_LOGFILE"
+    [[ -n "$INITHOOKS_LOGFILE" ]] \
+        && echo "${LEVEL^^}: $@" >> "$INITHOOKS_LOGFILE"
 }
 
 if [ "$REDIRECT_OUTPUT" = "true" ]; then
@@ -25,62 +28,65 @@ if [ "$REDIRECT_OUTPUT" = "true" ]; then
 
     # on xen redirection is performed by the inithooks-xen service
     # on lxc and other headless deployments, redirection is handled below
-    # otherwise redirection is handled by inithooks service and redirected to tty8
+    # otherwise redirection is handled by inithooks service and redirected to
+    # tty8
 
-    if [ ! -f "$TKLINFO/xen" ]; then
+    if [[ ! -f "$TKLINFO/xen" ]]; then
         TTY=$(cat /sys/devices/virtual/tty/tty0/active)
-        [ -z $TTY ] && TTY=console
+        [[ -z $TTY ]] && TTY=console
         tail -f $INITHOOKS_LOGFILE > /dev/$TTY &
         PID="$!"
     fi
 fi
 
 exec_scripts() {
-    SCRIPT_DIR=$1
-    [ -d $SCRIPT_DIR ] || return 0
-    for SCRIPT in $(find $SCRIPT_DIR -type f -or -type l | sort); do
-        [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
-        [ -x $SCRIPT ] || continue
-        log info "running $SCRIPT"
-        $SCRIPT
-        RET=$?
-        if [ "$RET" -eq 0 ]; then
-            log info "successfully completed $SCRIPT"
-        elif [ "$(basename $SCRIPT)" = "95secupdates" ] && [ "$RET" -eq 2 ]; then
-            log info "running live, so skipping security updates"
-        else
-            log err "completed $SCRIPT - exit code $RET"
+    script_dir=$1
+    [[ -d "$script_dir" ]] || return 0
+    for SCRIPT in $(find $script_dir -type f -or -type l | sort); do
+        [[ -e $INITHOOKS_CONF ]] && . $INITHOOKS_CONF
+        script=$(basename $SCRIPT)
+        if [[ ! -x "$SCRIPT" ]]; then
+            log warn "[$script] skipping"
+            continue
         fi
-        # the script requested a reboot before we can continue
-        if [ $RET -eq 42 ]; then
-            log warn "Exit code 42 indicates a reboot is required"
+        log info "[$script] running"
+        "$SCRIPT"
+        exit_code=$?
+        if [[ "$exit_code" -eq 0 ]]; then
+            log info "[$script] successfully completed"
+        elif [[ "$script" = "95secupdates" ]] && [[ "$exit_code" -eq 2 ]]; then
+            log info "[$script] detected live system - skipping"
+        elif [[ "$script" = "95secupdates" ]] && [[ "$exit_code" -eq 42 ]]; then
+            log warn "[$script] reboot is required"
             log err 'Rebooting now!'
             systemctl reboot
             exit 0
+        else
+            log err "[$script] failed - exit code $exit_code"
         fi
     done
     return 0
 }
 
-[ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
+[[ -e $INITHOOKS_CONF ]] && . $INITHOOKS_CONF
 export INITHOOKS_CONF=$INITHOOKS_CONF
 
-if [ "$(echo $RUN_FIRSTBOOT | tr [A-Z] [a-z] )" = "true" ]; then
+if [[ "${RUN_FIRSTBOOT,,}" = "true" ]]; then
     exec_scripts $INITHOOKS_PATH/firstboot.d
 fi
 exec_scripts $INITHOOKS_PATH/everyboot.d
 
-if [ -n "$PID" ];  then
+if [[ -n "$PID" ]];  then
     kill -9 $PID || true
 fi
 
-if [ "$REDIRECT_OUTPUT" = "true" ]; then
+if [[ "${REDIRECT_OUTPUT,,}" = "true" ]]; then
     log info "Inithook run completed, exiting."
 else
     log info "Inithook run completed, now starting confconsole"
     sleep 2 # anyway to replace this?
     confconsole --usage
-    log info "Confconsole completed, now exiting"
+    log info "Confconsole started, inithooks exiting"
 fi
 
 exit 0
