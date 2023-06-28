@@ -21,10 +21,11 @@ log() {
         && echo "${LEVEL^^}: $@" >> "$INITHOOKS_LOGFILE"
 }
 
-if [ "$REDIRECT_OUTPUT" = "true" ]; then
+if [[ "$REDIRECT_OUTPUT" == "true" ]]; then
     # redirect stdout/stderr (use when preseeding headless deployments)
     export INITHOOKS_LOGFILE=/var/log/inithooks.log
-    touch $INITHOOKS_LOGFILE; chmod 640 $INITHOOKS_LOGFILE
+    touch $INITHOOKS_LOGFILE
+    chmod 640 $INITHOOKS_LOGFILE
 
     # on xen redirection is performed by the inithooks-xen service
     # on lxc and other headless deployments, redirection is handled below
@@ -71,7 +72,7 @@ exec_scripts() {
 [[ -e $INITHOOKS_CONF ]] && . $INITHOOKS_CONF
 export INITHOOKS_CONF=$INITHOOKS_CONF
 
-if [[ "${RUN_FIRSTBOOT,,}" = "true" ]]; then
+if [[ "${RUN_FIRSTBOOT,,}" == "true" ]]; then
     exec_scripts $INITHOOKS_PATH/firstboot.d
 fi
 exec_scripts $INITHOOKS_PATH/everyboot.d
@@ -80,7 +81,7 @@ if [[ -n "$PID" ]];  then
     kill -9 $PID || true
 fi
 
-if [[ "${REDIRECT_OUTPUT,,}" = "true" ]]; then
+if [[ "${REDIRECT_OUTPUT,,}" == "true" ]]; then
     log info "Inithook run completed, exiting."
 else
     log info "Inithook run completed, now starting confconsole"
