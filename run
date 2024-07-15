@@ -1,32 +1,35 @@
 #!/bin/bash
 # Executed by init script
 
+# load/set general global vars
+INITHOOKS_DEFAULT="${INITHOOKS_DEFAULT:-/etc/default/inithooks}"
+i[[ -z "$RUN_FIRSTBOOT" ]] || RUN_FIRSTBOOT="${RUN_FIRSTBOOT,,}"
+source $INITHOOKS_DEFAULT
+if [[ -f $INITHOOKS_CONF ]]; then
+    source $INITHOOKS_CONF
+    export INITHOOKS_CONF=$INITHOOKS_CONF
+fi
 TERM=${TERM:-linux}
+TKLINFO="${TKLINFO:-/var/lib/turnkey-info}"
+export INITHOOKS_LOGFILE="${INITHOOKS_LOGFILE:-/var/log/inithooks.log}"
+PID=
 
-INITHOOKS_DEFAULT=/etc/default/inithooks
-. $INITHOOKS_DEFAULT
-
-TKLINFO=/var/lib/turnkey-info
-
-unset PID INITHOOKS_LOGFILE
-
-REDIRECT_OUTPUT=$(echo $REDIRECT_OUTPUT | tr [A-Z] [a-z])
+# initalise log file
+mkdir -p "$(dirname "$INITHOOKS_LOGFILE")"
+touch "$INITHOOKS_LOGFILE"
+chmod 640 "$INITHOOKS_LOGFILE"
 
 log() {
     # log to journal as well as $INITHOOKS_LOGFILE
-    LEVEL=$1 # err|warn|info|debug
+    local level=${1} # err|warn|info|debug
     shift
-    logger -t inithooks -p $LEVEL "$@"
-    [[ -n "$INITHOOKS_LOGFILE" ]] \
-        && echo "${LEVEL^^}: $@" >> "$INITHOOKS_LOGFILE"
+    logger -t inithooks -p "${level,,}" "$@"
+    if [[ -f "$INITHOOKS_LOGFILE" ]]; then
+        echo "${level^^}: $*" >> "$INITHOOKS_LOGFILE"
+    fi
 }
 
-if [[ "$REDIRECT_OUTPUT" == "true" ]]; then
-    # redirect stdout/stderr (use when preseeding headless deployments)
-    export INITHOOKS_LOGFILE=/var/log/inithooks.log
-    touch $INITHOOKS_LOGFILE
-    chmod 640 $INITHOOKS_LOGFILE
-
+if [[ "${REDIRECT_OUTPUT,,}" == "true" ]]; then
     # on xen redirection is performed by the inithooks-xen service
     # on lxc and other headless deployments, redirection is handled below
     # otherwise redirection is handled by inithooks service and redirected to
@@ -34,24 +37,25 @@ if [[ "$REDIRECT_OUTPUT" == "true" ]]; then
 
     if [[ ! -f "$TKLINFO/xen" ]]; then
         TTY=$(cat /sys/devices/virtual/tty/tty0/active)
-        [[ -z $TTY ]] && TTY=console
+        if [[ -z $TTY ]] && TTY=console
         tail -f $INITHOOKS_LOGFILE > /dev/$TTY &
         PID="$!"
     fi
 fi
 
 exec_scripts() {
-    script_dir=$1
+    local script_dir=$1
+    local script_executable=
+    local script=
     [[ -d "$script_dir" ]] || return 0
-    for SCRIPT in $(find $script_dir -type f -or -type l | sort); do
-        [[ -e $INITHOOKS_CONF ]] && . $INITHOOKS_CONF
-        script=$(basename $SCRIPT)
-        if [[ ! -x "$SCRIPT" ]]; then
+    for script_executable in $(find $script_dir -type f -or -type l | sort); do
+        script=$(basename $script_executable)
+        if [[ ! -x "$script_executable" ]]; then
             log warn "[$script] skipping"
             continue
         fi
         log info "[$script] running"
-        "$SCRIPT"
+        "$script_executable"
         exit_code=$?
         if [[ "$exit_code" -eq 0 ]]; then
             log info "[$script] successfully completed"
@@ -69,12 +73,12 @@ exec_scripts() {
     return 0
 }
 
-[[ -e $INITHOOKS_CONF ]] && . $INITHOOKS_CONF
-export INITHOOKS_CONF=$INITHOOKS_CONF
 
-if [[ "${RUN_FIRSTBOOT,,}" == "true" ]]; then
+if [[ "$RUN_FIRSTBOOT" == "true" ]]; then
+    log info "Running firstboot scripts"
     exec_scripts $INITHOOKS_PATH/firstboot.d
 fi
+log info "Running firstboot scripts"
 exec_scripts $INITHOOKS_PATH/everyboot.d
 
 if [[ -n "$PID" ]];  then
