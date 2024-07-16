@@ -39,7 +39,7 @@ class KeyStore:
         keypath = os.path.join(self.path, key)
 
         if os.path.exists(keypath):
-            with open(keypath, 'r') as fob:
+            with open(keypath, "r") as fob:
                 data = fob.read()
             return data
 
@@ -48,12 +48,12 @@ class KeyStore:
     def write(self, key, val):
         keypath = os.path.join(self.path, key)
 
-        with open(keypath, 'w') as fob:
+        with open(keypath, "w") as fob:
             fob.write(val)
 
 
 # convenience functions
-CACHE_DIR = os.environ.get('INITHOOKS_CACHE', '/var/lib/inithooks/cache')
+CACHE_DIR = os.environ.get("INITHOOKS_CACHE", "/var/lib/inithooks/cache")
 
 
 def read(key):
@@ -66,7 +66,8 @@ def write(key, value):
 
 if __name__ == "__main__":
     import getopt
-
+    opts = []
+    args = []
     try:
         opts, args = getopt.gnu_getopt(sys.argv[1:], "h", ["help"])
     except getopt.GetoptError as e:

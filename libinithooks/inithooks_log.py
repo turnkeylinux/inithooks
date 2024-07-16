@@ -17,11 +17,19 @@ class InitLog:
 
     def write(self, msg: str, level: str = "info") -> None:
         """Write to log & journal
-           valid levels: err|warn|info|debug
+        valid levels: err|warn|info|debug
         """
         if level not in LOG_LEVELS:
             raise InitLogError(f"invalid log level '{level}'")
-        subprocess.run(["/usr/bin/logger", "-t", "inithooks",
-                        "-p", level, f"{self.inithook_name}: {msg}"])
+        subprocess.run(
+            [
+                "/usr/bin/logger",
+                "-t",
+                "inithooks",
+                "-p",
+                level,
+                f"{self.inithook_name}: {msg}",
+            ]
+        )
         with open(self.log_file, "a") as fob:
             fob.write(f"{msg}\n")
