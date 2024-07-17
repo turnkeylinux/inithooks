@@ -21,6 +21,7 @@ class InitLog:
         """
         if level not in LOG_LEVELS:
             raise InitLogError(f"invalid log level '{level}'")
+        msg = f"[{self.inithook_name}] {msg}".rstrip()
         subprocess.run(
             [
                 "/usr/bin/logger",
@@ -28,7 +29,7 @@ class InitLog:
                 "inithooks",
                 "-p",
                 level,
-                f"{self.inithook_name}: {msg}",
+                msg,
             ]
         )
         with open(self.log_file, "a") as fob:
