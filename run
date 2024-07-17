@@ -3,13 +3,16 @@
 
 # load/set general global vars
 INITHOOKS_DEFAULT="${INITHOOKS_DEFAULT:-/etc/default/inithooks}"
-i[[ -z "$RUN_FIRSTBOOT" ]] || RUN_FIRSTBOOT="${RUN_FIRSTBOOT,,}"
-source $INITHOOKS_DEFAULT
+# shellcheck source=/dev/null
+source "$INITHOOKS_DEFAULT"
+TERM=${TERM:-linux}
+RUN_FIRSTBOOT="${RUN_FIRSTBOOT:-}"
+RUN_FIRSTBOOT="${RUN_FIRSTBOOT,,}"
 if [[ -f $INITHOOKS_CONF ]]; then
-    source $INITHOOKS_CONF
+    # shellcheck source=/dev/null
+    source "$INITHOOKS_CONF"
     export INITHOOKS_CONF=$INITHOOKS_CONF
 fi
-TERM=${TERM:-linux}
 TKLINFO="${TKLINFO:-/var/lib/turnkey-info}"
 export INITHOOKS_LOGFILE="${INITHOOKS_LOGFILE:-/var/log/inithooks.log}"
 PID=
@@ -37,8 +40,10 @@ if [[ "${REDIRECT_OUTPUT,,}" == "true" ]]; then
 
     if [[ ! -f "$TKLINFO/xen" ]]; then
         TTY=$(cat /sys/devices/virtual/tty/tty0/active)
-        if [[ -z $TTY ]] && TTY=console
-        tail -f $INITHOOKS_LOGFILE > /dev/$TTY &
+        if [[ -z $TTY ]]; then
+            TTY=console
+        fi
+        tail -f "$INITHOOKS_LOGFILE" > "/dev/$TTY" &
         PID="$!"
     fi
 fi
@@ -48,8 +53,8 @@ exec_scripts() {
     local script_executable=
     local script=
     [[ -d "$script_dir" ]] || return 0
-    for script_executable in $(find $script_dir -type f -or -type l | sort); do
-        script=$(basename $script_executable)
+    for script_executable in $(find "$script_dir" -type f -or -type l | sort); do
+        script=$(basename "$script_executable")
         if [[ ! -x "$script_executable" ]]; then
             log warn "[$script] skipping"
             continue
@@ -76,13 +81,13 @@ exec_scripts() {
 
 if [[ "$RUN_FIRSTBOOT" == "true" ]]; then
     log info "Running firstboot scripts"
-    exec_scripts $INITHOOKS_PATH/firstboot.d
+    exec_scripts "$INITHOOKS_PATH/firstboot.d"
 fi
 log info "Running firstboot scripts"
-exec_scripts $INITHOOKS_PATH/everyboot.d
+exec_scripts "$INITHOOKS_PATH/everyboot.d"
 
 if [[ -n "$PID" ]];  then
-    kill -9 $PID || true
+    kill -9 $PID
 fi
 
 if [[ "${REDIRECT_OUTPUT,,}" == "true" ]]; then
