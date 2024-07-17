@@ -87,7 +87,7 @@ log info "Running firstboot scripts"
 exec_scripts "$INITHOOKS_PATH/everyboot.d"
 
 if [[ -n "$PID" ]];  then
-    kill -9 $PID
+    kill -9 $PID || true
 fi
 
 if [[ "${REDIRECT_OUTPUT,,}" == "true" ]]; then
