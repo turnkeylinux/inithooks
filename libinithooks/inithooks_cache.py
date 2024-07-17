@@ -15,6 +15,8 @@ Environment:
 import os
 import sys
 
+CACHE_DIR = os.environ.get("INITHOOKS_CACHE", "/var/lib/inithooks/cache")
+
 
 def fatal(e):
     print("Error:", e, file=sys.stderr)
@@ -30,11 +32,11 @@ def usage(s=None):
 
 
 class KeyStore:
-    def __init__(self, cache_dir):
+    def __init__(self, cache_dir=CACHE_DIR):
         self.cache_dir = cache_dir
         os.makedirs(self.cache_dir, mode=0o755, exist_ok=True)
 
-    def read(self, key):
+    def read(self, key, fallback=''):
         keypath = os.path.join(self.cache_dir, key)
 
         if os.path.exists(keypath):
@@ -42,7 +44,7 @@ class KeyStore:
                 data = fob.read()
             return data
 
-        return None
+        return fallback
 
     def write(self, key, val):
         keypath = os.path.join(self.cache_dir, key)
@@ -52,11 +54,9 @@ class KeyStore:
 
 
 # convenience functions
-CACHE_DIR = os.environ.get("INITHOOKS_CACHE", "/var/lib/inithooks/cache")
 
-
-def read(key):
-    return KeyStore(CACHE_DIR).read(key)
+def read(key, fallback=''):
+    return KeyStore(CACHE_DIR).read(key, fallback)
 
 
 def write(key, value):
