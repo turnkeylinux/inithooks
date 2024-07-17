@@ -36,7 +36,7 @@ class KeyStore:
         self.cache_dir = cache_dir
         os.makedirs(self.cache_dir, mode=0o755, exist_ok=True)
 
-    def read(self, key, fallback=''):
+    def read(self, key, fallback=None):
         keypath = os.path.join(self.cache_dir, key)
 
         if os.path.exists(keypath):
@@ -55,7 +55,7 @@ class KeyStore:
 
 # convenience functions
 
-def read(key, fallback=''):
+def read(key, fallback=None):
     return KeyStore(CACHE_DIR).read(key, fallback)
 
 
