@@ -30,13 +30,12 @@ def usage(s=None):
 
 
 class KeyStore:
-    def __init__(self, path):
-        self.path = path
-        if not os.path.exists(self.path):
-            os.makedirs(self.path)
+    def __init__(self, cache_dir):
+        self.cache_dir = cache_dir
+        os.makedirs(self.cache_dir, mode=0o755, exist_ok=True)
 
     def read(self, key):
-        keypath = os.path.join(self.path, key)
+        keypath = os.path.join(self.cache_dir, key)
 
         if os.path.exists(keypath):
             with open(keypath, "r") as fob:
@@ -46,7 +45,7 @@ class KeyStore:
         return None
 
     def write(self, key, val):
-        keypath = os.path.join(self.path, key)
+        keypath = os.path.join(self.cache_dir, key)
 
         with open(keypath, "w") as fob:
             fob.write(val)
