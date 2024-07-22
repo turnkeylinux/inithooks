@@ -15,6 +15,8 @@ Environment:
 import os
 import sys
 
+CACHE_DIR = os.environ.get("INITHOOKS_CACHE", "/var/lib/inithooks/cache")
+
 
 def fatal(e):
     print("Error:", e, file=sys.stderr)
@@ -30,34 +32,31 @@ def usage(s=None):
 
 
 class KeyStore:
-    def __init__(self, path):
-        self.path = path
-        if not os.path.exists(self.path):
-            os.makedirs(self.path)
+    def __init__(self, cache_dir=CACHE_DIR):
+        self.cache_dir = cache_dir
+        os.makedirs(self.cache_dir, mode=0o755, exist_ok=True)
 
-    def read(self, key):
-        keypath = os.path.join(self.path, key)
+    def read(self, key, fallback=None):
+        keypath = os.path.join(self.cache_dir, key)
 
         if os.path.exists(keypath):
-            with open(keypath, 'r') as fob:
+            with open(keypath, "r") as fob:
                 data = fob.read()
             return data
 
-        return None
+        return fallback
 
     def write(self, key, val):
-        keypath = os.path.join(self.path, key)
+        keypath = os.path.join(self.cache_dir, key)
 
-        with open(keypath, 'w') as fob:
+        with open(keypath, "w") as fob:
             fob.write(val)
 
 
 # convenience functions
-CACHE_DIR = os.environ.get('INITHOOKS_CACHE', '/var/lib/inithooks/cache')
 
-
-def read(key):
-    return KeyStore(CACHE_DIR).read(key)
+def read(key, fallback=None):
+    return KeyStore(CACHE_DIR).read(key, fallback)
 
 
 def write(key, value):
@@ -66,7 +65,8 @@ def write(key, value):
 
 if __name__ == "__main__":
     import getopt
-
+    opts = []
+    args = []
     try:
         opts, args = getopt.gnu_getopt(sys.argv[1:], "h", ["help"])
     except getopt.GetoptError as e:
