@@ -102,28 +102,36 @@ class Dialog:
 
         return retcode
 
-    def error(self, text):
+    def error(self, text: str) -> str:
+        """'Error' titled message with single 'ok' button
+        Returns 'Ok'"""
         height = self._calc_height(text)
         return self.wrapper("msgbox", text, height, self.width, title="Error")
 
-    def msgbox(self, title, text):
+    def msgbox(self, title: str, text: str) -> str:
+        """Titled message with single 'ok' button
+        Returns 'Ok'"""
         height = self._calc_height(text)
         logging.debug(f"msgbox(title={title!r}, text=<redacted>)")
         return self.wrapper("msgbox", text, height, self.width, title=title)
 
-    def infobox(self, text):
+    def infobox(self, text: str) -> str:
+        """Untitled message with single 'ok' button
+        Returns 'Ok'"""
         height = self._calc_height(text)
         logging.debug(f"infobox(text={text!r}")
         return self.wrapper("infobox", text, height, self.width)
 
     def inputbox(
             self,
-            title,
-            text,
-            init="",
-            ok_label="OK",
-            cancel_label="Cancel"
-    ):
+            title: str,
+            text: str,
+            init: str = "",
+            ok_label: str = "OK",
+            cancel_label: str = "Cancel"
+    ) -> str:
+        """Titled message with text input and single choice of 2 buttons
+        Returns 'Ok' or "Cancel'"""
         logging.debug(
             f"inputbox(title={title!r}, text=<redacted>,"
             + f" init={init!r}, ok_label={ok_label!r},"
@@ -148,7 +156,15 @@ class Dialog:
             no_cancel=no_cancel,
         )
 
-    def yesno(self, title, text, yes_label="Yes", no_label="No"):
+    def yesno(
+            self,
+            title: str,
+            text: str,
+            yes_label: str = "Yes",
+            no_label: str = "No"
+    ) -> bool:
+        """Titled message with single choice of 2 buttons
+        Returns True ('Yes" button) or False ('No' button)"""
         height = self._calc_height(text)
         retcode = self.wrapper(
             "yesno",
@@ -166,10 +182,15 @@ class Dialog:
         )
         return True if retcode == "ok" else False
 
-    def menu(self, title, text, choices):
-        """choices: array of tuples
-        [ (opt1, opt1_text), (opt2, opt2_text) ]
-        """
+    def menu(
+            self,
+            title: str,
+            text: str,
+            # [(opt1, opt1_info), (opt2, opt2_info)]
+            choices: list[tuple[str, str]]
+    ) -> str:
+        """Titled message with single choice of options & 'ok' button
+        Returns selected option - e.g. 'opt1'"""
         retcode, choice = self.wrapper(
             "menu",
             text,
@@ -184,12 +205,15 @@ class Dialog:
 
     def get_password(
             self,
-            title,
-            text,
-            pass_req=8,
-            min_complexity=3,
-            blacklist=[]
-    ):
+            title: str,
+            text: str,
+            pass_req: int = 8,
+            min_complexity: int = 3,
+            blacklist: list[str] = []
+    ) -> str | None:
+        """Validated titled message with password (redacted input) box &
+        'ok' button - also accepts password limitations
+        Returns password"""
         req_string = (
             f"\n\nPassword Requirements\n - must be at least {pass_req}"
             " characters long\n - must contain characters from at"
@@ -203,7 +227,8 @@ class Dialog:
             )
         height = self._calc_height(text + req_string) + 3
 
-        def ask(title, text):
+        def ask(title: str, text: str) -> str:
+            """Titled input box (input redacted) & 'ok' button"""
             return self.wrapper(
                 "passwordbox",
                 text + req_string,
@@ -266,7 +291,10 @@ class Dialog:
 
             self.error("Password mismatch, please try again.")
 
-    def get_email(self, title, text, init=""):
+    def get_email(self, title: str, text: str, init: str = "") -> str | None:
+        """Vaidated input box (email) with optional prefilled value and 'Ok'
+        button
+        Returns email"""
         logging.debug(
             f"get_email(title={title!r}, text=<redacted>, init={init!r})"
         )
@@ -283,7 +311,9 @@ class Dialog:
 
             return email
 
-    def get_input(self, title, text, init=""):
+    def get_input(self, title: str, text: str, init: str = "") -> str | None:
+        """Input box within optional prefilled value & 'Ok' button
+        Returns input"""
         while 1:
             s = self.inputbox(title, text, init, "Apply", "")[1]
             if not s:
