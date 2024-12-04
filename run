@@ -12,6 +12,30 @@ unset PID INITHOOKS_LOGFILE
 
 REDIRECT_OUTPUT="$(echo "$REDIRECT_OUTPUT" | tr '[:upper:]' '[:lower:]')"
 
+everyboot_ran() {
+    # read lastboot time
+    lastboot_time="$(date '+%s' -d "$(cut -f1 -d. /proc/uptime) seconds ago")"
+    if [[ -f /run/inithooks/everyboot_ran ]]; then
+        # time stamp written
+        prev_lastboot_time="$(</run/inithooks/everyboot_ran)"
+        if [[ "$lastboot_time" -eq "$prev_lastboot_time" ]]; then
+            # time stamp of last boot is the same as our last boot, everyboot
+            # scripts already ran
+            return 0
+        else
+            # time stamp of last boot is different from our last boot, everyboot
+            # scripts not already ran
+            echo "$lastboot_time" > /run/inithooks/everyboot_ran
+            return 1
+        fi
+    else
+        # no time stamp written, haven't run everyboot scripts since last boot
+        mkdir -p /run/inithooks
+        echo "$lastboot_time" > /run/inithooks/everyboot_ran
+        return 1
+    fi
+}
+
 log() {
     # log to journal as well as $INITHOOKS_LOGFILE
     LEVEL=$1 # err|warn|info|debug
@@ -75,7 +99,10 @@ export INITHOOKS_CONF=$INITHOOKS_CONF
 if [[ "${RUN_FIRSTBOOT,,}" == "true" ]]; then
     exec_scripts "$INITHOOKS_PATH/firstboot.d"
 fi
-exec_scripts "$INITHOOKS_PATH/everyboot.d"
+
+if ! everyboot_ran; then
+    exec_scripts "$INITHOOKS_PATH/everyboot.d"
+fi
 
 if [[ -n "$PID" ]];  then
     kill -9 $PID || true
