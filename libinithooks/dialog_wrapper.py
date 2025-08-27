@@ -1,4 +1,5 @@
 # Copyright (c) 2010 Alon Swartz <alon@turnkeylinux.org>
+# Copyright (c) 2020-2025 TurnKey GNU/Linux <admin@turnkeylinux.org>
 
 import re
 import sys
@@ -25,7 +26,7 @@ class Error(Exception):
     pass
 
 
-def password_complexity(password):
+def password_complexity(password: str) -> int:
     """return password complexity score from 0 (invalid) to 4 (strong)"""
 
     lowercase = re.search("[a-z]", password) is not None
@@ -37,7 +38,7 @@ def password_complexity(password):
 
 
 class Dialog:
-    def __init__(self, title, width=60, height=20):
+    def __init__(self, title: str, width: int = 60, height: int = 20) -> None:
         self.width = width
         self.height = height
 
@@ -46,31 +47,35 @@ class Dialog:
         self.console.add_persistent_args(["--backtitle", title])
         self.console.add_persistent_args(["--no-mouse"])
 
-    def _handle_exitcode(self, retcode):
+    def _handle_exitcode(self, retcode: int) -> bool:
         logging.debug(f"_handle_exitcode(retcode={retcode!r})")
         if retcode == self.console.ESC:  # ESC, ALT+?
             text = "Do you really want to quit?"
             if self.console.yesno(text) == self.console.OK:
                 sys.exit(0)
             return False
-
         logging.debug(
             "_handle_exitcode(): [no conditions met, returning True]"
         )
         return True
 
-    def _calc_height(self, text):
+    def _calc_height(self, text: str) -> int:
         height = 6
         for line in text.splitlines():
             height += (len(line) // self.width) + 1
 
         return height
 
-    def wrapper(self, dialog_name, text, *args, **kws):
-        retcode = ""
+    def wrapper(
+            self,
+            dialog_name: str,
+            text: str, *args,
+            **kws
+) -> tuple[int, str]:
+        retcode = 0
         logging.debug(
             f"wrapper(dialog_name={dialog_name!r}, text=<redacted>,"
-            + f" *{args!r}, **{kws!r})"
+            f" *{args!r}, **{kws!r})"
         )
         try:
             method = getattr(self.console, dialog_name)
@@ -87,7 +92,6 @@ class Dialog:
                 logging.debug(
                     f"wrapper(dialog_name={dialog_name!r}, ...) -> {retcode!r}"
                 )
-
                 if self._handle_exitcode(retcode):
                     break
 
@@ -100,22 +104,22 @@ class Dialog:
                 )
                 self.msgbox("Caught exception", sio.getvalue())
 
-        return retcode
+        return retcode, ""
 
-    def error(self, text: str) -> str:
+    def error(self, text: str) -> tuple[int, str]:
         """'Error' titled message with single 'ok' button
         Returns 'Ok'"""
         height = self._calc_height(text)
         return self.wrapper("msgbox", text, height, self.width, title="Error")
 
-    def msgbox(self, title: str, text: str) -> str:
+    def msgbox(self, title: str, text: str) -> tuple[int, str]:
         """Titled message with single 'ok' button
         Returns 'Ok'"""
         height = self._calc_height(text)
         logging.debug(f"msgbox(title={title!r}, text=<redacted>)")
         return self.wrapper("msgbox", text, height, self.width, title=title)
 
-    def infobox(self, text: str) -> str:
+    def infobox(self, text: str) -> tuple[int, str]:
         """Untitled message with single 'ok' button
         Returns 'Ok'"""
         height = self._calc_height(text)
@@ -129,7 +133,7 @@ class Dialog:
             init: str = "",
             ok_label: str = "OK",
             cancel_label: str = "Cancel"
-    ) -> str:
+    ) -> tuple[int, str]:
         """Titled message with text input and single choice of 2 buttons
         Returns 'Ok' or "Cancel'"""
         logging.debug(
@@ -191,7 +195,7 @@ class Dialog:
     ) -> str:
         """Titled message with single choice of options & 'ok' button
         Returns selected option - e.g. 'opt1'"""
-        retcode, choice = self.wrapper(
+        _, choice = self.wrapper(  # return_code, choice
             "menu",
             text,
             self.height,
@@ -209,7 +213,7 @@ class Dialog:
             text: str,
             pass_req: int = 8,
             min_complexity: int = 3,
-            blacklist: list[str] = []
+            blacklist: list[str] | None = None
     ) -> str | None:
         """Validated titled message with password (redacted input) box &
         'ok' button - also accepts password limitations
@@ -225,6 +229,8 @@ class Dialog:
                 f"{req_string}. Also must NOT contain these characters:"
                 f' {" ".join(blacklist)}'
             )
+        else:
+            blacklist = []
         height = self._calc_height(text + req_string) + 3
 
         def ask(title: str, text: str) -> str:
@@ -252,11 +258,12 @@ class Dialog:
                         f"Password must be at least {pass_req} characters."
                     )
                     continue
-            else:
-                if not re.match(pass_req, password):
-                    self.error("Password does not match complexity"
-                               " requirements.")
-                    continue
+            elif not re.match(pass_req, password):
+                # TODO "Type analysis indicates code is unreachable"?!
+                self.error(
+                    "Password does not match complexity requirements."
+                )
+                continue
 
             if password_complexity(password) < min_complexity:
                 if min_complexity <= 3:
@@ -319,5 +326,4 @@ class Dialog:
             if not s:
                 self.error(f"{title} is required.")
                 continue
-
             return s
