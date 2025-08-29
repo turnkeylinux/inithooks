@@ -123,10 +123,12 @@ if [[ "$RUN_FIRSTBOOT" == "true" ]]; then
 fi
 
 if ! everyboot_ran; then
+    log info "Running everyboot scripts"
     exec_scripts "$INITHOOKS_PATH/everyboot.d"
 fi
 
 if [[ -n "$PID" ]];  then
+    log info "Killing inithooks pid $PID"
     kill -9 $PID || true
 fi
 

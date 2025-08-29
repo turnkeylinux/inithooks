@@ -12,19 +12,20 @@ Options:
 import sys
 import getopt
 import subprocess
-from subprocess import PIPE
 import signal
+from typing import NoReturn
 
-
-def fatal(s):
-    print("Error:", s, file=sys.stderr)
+def fatal(
+        msg: str | subprocess.TimeoutExpired | subprocess.CalledProcessError
+) -> NoReturn:
+    print(f"Error: {msg}", file=sys.stderr)
     sys.exit(1)
 
 
-def usage(s=None):
-    if s:
-        print("Error:", s, file=sys.stderr)
-    print("Syntax: %s <username> [options]" % sys.argv[0], file=sys.stderr)
+def usage(msg: str | getopt.GetoptError = "") -> NoReturn:
+    if msg:
+        print(f"Error: {msg}", file=sys.stderr)
+    print(f"Syntax: {sys.argv[0]} <username> [options]", file=sys.stderr)
     print(__doc__, file=sys.stderr)
     sys.exit(1)
 
@@ -32,7 +33,7 @@ def usage(s=None):
 def main():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     try:
-        opts, args = getopt.gnu_getopt(sys.argv[1:], "hp:", ['help', 'pass='])
+        opts, args = getopt.gnu_getopt(sys.argv[1:], "hp:", ["help", "pass="])
     except getopt.GetoptError as e:
         usage(e)
 
@@ -42,27 +43,27 @@ def main():
     username = args[0]
     password = ""
     for opt, val in opts:
-        if opt in ('-h', '--help'):
+        if opt in ("-h", "--help"):
             usage()
-        elif opt in ('-p', '--pass'):
+        elif opt in ("-p", "--pass"):
             password = val
 
     if not password:
         from libinithooks.dialog_wrapper import Dialog
-        d = Dialog('TurnKey GNU/Linux - First boot configuration')
+        d = Dialog("TurnKey GNU/Linux - First boot configuration")
         password = d.get_password(
-            "%s Password" % username.capitalize(),
-            "Please enter new password for the %s account." % username)
+            f"{username.capitalize()} Password",
+            f"Please enter new password for the {username} account.")
 
+    assert password
     command = ["chpasswd"]
-    input = ":".join([username, password])
+    std_input = ":".join([username, password])
 
-    p = subprocess.Popen(command, stdin=PIPE, shell=False)
-    p.stdin.write(input.encode(sys.stdin.encoding))
-    p.stdin.close()
-    err = p.wait()
-    if err:
-        fatal(err)
+    try:
+        p = subprocess.Popen(command, stdin=subprocess.PIPE, shell=False)
+        p.communicate(std_input.encode(sys.stdin.encoding))
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as e:
+        fatal(e)
 
 
 if __name__ == "__main__":

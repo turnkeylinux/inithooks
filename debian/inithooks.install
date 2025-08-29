@@ -1,15 +1,15 @@
-default/*           /etc/default
-bin/*               /usr/lib/inithooks/bin
-firstboot.d/*       /usr/lib/inithooks/firstboot.d
-everyboot.d/*       /usr/lib/inithooks/everyboot.d
-run                 /usr/lib/inithooks
-rsyslog.d/*         /etc/rsyslog.d
+default/*                               /etc/default
+bin/*                                   /usr/lib/inithooks/bin
+firstboot.d/*                           /usr/lib/inithooks/firstboot.d
+everyboot.d/*                           /usr/lib/inithooks/everyboot.d
+run                                     /usr/lib/inithooks
+rsyslog.d/*                             /etc/rsyslog.d
 
-turnkey-init-fence/turnkey-init-fence           /etc/init.d
-turnkey-init-fence/htdocs                       /var/lib/inithooks/turnkey-init-fence
+turnkey-init-fence/turnkey-init-fence   /etc/init.d
+turnkey-init-fence/htdocs               /var/lib/inithooks/turnkey-init-fence
 
-turnkey-init                        /usr/sbin
-turnkey-sudoadmin                   /usr/sbin
-turnkey-install-security-updates    /usr/sbin
+turnkey-init                            /usr/sbin
+turnkey-sudoadmin                       /usr/sbin
+turnkey-install-security-updates        /usr/sbin
 
-systemd                             /etc
+systemd                                 /etc
