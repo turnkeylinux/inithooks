@@ -138,17 +138,17 @@ def main():
             d.error(CONNECTIVITY_ERROR)
             break
 
-        proc = subprocess.run(
+        tklbam_init = subprocess.run(
                 ["tklbam-init", apikey],
-                stdout=subprocess.PIPE,
-                encoding=sys.stdin.encoding,
+                capture_output=True,
+                text=True,
         )
-        if proc.returncode == 0:
+        if tklbam_init.returncode == 0:
             d.msgbox("Success! Linked TKLBAM to Hub", SUCCESS_TKLBAM)
             initialized_tklbam = True
             break
         else:
-            d.msgbox("Failure", proc.stderr)
+            d.msgbox("Failure", tklbam_init.stderr)
             continue
 
     if initialized_tklbam:
@@ -166,21 +166,21 @@ def main():
 
             d.infobox("Linking HubDNS to the TurnKey Hub...")
 
-            proc1 = subprocess.run(
+            hubdns_init = subprocess.run(
                     ["hubdns-init", apikey, fqdn],
-                    stdout=subprocess.PIPE,
-                    encoding=sys.stdin.encoding,
+                    capture_output=True,
+                    text=True,
             )
-            proc2 = subprocess.run(
+            hubdns_update = subprocess.run(
                     ["hubdns-update"],
-                    stdout=subprocess.PIPE,
-                    encoding=sys.stdin.encoding,
+                    capture_output=True,
+                    text=True,
             )
-            if proc1 != 0:
-                d.msgbox("Failure", proc1.stderr)
+            if hubdns_init != 0:
+                d.msgbox("Failure", hubdns_init.stderr)
                 continue
-            elif proc2 != 0:
-                d.msgbox("Failure", proc2.stderr)
+            elif hubdns_update != 0:
+                d.msgbox("Failure", hubdns_update.stderr)
                 continue
             else:
                 d.msgbox(f"Success! Assigned {fqdn}", SUCCESS_HUBDNS)
