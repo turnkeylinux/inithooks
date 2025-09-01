@@ -130,13 +130,11 @@ def main():
 
         d.infobox("Linking TKLBAM to the TurnKey Hub...")
 
-        try:
-            subprocess.run(
-                    ["host", "-W", "2", "hub.turnkeylinux.org"],
-                    encoding=sys.stdin.encoding,
-                    check=True,
-            )
-        except subprocess.CalledProcessError:
+        hub_connect = subprocess.run(
+                ["host", "-W", "2", "hub.turnkeylinux.org"],
+                capture_output=True,
+        )
+        if hub_connect.returncode != 0:
             d.error(CONNECTIVITY_ERROR)
             break
 
