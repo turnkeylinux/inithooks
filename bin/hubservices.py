@@ -176,10 +176,10 @@ def main():
                     capture_output=True,
                     text=True,
             )
-            if hubdns_init != 0:
+            if hubdns_init.returncode != 0:
                 d.msgbox("Failure", hubdns_init.stderr)
                 continue
-            elif hubdns_update != 0:
+            elif hubdns_update.returncode != 0:
                 d.msgbox("Failure", hubdns_update.stderr)
                 continue
             else:
