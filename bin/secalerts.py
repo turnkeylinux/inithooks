@@ -73,12 +73,7 @@ def main():
         d = Dialog("TurnKey Linux - First boot configuration")
         email = email_placeholder
         while 1:
-            retcode, email = d.inputbox(
-                TITLE,
-                TEXT,
-                email,
-                "Enable",
-                "Skip")
+            retcode, email = d.inputbox(TITLE, TEXT, email, "Enable", "Skip")
 
             logging.debug(
                 f"secalerts.main():\n\tretcode:`{retcode}'\n\temail:`{email}'"

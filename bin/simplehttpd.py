@@ -55,7 +55,7 @@ def usage(msg: str | getopt.GetoptError = "") -> NoReturn:
         f"Syntax: {sys.argv[0]} [ -options ] path/to/webroot"
         " [address:]http-port [ [ssl-address:]ssl-port path/to/cert.pem"
         " [ path/to/cert.key ] ]",
-        file=sys.stderr
+        file=sys.stderr,
     )
     assert __doc__ is not None
     print(__doc__.strip(), file=sys.stderr)
@@ -102,13 +102,11 @@ class SecureHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 return "/dev/null/doesntexist"
 
         return http.server.SimpleHTTPRequestHandler.translate_path(
-                self,
-                str(path)
+            self, str(path)
         )
 
 
 class SimpleWebServer:
-
     class TCPServer(socketserver.ForkingTCPServer):
         allow_reuse_address = True
 
@@ -141,10 +139,10 @@ class SimpleWebServer:
 
     class HTTPSConf(Address):
         def __init__(
-                self,
-                address: str,
-                certfile: str,
-                keyfile: str | None = None,
+            self,
+            address: str,
+            certfile: str,
+            keyfile: str | None = None,
         ) -> None:
             SimpleWebServer.Address.__init__(self, address)
             if not keyfile:
@@ -183,21 +181,22 @@ class SimpleWebServer:
             return str(self.temp_file.name)
 
     def __init__(
-            self,
-            webroot: str,
-            http_address: Address | None = None,
-            https_conf: HTTPSConf | None = None,
-            runas: str | None = None,
+        self,
+        webroot: str,
+        http_address: Address | None = None,
+        https_conf: HTTPSConf | None = None,
+        runas: str | None = None,
     ) -> None:
-
-        self.httpd = self.TCPServer(
-                (http_address.host, http_address.port),
-                self.HTTPRequestHandler
-        ) if http_address else None
+        self.httpd = (
+            self.TCPServer(
+                (http_address.host, http_address.port), self.HTTPRequestHandler
+            )
+            if http_address
+            else None
+        )
 
         httpsd = None
         if https_conf:
-
             certfile = https_conf.certfile
             keyfile = https_conf.keyfile
 
@@ -208,17 +207,16 @@ class SimpleWebServer:
                 keyfile = _keyfile.name()
 
             httpsd = self.TCPServer(
-                    (https_conf.host, https_conf.port),
-                    self.HTTPRequestHandler
+                (https_conf.host, https_conf.port), self.HTTPRequestHandler
             )
 
             httpsd.socket = ssl.wrap_socket(
-                    httpsd.socket,
-                    certfile=certfile,
-                    keyfile=keyfile,
-                    server_side=True,
-                    ssl_version=ssl.PROTOCOL_TLSv1_2,
-                    ciphers=https_conf.CIPHERS
+                httpsd.socket,
+                certfile=certfile,
+                keyfile=keyfile,
+                server_side=True,
+                ssl_version=ssl.PROTOCOL_TLSv1_2,
+                ciphers=https_conf.CIPHERS,
             )
 
         if runas:
@@ -246,7 +244,6 @@ class SimpleWebServer:
         os.setuid(uid)
 
     def serve_forever(self):
-
         os.chdir(self.webroot)
         httpd = self.httpd
         httpsd = self.httpsd
@@ -273,9 +270,9 @@ def main():
     args = sys.argv[1:]
     try:
         opts, args = getopt.gnu_getopt(
-                sys.argv[1:],
-                "h",
-                ["daemonize=", "logfile=", "runas="],
+            sys.argv[1:],
+            "h",
+            ["daemonize=", "logfile=", "runas="],
         )
     except getopt.GetoptError as e:
         usage(e)

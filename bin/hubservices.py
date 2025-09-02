@@ -77,9 +77,9 @@ def main():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     try:
         opts, _ = getopt.gnu_getopt(
-                sys.argv[1:],
-                "h",
-                ["help", "apikey=", "fqdn="],
+            sys.argv[1:],
+            "h",
+            ["help", "apikey=", "fqdn="],
         )
     except getopt.GetoptError as e:
         usage(e)
@@ -96,21 +96,21 @@ def main():
 
     if apikey:
         subprocess.run(
-                ["tklbam-init", apikey],
-                encoding=sys.stdin.encoding,
-                check=True,
+            ["tklbam-init", apikey],
+            encoding=sys.stdin.encoding,
+            check=True,
         )
 
         if fqdn:
             subprocess.run(
-                    ["hubdns-init", apikey, fqdn],
-                    encoding=sys.stdin.encoding,
-                    check=True,
+                ["hubdns-init", apikey, fqdn],
+                encoding=sys.stdin.encoding,
+                check=True,
             )
             subprocess.run(
-                    ["hubdns-update"],
-                    encoding=sys.stdin.encoding,
-                    check=True,
+                ["hubdns-update"],
+                encoding=sys.stdin.encoding,
+                check=True,
             )
         return
 
@@ -118,11 +118,11 @@ def main():
     d = Dialog("TurnKey GNU/Linux - First boot configuration")
     while 1:
         retcode, apikey = d.inputbox(
-                "Initialize Hub services",
-                TEXT_SERVICES,
-                apikey,
-                "Apply",
-                "Skip",
+            "Initialize Hub services",
+            TEXT_SERVICES,
+            apikey,
+            "Apply",
+            "Skip",
         )
 
         if not apikey or retcode == 1:
@@ -131,17 +131,17 @@ def main():
         d.infobox("Linking TKLBAM to the TurnKey Hub...")
 
         hub_connect = subprocess.run(
-                ["host", "-W", "2", "hub.turnkeylinux.org"],
-                capture_output=True,
+            ["host", "-W", "2", "hub.turnkeylinux.org"],
+            capture_output=True,
         )
         if hub_connect.returncode != 0:
             d.error(CONNECTIVITY_ERROR)
             break
 
         tklbam_init = subprocess.run(
-                ["tklbam-init", apikey],
-                capture_output=True,
-                text=True,
+            ["tklbam-init", apikey],
+            capture_output=True,
+            text=True,
         )
         if tklbam_init.returncode == 0:
             d.msgbox("Success! Linked TKLBAM to Hub", SUCCESS_TKLBAM)
@@ -154,11 +154,11 @@ def main():
     if initialized_tklbam:
         while 1:
             retcode, fqdn = d.inputbox(
-                    "Assign TurnKey DNS hostname",
-                    TEXT_HUBDNS,
-                    fqdn,
-                    "Apply",
-                    "Skip",
+                "Assign TurnKey DNS hostname",
+                TEXT_HUBDNS,
+                fqdn,
+                "Apply",
+                "Skip",
             )
 
             if not fqdn or retcode == 1:
@@ -167,14 +167,14 @@ def main():
             d.infobox("Linking HubDNS to the TurnKey Hub...")
 
             hubdns_init = subprocess.run(
-                    ["hubdns-init", apikey, fqdn],
-                    capture_output=True,
-                    text=True,
+                ["hubdns-init", apikey, fqdn],
+                capture_output=True,
+                text=True,
             )
             hubdns_update = subprocess.run(
-                    ["hubdns-update"],
-                    capture_output=True,
-                    text=True,
+                ["hubdns-update"],
+                capture_output=True,
+                text=True,
             )
             if hubdns_init.returncode != 0:
                 d.msgbox("Failure", hubdns_init.stderr)

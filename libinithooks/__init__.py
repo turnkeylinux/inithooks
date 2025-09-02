@@ -5,9 +5,9 @@ from os.path import abspath
 
 
 def is_interactive() -> bool:
-    return len(
-        subprocess.run(["stty", "size"], capture_output=True).stdout
-    ) > 0
+    return (
+        len(subprocess.run(["stty", "size"], capture_output=True).stdout) > 0
+    )
 
 
 # logging is done this way to ensure it's done the same as with inithooks run

@@ -57,6 +57,7 @@ class KeyStore:
 
 # convenience functions
 
+
 def read(key, fallback: str = ""):
     return KeyStore(CACHE_DIR).read(key, fallback)
 

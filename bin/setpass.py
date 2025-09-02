@@ -15,8 +15,9 @@ import subprocess
 import signal
 from typing import NoReturn
 
+
 def fatal(
-        msg: str | subprocess.TimeoutExpired | subprocess.CalledProcessError
+    msg: str | subprocess.TimeoutExpired | subprocess.CalledProcessError,
 ) -> NoReturn:
     print(f"Error: {msg}", file=sys.stderr)
     sys.exit(1)
@@ -50,10 +51,12 @@ def main():
 
     if not password:
         from libinithooks.dialog_wrapper import Dialog
+
         d = Dialog("TurnKey GNU/Linux - First boot configuration")
         password = d.get_password(
             f"{username.capitalize()} Password",
-            f"Please enter new password for the {username} account.")
+            f"Please enter new password for the {username} account.",
+        )
 
     assert password
     command = ["chpasswd"]
