@@ -4,6 +4,7 @@
 import sys
 import getopt
 import signal
+from typing import NoReturn
 
 from libinithooks.dialog_wrapper import Dialog
 
@@ -13,10 +14,10 @@ For maximum protection, we recommend rebooting now.
 """
 
 
-def usage(s=None):
-    if s:
-        print("Error:", s, file=sys.stderr)
-    print("Syntax: %s [options]" % sys.argv[0], file=sys.stderr)
+def usage(msg: str | getopt.GetoptError = "") -> NoReturn:
+    if msg:
+        print(f"Error: {msg}", file=sys.stderr)
+    print(f"Syntax: {sys.argv[0]} [options]", file=sys.stderr)
     print(__doc__, file=sys.stderr)
     sys.exit(1)
 
@@ -24,12 +25,12 @@ def usage(s=None):
 def main():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     try:
-        opts, args = getopt.gnu_getopt(sys.argv[1:], "h", ['help'])
+        opts, _ = getopt.gnu_getopt(sys.argv[1:], "h", ["help"])
     except getopt.GetoptError as e:
         usage(e)
 
-    for opt, val in opts:
-        if opt in ('-h', '--help'):
+    for opt, _ in opts:
+        if opt in ("-h", "--help"):
             usage()
 
     d = Dialog("TurnKey GNU/Linux - Reboot after kernel update")

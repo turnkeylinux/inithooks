@@ -16,9 +16,7 @@ if "DIALOG_DEBUG" in environ.keys():
     LOG_LEVEL = logging.DEBUG
 
 logging.basicConfig(
-        filename="/var/log/dialog.log",
-        encoding="utf-8",
-        level=LOG_LEVEL
+    filename="/var/log/dialog.log", encoding="utf-8", level=LOG_LEVEL
 )
 
 
@@ -67,11 +65,8 @@ class Dialog:
         return height
 
     def wrapper(
-            self,
-            dialog_name: str,
-            text: str, *args,
-            **kws
-) -> tuple[int, str]:
+        self, dialog_name: str, text: str, *args, **kws
+    ) -> tuple[int, str]:
         retcode = 0
         logging.debug(
             f"wrapper(dialog_name={dialog_name!r}, text=<redacted>,"
@@ -100,7 +95,7 @@ class Dialog:
                 traceback.print_exc(file=sio)
                 logging.error(
                     f"wrapper(dialog_name={dialog_name!r}) raised exception",
-                    exc_info=e
+                    exc_info=e,
                 )
                 self.msgbox("Caught exception", sio.getvalue())
 
@@ -127,12 +122,12 @@ class Dialog:
         return self.wrapper("infobox", text, height, self.width)
 
     def inputbox(
-            self,
-            title: str,
-            text: str,
-            init: str = "",
-            ok_label: str = "OK",
-            cancel_label: str = "Cancel"
+        self,
+        title: str,
+        text: str,
+        init: str = "",
+        ok_label: str = "OK",
+        cancel_label: str = "Cancel",
     ) -> tuple[int, str]:
         """Titled message with text input and single choice of 2 buttons
         Returns 'Ok' or "Cancel'"""
@@ -161,11 +156,11 @@ class Dialog:
         )
 
     def yesno(
-            self,
-            title: str,
-            text: str,
-            yes_label: str = "Yes",
-            no_label: str = "No"
+        self,
+        title: str,
+        text: str,
+        yes_label: str = "Yes",
+        no_label: str = "No",
     ) -> bool:
         """Titled message with single choice of 2 buttons
         Returns True ('Yes" button) or False ('No' button)"""
@@ -187,11 +182,11 @@ class Dialog:
         return True if retcode == "ok" else False
 
     def menu(
-            self,
-            title: str,
-            text: str,
-            # [(opt1, opt1_info), (opt2, opt2_info)]
-            choices: list[tuple[str, str]]
+        self,
+        title: str,
+        text: str,
+        # [(opt1, opt1_info), (opt2, opt2_info)]
+        choices: list[tuple[str, str]],
     ) -> str:
         """Titled message with single choice of options & 'ok' button
         Returns selected option - e.g. 'opt1'"""
@@ -208,12 +203,12 @@ class Dialog:
         return choice
 
     def get_password(
-            self,
-            title: str,
-            text: str,
-            pass_req: int = 8,
-            min_complexity: int = 3,
-            blacklist: list[str] | None = None
+        self,
+        title: str,
+        text: str,
+        pass_req: int = 8,
+        min_complexity: int = 3,
+        blacklist: list[str] | None = None,
     ) -> str | None:
         """Validated titled message with password (redacted input) box &
         'ok' button - also accepts password limitations
@@ -227,7 +222,7 @@ class Dialog:
         if blacklist:
             req_string = (
                 f"{req_string}. Also must NOT contain these characters:"
-                f' {" ".join(blacklist)}'
+                f" {' '.join(blacklist)}"
             )
         else:
             blacklist = []
@@ -260,9 +255,7 @@ class Dialog:
                     continue
             elif not re.match(pass_req, password):
                 # TODO "Type analysis indicates code is unreachable"?!
-                self.error(
-                    "Password does not match complexity requirements."
-                )
+                self.error("Password does not match complexity requirements.")
                 continue
 
             if password_complexity(password) < min_complexity:

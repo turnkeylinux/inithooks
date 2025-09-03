@@ -14,29 +14,31 @@ Environment:
 
 import os
 import sys
+import getopt
+from typing import NoReturn
 
 CACHE_DIR = os.environ.get("INITHOOKS_CACHE", "/var/lib/inithooks/cache")
 
 
-def fatal(e):
-    print("Error:", e, file=sys.stderr)
+def fatal(e) -> NoReturn:
+    print(f"Error: {e}", file=sys.stderr)
     sys.exit(1)
 
 
-def usage(s=None):
-    if s:
-        print("Error:", s, file=sys.stderr)
-    print("Syntax: %s <key> [value]" % sys.argv[0], file=sys.stderr)
+def usage(msg: str | getopt.GetoptError = "") -> NoReturn:
+    if msg:
+        print(f"Error: {msg}", file=sys.stderr)
+    print(f"Syntax: {sys.argv[0]} <key> [value]", file=sys.stderr)
     print(__doc__, file=sys.stderr)
     sys.exit(1)
 
 
 class KeyStore:
-    def __init__(self, cache_dir=CACHE_DIR):
+    def __init__(self, cache_dir: str = CACHE_DIR) -> None:
         self.cache_dir = cache_dir
         os.makedirs(self.cache_dir, mode=0o755, exist_ok=True)
 
-    def read(self, key, fallback=None):
+    def read(self, key, fallback: str = "") -> str:
         keypath = os.path.join(self.cache_dir, key)
 
         if os.path.exists(keypath):
@@ -46,7 +48,7 @@ class KeyStore:
 
         return fallback
 
-    def write(self, key, val):
+    def write(self, key: str, val: str) -> None:
         keypath = os.path.join(self.cache_dir, key)
 
         with open(keypath, "w") as fob:
@@ -55,16 +57,16 @@ class KeyStore:
 
 # convenience functions
 
-def read(key, fallback=None):
+
+def read(key, fallback: str = ""):
     return KeyStore(CACHE_DIR).read(key, fallback)
 
 
-def write(key, value):
+def write(key: str, value: str) -> None:
     return KeyStore(CACHE_DIR).write(key, value)
 
 
 if __name__ == "__main__":
-    import getopt
     opts = []
     args = []
     try:

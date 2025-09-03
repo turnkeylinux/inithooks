@@ -1,5 +1,6 @@
 INITHOOKS_CONF=/etc/inithooks.conf
 INITHOOKS_PATH=/usr/lib/inithooks
+INITHOOKS_LOGFILE=/var/log/inithooks.log
 
 RUN_FIRSTBOOT=true
 REDIRECT_OUTPUT=false
