@@ -99,7 +99,7 @@ class Dialog:
                 )
                 self.msgbox("Caught exception", sio.getvalue())
 
-        return retcode, ""
+        return retcode
 
     def error(self, text: str) -> tuple[int, str]:
         """'Error' titled message with single 'ok' button
