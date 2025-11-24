@@ -83,8 +83,7 @@ exec_scripts() {
     local script_executable=
     local script=
     [[ -d "$script_dir" ]] || return 0
-    readarray -d '' all_scripts < \
-        <(find "$script_dir" -type f -or -type l -print0 | sort)
+    readarray -d '' all_scripts < <(find "$script_dir" \( -type f -or -type l \) -print0 | sort -z)
     for script_executable in "${all_scripts[@]}"; do
         # this is already sourced above is it needed again here?
         if [[ -e $INITHOOKS_CONF ]]; then
