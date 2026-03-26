@@ -1,0 +1,29 @@
+# TODO (feature):
+# - avoid use of Google's CDN for jquery - advantages are two-fold:
+#   - increases user privacy
+#   - increases performance
+#   - improves offline support
+
+inithooks binary: privacy-breach-uses-embedded-file [usr/lib/inithooks/turnkey-init-fence/htdocs/index.html]
+
+# TODO (wishlist):
+# - set ownership of inithooks cache dir at buildtime and/or runtime as
+#   appropriate; rather than at install time.
+# - OTOH it works "as is" and is a "best practice" issue, rather than a
+#   functional problem - thus low priority
+
+inithooks binary: recursive-privilege-change "chown -R" [postinst:9]
+
+# TODO (wishlist):
+# - man files...
+
+inithooks binary: no-manual-page [usr/sbin/turnkey-init]
+inithooks binary: no-manual-page [usr/sbin/turnkey-install-security-updates]
+inithooks binary: no-manual-page [usr/sbin/turnkey-sudoadmin]
+
+# these files are intentionally not executable as it is not always desireable
+# to execute them - they will be updated if/when required.
+
+inithooks binary: script-not-executable [usr/lib/inithooks/firstboot.d/30turnkey-init-fence]
+inithooks binary: script-not-executable [usr/lib/inithooks/firstboot.d/97turnkey-init-fence-disable]
+inithooks binary: script-not-executable [usr/lib/inithooks/firstboot.d/99reboot]

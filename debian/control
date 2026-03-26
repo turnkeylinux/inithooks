@@ -21,3 +21,8 @@ Depends:
 Recommends:
  confconsole (>= 2.1.0~)
 Description: Executes firstboot and everyboot scripts
+ Inithooks provides facility to run scripts at boot time. It's
+ primary use is for firstboot system configuration/setup. Scripts in
+ firstboot.d (or everboot.d) are run in alphanumeric order. TurnKey
+ default firstboot script helpers (generally interactive python scripts)
+ are contained in a separate bin/ directory.
