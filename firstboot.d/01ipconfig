@@ -1,30 +1,51 @@
 #!/bin/bash -e
-# set ipconfig
 
-. /etc/default/inithooks
+# firstboot network interfaces file generation - runs non-interactively.
+# - config can be customized via inithooks conf file (i.e. preseed)
 
-fatal() { echo "fatal $@" >&2; exit 1; }
+# shellcheck source=default/inithooks
+source /etc/default/inithooks
 
-[[ -e $INITHOOKS_CONF ]] && . $INITHOOKS_CONF
-[[ -z "$IP_CONFIG" ]] && exit 0
-[[ "$IP_CONFIG" != "manual" ]] \
-    && [[ "$IP_CONFIG" != "static" ]] \
-    && [[ "$IP_CONFIG" != "dhcp" ]] \
-    && fatal "IP_CONFIG set incorrectly"
-[[ ! -e /etc/network/interfaces ]] && fatal "intefaces file not found"
+fatal() { echo "fatal $*" >&2; exit 1; }
 
-APP=$(turnkey-version -n)
+if [[ -e $INITHOOKS_CONF ]]; then
+    source $INITHOOKS_CONF
+fi
 
-IP_IFACE="eth0"
-[[ "$APP" == "lxc" ]] && IP_IFACE="br0"
+if [[ -z "$IP_CONFIG" ]]; then
+    # exit cleanly if env var not set
+    exit 0
+fi
 
-# if IP_CONFIG is not changed skip this script and avoid a interface
-# reconfiguration
-grep "iface $IP_IFACE inet $IP_CONFIG" /etc/network/interfaces >/dev/null \
-    && exit 0
+case "$IP_CONFIG" in
+    manual|static|dhcp)
+        : # known/valid value, do nothing
+        ;;
+    *)
+        fatal "Invalid: IP_CONFIG='$IP_CONFIG' - valid values: manual|static|dhcp"
+        ;;
+esac
 
-# since debian 8 (systemd) ifdown no longer takes the interface down if we
-# change between manual, static or dhcp so using 'ip' instead
+if ! [[ -e /etc/network/interfaces ]]; then
+    fatal "/etc/network/interfaces file not found"
+fi
+
+
+if [[ "$(turnkey-version -n)" == "lxc" ]]; then
+    # LXC app not currently being built, but leaving for now...
+    IP_IFACE="br0"
+else
+    IP_IFACE="eth0"
+fi
+
+# if IP_CONFIG is not changed avoid a interface redundant reconfiguration
+if grep --quiet --no-messages "iface $IP_IFACE inet $IP_CONFIG" \
+        /etc/network/interfaces; then
+    exit 0
+fi
+
+# under systemd, ifdown no longer takes the interface down when changing
+# between manual, static or dhcp so use 'ip' instead
 ip link set $IP_IFACE down
 
 cat > /etc/network/interfaces <<EOF
@@ -46,7 +67,8 @@ if [[ "$IP_CONFIG" == "static" ]]; then
     gateway $IP_GW
     dns-nameservers $IP_DNS1 $IP_DNS2
 EOF
+fi
 
-ifup --exclude=lo -a
+ifup --all --exclude=lo
 
 exit $?
