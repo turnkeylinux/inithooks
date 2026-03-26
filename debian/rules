@@ -9,3 +9,8 @@ export PYTHONDONTWRITEBYTECODE=1
 
 %:
 	dh $@ --with=python3 --buildsystem=pybuild
+
+override_dh_installsystemd:
+	dh_installsystemd --name=inithooks
+	dh_installsystemd --name=inithooks-restart-getty
+	dh_installsystemd --name=turnkey-init-fence
