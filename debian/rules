@@ -12,5 +12,5 @@ export PYTHONDONTWRITEBYTECODE=1
 
 override_dh_installsystemd:
 	dh_installsystemd --name=inithooks
-	dh_installsystemd --name=inithooks-restart-getty
+	dh_installsystemd --name=inithooks-restart-getty1
 	dh_installsystemd --name=turnkey-init-fence
