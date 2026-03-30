@@ -65,7 +65,13 @@ for i in {10..0}; do
             if ! systemctl start "$getty1_service"; then
                 fatal "Failed to start $getty1_service"
             else
-                echo "$getty1_service started..."
+                # because getty@.service is 'Type=idle' systemctl start may
+                # exit zero even if it fails, so double check to be sure
+                if ! systemctl is-active -q "$getty1_service"; then
+                    fatal "$getty1_service failed"
+                else
+                    echo "$getty1_service started..."
+                fi
             fi
         fi
         exit 0
