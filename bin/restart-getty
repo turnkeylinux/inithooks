@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
 # This script is intended to be automatically triggered by
-# inithooks-restart-getty.service, which in turn is intended to be started
+# inithooks-restart-getty1.service, which in turn is intended to be started
 # when inithooks.service exits (regardless of exit status)
 #
 # Assuming this script _was_ triggered by inithooks.service exit, on most
