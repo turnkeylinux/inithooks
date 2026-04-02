@@ -1,2 +1,5 @@
 *.pyc
 __pycache__
+.pybuild/
+inithooks.egg-info/
+debian/debhelper-build-stamp

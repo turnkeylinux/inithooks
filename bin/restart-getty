@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
 # This script is intended to be automatically triggered by
-# inithooks-restart-getty.service, which in turn is intended to be started
+# inithooks-restart-getty1.service, which in turn is intended to be started
 # when inithooks.service exits (regardless of exit status)
 #
 # Assuming this script _was_ triggered by inithooks.service exit, on most
@@ -9,24 +9,33 @@
 # only loop 1 additional times. However to ensure that it is as robust as
 # possible, it will wait up to 10 secs for inithooks.service to stop.
 
-fatal() { echo "$*" >&2; exit 1; }
+# systemd honors syslog-style priority prefixes on stdout/stderr
+# supports journalctl log level filtering - and colors the messages
+warn() { echo "<4>$*" >&2; }
+fatal() {
+   echo "<3>$*" >&2
+   echo "<3>Please report to support@turnkeylinux.org"
+   exit 1
+}
 
+# only run this script if started by systemd
 if [[ "$_STARTED_BY_SYSTEMD" == yes ]]; then
-    echo "$(basename "$0") running"
+    echo "$(basename "$0") script running"
 else
-    fatal "$(basename "$0") not started by systemd - exiting"
+    echo "$(basename "$0") script not started by systemd - exiting" >&2
+    exit 0
 fi
 
 getty1_services=(getty@tty1.service container-getty@1.service)
 getty_target=/etc/systemd/system/getty.target.wants
-getty1_service=
+getty1_service=""
 
 for _getty1 in "${getty1_services[@]}"; do
     _getty_target="$getty_target/$_getty1"
     if [[ -L "$_getty_target" ]]; then
         if [[ -f "$_getty_target" ]]; then
             getty1_service="$_getty1"
-            echo "system getty service is '$getty1_service'"
+            echo "Found default system getty service: '$getty1_service'"
             break
         fi
     fi
@@ -35,23 +44,34 @@ if [[ -z "$getty1_service" ]]; then
     fatal "Could not find valid getty1 service (tried ${getty1_services[*]})"
 fi
 
+echo "Starting $getty1_service"
 for i in {10..0}; do
     if systemctl is-active -q inithooks.service; then
         msg="inithooks.service running"
         if [[ $1 -gt 0 ]]; then
-            echo "$msg - waiting $i more seconds for it to stop" >&2
+            msg="inithooks.service running"
+            warn "$msg - waiting $i more seconds for it to stop" >&2
         else
-            fatal "$msg - giving up..."
+            warn "Failed to stop inithooks.service - giving up..."
+            fatal "$getty1_service could not be started"
         fi
         sleep 1
     else
-        echo "inithooks service is not running"
+        echo "inithooks.service is not running"
         if systemctl is-active -q "$getty1_service"; then
-            echo "$getty1_service already running, nothing to do"
+            warn "$getty1_service already running, nothing to do"
         else
-            echo "starting $getty1_service"
-            if ! systemctl start ; then
-                fatal "failed to start $getty1_service"
+            echo "Starting $getty1_service..."
+            if ! systemctl start "$getty1_service"; then
+                fatal "Failed to start $getty1_service"
+            else
+                # because getty@.service is 'Type=idle' systemctl start may
+                # exit zero even if it fails, so double check to be sure
+                if ! systemctl is-active -q "$getty1_service"; then
+                    fatal "$getty1_service failed"
+                else
+                    echo "$getty1_service started..."
+                fi
             fi
         fi
         exit 0
