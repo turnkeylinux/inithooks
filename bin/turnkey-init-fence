@@ -66,15 +66,15 @@ iptables_redirect() {
 
 case "$1" in
     start)
-	    echo "Starting turnkey-init-fence"
+        echo "Starting turnkey-init-fence"
         iptables_redirect start
-	    ;;
+        ;;
     stop)
-	    echo "Stopping turnkey-init-fence"
+        echo "Stopping turnkey-init-fence"
         iptables_redirect stop
-	    ;;
-	*)
-		echo "Unknown command: $1" >&2
+        ;;
+    *)
+        echo "Unknown command: $1" >&2
         exit 1
-		;;
+        ;;
 esac
