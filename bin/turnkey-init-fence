@@ -3,6 +3,9 @@
 # TurnKey web interface fence - blocks access to web app until system is
 # initialized (admin password configure, etc)
 
+# shellcheck source=default/turnkey-init-fence
+source /etc/default/turnkey-init-fence
+
 iptables_delete_redirect() {
     local dport=$1
     local to_port=$2

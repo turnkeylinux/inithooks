@@ -6,7 +6,7 @@ Before=apache2.service nginx.service lighttpd.service
 
 [Service]
 Type=oneshot
-EnvironmentFile=/etc/default/turnkey-init-fence
+RemainAfterExit=true
 ExecStart=/usr/lib/inithooks/bin/turnkey-init-fence start
 ExecStop=/usr/lib/inithooks/bin/turnkey-init-fence stop
 
