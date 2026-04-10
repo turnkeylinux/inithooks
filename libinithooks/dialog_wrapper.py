@@ -98,7 +98,7 @@ class Dialog:
 
     def wrapper(
         self, dialog_name: str, text: str, *args, **kws
-    ) -> tuple[int, str]:
+    ) -> str | tuple[str, str]:
         retcode = 0
         logging.debug(
             f"wrapper(dialog_name={dialog_name!r}, text=<redacted>,"
@@ -115,7 +115,7 @@ class Dialog:
 
         while 1:
             try:
-                retcode = method("\n" + text, *args, **kws)
+                return_value = method("\n" + text, *args, **kws)
                 logging.debug(
                     f"wrapper(dialog_name={dialog_name!r}, ...) -> {retcode!r}"
                 )
@@ -131,21 +131,33 @@ class Dialog:
                 )
                 self.msgbox("Caught exception", sio.getvalue())
 
-        return retcode
+        return return_value
 
-    def error(self, text: str) -> tuple[int, str]:
+    def error(self, text: str) -> str:
+        """'Error' titled message with single 'ok' button
+        Returns 'Ok'"""
         height = self._calc_height(text)
-        return self.wrapper("msgbox", text, height, self.width, title="Error")
+        return str(
+            self.wrapper("msgbox", text, height, self.width, title="Error"),
+        )
 
-    def msgbox(self, title: str, text: str) -> tuple[int, str]:
+    def msgbox(self, title: str, text: str) -> str:
+        """Titled message with single 'ok' button
+        Returns 'Ok'"""
         height = self._calc_height(text)
         logging.debug(f"msgbox(title={title!r}, text=<redacted>)")
-        return self.wrapper("msgbox", text, height, self.width, title=title)
+        return str(
+            self.wrapper("msgbox", text, height, self.width, title=title),
+        )
 
-    def infobox(self, text: str) -> tuple[int, str]:
+    def infobox(self, text: str) -> str:
+        """Untitled message with single 'ok' button
+        Returns 'Ok'"""
         height = self._calc_height(text)
         logging.debug(f"infobox(text={text!r}")
-        return self.wrapper("infobox", text, height, self.width)
+        return str(
+            self.wrapper("infobox", text, height, self.width),
+        )
 
     def inputbox(
         self,
@@ -154,7 +166,9 @@ class Dialog:
         init: str = "",
         ok_label: str = "OK",
         cancel_label: str = "Cancel",
-    ) -> tuple[int, str]:
+    ) -> tuple[str, str]:
+        """Titled message with text input and single choice of 2 buttons
+        Returns tuple of 'ok'/'cancel' & the input string"""
         logging.debug(
             f"inputbox(title={title!r}, text=<redacted>,"
             + f" init={init!r}, ok_label={ok_label!r},"
@@ -166,7 +180,7 @@ class Dialog:
             f"inputbox(...) [calculated height={height},"
             f" no_cancel={no_cancel}]"
         )
-        return self.wrapper(
+        return_tuple = self.wrapper(
             "inputbox",
             text,
             height,
@@ -177,6 +191,8 @@ class Dialog:
             cancel_label=cancel_label,
             no_cancel=no_cancel,
         )
+        assert isinstance(return_tuple, tuple)
+        return return_tuple
 
     def yesno(
         self,
@@ -185,6 +201,8 @@ class Dialog:
         yes_label: str = "Yes",
         no_label: str = "No",
     ) -> bool:
+        """Titled message with single choice of 2 buttons
+        Returns True ('Yes" button) or False ('No' button)"""
         height = self._calc_height(text)
         retcode = self.wrapper(
             "yesno",
@@ -208,7 +226,11 @@ class Dialog:
         text: str,
         choices: list[tuple[str, str]],
     ) -> str:
-        _, choice = self.wrapper(
+        """Titled message with single choice of options & 'ok' button.
+        choices is a list of options, each option is a tuple of option tag and
+        option (short) description
+        Returns selected option tag"""
+        return_tuple = self.wrapper(
             "menu",
             text,
             self.height,
@@ -218,7 +240,8 @@ class Dialog:
             choices=choices,
             no_cancel=True,
         )
-        return choice
+        assert isinstance(return_tuple, tuple)
+        return return_tuple[0]
 
     def get_password(
         self,
@@ -242,7 +265,6 @@ class Dialog:
         offer_generate=False for the original behavior.
 
         Returns password"""
-
         if offer_generate:
             choice = self.menu(
                 title,
@@ -265,7 +287,10 @@ class Dialog:
         """Generate a strong password and show it to the user.
 
         Displays the password in a highlighted reverse-video box,
-        centered within the dialog, with a bold red warning."""
+        centered within the dialog, with a bold red warning.
+
+        Returns password.
+        """
         while True:
             password = generate_password(length)
 
@@ -342,7 +367,12 @@ class Dialog:
         min_complexity: int = 3,
         blacklist: list[str] | None = None,
     ) -> str | None:
-        """Original manual password entry with validation."""
+        """Original manual password entry with validation.
+
+        Titled message with password (redacted input) box & 'ok' button.
+        Password is validated against defined rules (pass_req, min_complexity &
+        blacklist). Method will loop until deemed valid.
+        """
         req_string = (
             f"\n\nPassword Requirements\n - must be at least {pass_req}"
             " characters long\n - must contain characters from at"
@@ -359,6 +389,7 @@ class Dialog:
         height = self._calc_height(text + req_string) + 3
 
         def ask(title: str, text: str) -> str:
+            """Titled input box (input redacted) & 'ok' button"""
             return self.wrapper(
                 "passwordbox",
                 text + req_string,
@@ -421,6 +452,9 @@ class Dialog:
             self.error("Password mismatch, please try again.")
 
     def get_email(self, title: str, text: str, init: str = "") -> str | None:
+        """Validated input box (email) with optional prefilled value and 'Ok'
+        button
+        Returns email"""
         logging.debug(
             f"get_email(title={title!r}, text=<redacted>, init={init!r})"
         )
@@ -439,6 +473,8 @@ class Dialog:
             return email
 
     def get_input(self, title: str, text: str, init: str = "") -> str | None:
+        """Input box within optional prefilled value & 'Ok' button
+        Returns input"""
         while 1:
             s = self.inputbox(title, text, init, "Apply", "")[1]
             if not s:
