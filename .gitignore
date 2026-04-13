@@ -1,5 +1,20 @@
-*.pyc
-__pycache__
+# cached dev files
+**/__pycache__/
+.mypy_cache/
+.ruff_cache/
+**/*.swp
+
+# python build assets
 .pybuild/
-inithooks.egg-info/
+build/
+*.egg-info/
+
+# deb package build assests
+debian/inithooks/
+
+debian/.debhelper/
 debian/debhelper-build-stamp
+debian/*.debhelper.log
+debian/*.debhelper
+debian/*.substvars
+debian/files
