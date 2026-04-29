@@ -28,6 +28,16 @@ mkdir -p "$(dirname "$INITHOOKS_LOGFILE")"
 touch "$INITHOOKS_LOGFILE"
 chmod 640 "$INITHOOKS_LOGFILE"
 
+# wait up to 10 secs for system to be running before starting; minimizes chance
+# of journal overwriting inithook dialog/confconsole
+logger -t inithooks "systemctl is-system-running: $(systemctl is-system-running)"
+for count in {1..10}; do
+    if [[ "$(systemctl is-system-running)" == "starting" ]]; then
+        logger -t inithooks "Waiting for boot to finish ($count/10 seconds)"
+        sleep 1
+    fi
+done
+
 everyboot_ran() {
     # read lastboot time
     lastboot_time="$(date '+%s' -d "$(cut -f1 -d. /proc/uptime) seconds ago")"
