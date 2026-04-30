@@ -88,7 +88,9 @@ start_mini_server() {
         "$HTTP_FENCE_PORT" \
         "$HTTPS_FENCE_PORT" \
         "$HTTPS_FENCE_CERTFILE" \
-        "$HTTPS_FENCE_KEYFILE"
+        "$HTTPS_FENCE_KEYFILE" \
+        | echo "<3>init-fence mini server failed to start" >&2 \
+        && exit 1
 }
 
 stop_mini_server() {
@@ -96,7 +98,7 @@ stop_mini_server() {
     if [[ -f "$PIDFILE" ]]; then
         kill "$( < "$PIDFILE" )"
     else
-        echo "$PIDFILE not found" >&2
+        echo "<4>pid file '$PIDFILE' not found" >&2
     fi
 }
 
