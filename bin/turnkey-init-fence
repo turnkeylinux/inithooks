@@ -94,8 +94,10 @@ start_mini_server() {
         "$HTTPS_FENCE_PORT" \
         "$HTTPS_FENCE_CERTFILE" \
         "$HTTPS_FENCE_KEYFILE" \
-        || echo "<3>init-fence mini server failed to start" >&2 \
-        && exit 1
+        || {
+            echo "<3>init-fence mini server failed to start" >&2 \
+            && exit 1
+        }
 }
 
 stop_mini_server() {
