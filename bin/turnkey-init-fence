@@ -3,13 +3,21 @@
 # TurnKey web interface fence - blocks access to web app until system is
 # initialized (admin password configure, etc)
 
+DEBUG=${DEBUG:-}
+[[ -z "$DEBUG" ]] || set -x
+
+HTDOCS=lib/inithooks/turnkey-init-fence/htdocs
+PIDFILE=/run/init-fence.pid
+LOGFILE=/var/log/init-fence.log
+SERVER_RUNAS=nobody
+
 # shellcheck source=default/turnkey-init-fence
 source /etc/default/turnkey-init-fence
 
 iptables_delete_redirect() {
     local dport=$1
     local to_port=$2
-
+    echo "Removing REDIRECT firewall rule: $dport => $to_port"
     while true; do
         (2>&1 iptables -t nat -D PREROUTING -p tcp --dport "$dport" -j REDIRECT --to-port "$to_port") > /dev/null || break
     done
@@ -18,24 +26,24 @@ iptables_delete_redirect() {
 iptables_add_redirect() {
     local dport=$1
     local to_port=$2
-
+    echo "Adding REDIRECT firewall rule: $dport => $to_port"
     iptables_delete_redirect "$dport" "$to_port"
     iptables -t nat -A PREROUTING -p tcp --dport "$dport" -j REDIRECT --to-port "$to_port"
 }
 
 iptables_unensure_accept() {
-    # remove ACCEPT line for fence ports (used in appliances that have a
-    # `filter` policy of `DROP`)
+    # Used in appliances that have a `filter` policy of `DROP`
     local dport=$1
+    echo "Removing ACCEPT firewall rule for fence port: $dport"
     while true; do
         (2>&1 iptables -t filter -D INPUT -p tcp -m tcp --dport "$dport" -j ACCEPT) > /dev/null || break
     done
 }
 
 iptables_ensure_accept() {
-    # add ACCEPT line for fence ports (used in appliances that have a
-    # `filter` policy of `DROP`)
+    # Used in appliances that have a `filter` policy of `DROP`
     local dport=$1
+    echo "Adding ACCEPT firewall rule for fence port: $dport"
     iptables_unensure_accept "$dport"
     iptables -t filter -A INPUT -p tcp -m tcp --dport "$dport" -j ACCEPT
 }
@@ -67,14 +75,63 @@ iptables_redirect() {
     $mop "$HTTPS_FENCE_PORT"
 }
 
+start_mini_server() {
+    local htdocs
+    if [[ -d "/var/$HTDOCS" ]]; then
+        htdocs="/var/$HTDOCS"
+    else
+        htdocs="/usr/$HTDOCS"
+    fi
+    echo "Starting init-fence mini-server (serving $htdocs)"
+    touch "$LOGFILE" "$PIDFILE"
+    chown -R "$SERVER_RUNAS" "$htdocs" "$LOGFILE" "$PIDFILE"
+    /usr/lib/inithooks/bin/simplehttpd.py \
+        --daemonize="$PIDFILE" \
+        --runas="$SERVER_RUNAS" \
+        --logfile="$LOGFILE" \
+        "$htdocs" \
+        "$HTTP_FENCE_PORT" \
+        "$HTTPS_FENCE_PORT" \
+        "$HTTPS_FENCE_CERTFILE" \
+        "$HTTPS_FENCE_KEYFILE" \
+        || {
+            echo "<3>init-fence mini server failed to start" >&2 \
+            && exit 1
+        }
+}
+
+stop_mini_server() {
+    echo "Stopping init-fence mini-server"
+    if [[ -f "$PIDFILE" ]]; then
+        kill "$( < "$PIDFILE" )"
+        rm "$PIDFILE"
+    else
+        echo "<4>pid file '$PIDFILE' not found" >&2
+        echo "Searching for simplehttpd.py process"
+        # search for process using init-fence webroot too to avoid risk of
+        # killing unrelated simplehttpd.py instance
+        PROC="/usr/lib/inithooks/bin/simplehttpd.py.*lib/inithooks/turnkey-init-fence/htdocs"
+        if PID=$(pgrep --oldest --full "$PROC"); then
+            echo "Found simplehttpd.py (pid: $PID) - killing"
+            kill "$PID"
+        else
+            echo "<3>No simplehttpd.py process found" >&2
+        fi
+    fi
+}
+
 case "$1" in
     start)
         echo "Starting turnkey-init-fence"
         iptables_redirect start
+        start_mini_server
+        echo "Started turnkey-init-fence"
         ;;
     stop)
         echo "Stopping turnkey-init-fence"
         iptables_redirect stop
+        stop_mini_server
+        echo "Stopped turnkey-init-fence"
         ;;
     *)
         echo "Unknown command: $1" >&2

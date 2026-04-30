@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Note that as of v19.0, the init-fence service is enabled by default
+
 [ -n "$_TURNKEY_INIT" ] && exit 0
 
 USERNAME=root
@@ -9,7 +11,3 @@ USERNAME=root
 
 PROFILE_FIRSTLOGIN=$(eval printf ~$USERNAME)/.profile.d/turnkey-init-fence
 [ -f $PROFILE_FIRSTLOGIN ] && chmod +x $PROFILE_FIRSTLOGIN
-
-systemctl enable turnkey-init-fence
-systemctl start turnkey-init-fence
-echo 'turnkey-init-fence is up'

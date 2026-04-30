@@ -3,10 +3,8 @@
 [ -z "$_TURNKEY_INIT" ] && exit 0; # ONLY run from within turnkey-init
 
 if systemctl is-active --quiet turnkey-init-fence; then
-
     systemctl disable turnkey-init-fence
     systemctl stop turnkey-init-fence
-
 fi
 
 for home in /root /home/admin; do
