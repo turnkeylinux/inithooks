@@ -3,6 +3,9 @@
 # TurnKey web interface fence - blocks access to web app until system is
 # initialized (admin password configure, etc)
 
+DEBUG=${DEBUG:-}
+[[ -z "$DEBUG" ]] || set -x
+
 HTDOCS=lib/inithooks/turnkey-init-fence/htdocs
 PIDFILE=/run/init-fence.pid
 LOGFILE=/var/log/init-fence.log
@@ -77,6 +80,7 @@ start_mini_server() {
     else
         HTDOCS="/usr/$HTDOCS"
     fi
+    chown -R nobody "$HTDOCS"
     echo "Starting init-fence mini-server (serving $HTDOCS)"
     touch "$LOGFILE" "$PIDFILE"
     chown nobody "$LOGFILE" "$PIDFILE"
