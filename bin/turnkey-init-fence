@@ -101,8 +101,20 @@ stop_mini_server() {
     echo "Stopping init-fence mini-server"
     if [[ -f "$PIDFILE" ]]; then
         kill "$( < "$PIDFILE" )"
+        rm "$PIDFILE"
     else
         echo "<4>pid file '$PIDFILE' not found" >&2
+        echo "Searching for simplehttpd.py process"
+        # search for process using init-fence webroot too to avoid risk of
+        # killing unrelated simplehttpd.py instance
+        PROC="/usr/lib/inithooks/bin/simplehttpd.py.*lib/inithooks/turnkey-init-fence/htdocs"
+        if PID=$(pgrep --oldest --full "$PROC"); then
+            echo "Found simplehttpd.py (pid: $PID) - killing"
+            kill "$PID"
+        else
+            echo "<3>No simplehttpd.py process found" >&2
+        fi
+
     fi
 }
 
