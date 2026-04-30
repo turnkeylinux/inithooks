@@ -75,7 +75,8 @@ def daemonize(pidfile: str, logfile: str | None = None) -> None:
 
     pid = os.fork()
     if pid != 0:
-        print(str(pid), file=open(pidfile, "w").close())
+        with open(pidfile, "w") as fob:
+            fob.write(str(pid))
         sys.exit(0)
 
     os.chdir("/")
@@ -89,7 +90,7 @@ def daemonize(pidfile: str, logfile: str | None = None) -> None:
 
 
 class SecureHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
-    ALLOWED_EXTS = []
+    ALLOWED_EXTS: list[str] = []
 
     def list_directory(self, path: os.PathLike | str) -> None:
         _ = path
@@ -117,17 +118,17 @@ class SimpleWebServer:
         @staticmethod
         def parse_address(address: str) -> tuple[str, int]:
             if ":" in address:
-                host, port = address.split(":", 1)
+                host, _port = address.split(":", 1)
             else:
                 host = "0.0.0.0"
-                port = address
+                _port = address
 
             try:
-                port = int(port)
+                port = int(_port)
                 assert port > 0 and port < 65535
             except (ValueError, AssertionError):
                 raise SimpleWebServerError(
-                    f"Illegal port: '{port}' - must be integer between 1 &"
+                    f"Illegal port: '{_port}' - must be integer between 1 &"
                     " 65534"
                 )
             return host, port
