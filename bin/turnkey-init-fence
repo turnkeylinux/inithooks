@@ -125,11 +125,13 @@ case "$1" in
         echo "Starting turnkey-init-fence"
         iptables_redirect start
         start_mini_server
+        echo "Started turnkey-init-fence"
         ;;
     stop)
         echo "Stopping turnkey-init-fence"
         iptables_redirect stop
         stop_mini_server
+        echo "Stopped turnkey-init-fence"
         ;;
     *)
         echo "Unknown command: $1" >&2
