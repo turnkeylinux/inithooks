@@ -211,13 +211,14 @@ class SimpleWebServer:
                 (https_conf.host, https_conf.port), self.HTTPRequestHandler
             )
 
-            httpsd.socket = ssl.wrap_socket(
-                httpsd.socket,
-                certfile=certfile,
-                keyfile=keyfile,
-                server_side=True,
-                ssl_version=ssl.PROTOCOL_TLSv1_2,
-                ciphers=https_conf.CIPHERS,
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(certfile=certfile, keyfile=keyfile)
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            context.maximum_version = ssl.TLSVersion.TLSv1_3
+            context.set_ciphers(https_conf.CIPHERS)
+
+            httpsd.socket = context.wrap_socket(
+                httpsd.socket, server_side=True,
             )
 
         if runas:
