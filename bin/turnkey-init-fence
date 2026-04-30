@@ -9,6 +9,7 @@ DEBUG=${DEBUG:-}
 HTDOCS=lib/inithooks/turnkey-init-fence/htdocs
 PIDFILE=/run/init-fence.pid
 LOGFILE=/var/log/init-fence.log
+SERVER_RUNAS=nobody
 
 # shellcheck source=default/turnkey-init-fence
 source /etc/default/turnkey-init-fence
@@ -75,20 +76,20 @@ iptables_redirect() {
 }
 
 start_mini_server() {
+    local htdocs
     if [[ -d "/var/$HTDOCS" ]]; then
-        HTDOCS="/var/$HTDOCS"
+        htdocs="/var/$HTDOCS"
     else
-        HTDOCS="/usr/$HTDOCS"
+        htdocs="/usr/$HTDOCS"
     fi
-    chown -R nobody "$HTDOCS"
-    echo "Starting init-fence mini-server (serving $HTDOCS)"
+    echo "Starting init-fence mini-server (serving $htdocs)"
     touch "$LOGFILE" "$PIDFILE"
-    chown nobody "$LOGFILE" "$PIDFILE"
+    chown -R "$SERVER_RUNAS" "$htdocs" "$LOGFILE" "$PIDFILE"
     /usr/lib/inithooks/bin/simplehttpd.py \
         --daemonize="$PIDFILE" \
-        --runas=nobody \
+        --runas="$SERVER_RUNAS" \
         --logfile="$LOGFILE" \
-        "$HTDOCS" \
+        "$htdocs" \
         "$HTTP_FENCE_PORT" \
         "$HTTPS_FENCE_PORT" \
         "$HTTPS_FENCE_CERTFILE" \
@@ -114,7 +115,6 @@ stop_mini_server() {
         else
             echo "<3>No simplehttpd.py process found" >&2
         fi
-
     fi
 }
 
