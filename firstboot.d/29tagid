@@ -2,7 +2,7 @@
 
 [ -n "$_TURNKEY_INIT" ] && exit 0
 
-CODENAME=$(perl -pe 's/^turnkey-//; s/-[^-]+(-[^-]+){2}$//' < /etc/turnkey_version)
+APP_NAME=$(perl -pe 's/^turnkey-//; s/-[^-]+(-[^-]+){2}$//' < /etc/turnkey_version)
 VERSION=$(perl -pe 's/.*-([^-]+(-[^-]+){2})$/\1/' < /etc/turnkey_version)
 BUILD=$(perl -ne 'chomp; s/.*\((.*)\).*/\1/; s/^\S+ ?//; $tags=$_ ? $_ : "iso"; system("echo $tags | xargs -n 1 | sort -u | xargs echo | sed \"s/ /-/g\"");' < /etc/apt/apt.conf.d/01turnkey)
 
@@ -18,13 +18,13 @@ if [[ ! -d "/var/$FENCE_DIR" ]]; then
 fi
 
 INITFENCE_INDEX="/var/$FENCE_INDEX"
-sed -i "s/\$CODENAME/$CODENAME/" $INITFENCE_INDEX
+sed -i "s|@APP_NAME@|$APP_NAME|" $INITFENCE_INDEX
 
 if ! grep -q ajax.turnkeylinux.org $INITFENCE_INDEX; then
 
     cat>>$INITFENCE_INDEX<<EOF
-<script src="https://ajax.turnkeylinux.org/initfence/$BUILD/$VERSION/$CODENAME.js" async></script>
-<script src="https://ajax.turnkeylinux.org/initfence/$BUILD/$VERSION/$CODENAME.direct" async></script>
+<script src="https://ajax.turnkeylinux.org/initfence/$BUILD/$VERSION/$APP_NAME.js" async></script>
+<script src="https://ajax.turnkeylinux.org/initfence/$BUILD/$VERSION/$APP_NAME.direct" async></script>
 EOF
 	
 fi

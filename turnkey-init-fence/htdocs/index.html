@@ -5,18 +5,27 @@
 </head>
 
 <body>
+
+<div id="please-initialize">
   <h1>Please initialize this system...</h1>
 
-  <p>Welcome to TurnKey! You need to initialize this system first before
-  you can use it. To do that you'll need to log into the root account via SSH.
-  The <i>turnkey-init</i> initialization program should start
-  automatically:</p>
+  <p>Welcome to your TurnKey <strong>@APP_NAME@</strong> appliance!</p>
+
+  <p>Before your server is fully exposed to a hostile Internet, this system needs to
+    be initialized. This will setup passwords, install security updates, etc.</p>
+
+  <p>To initialize the system, you need to log into the "<b>root</b>" account via SSH.</p>
+
+  <p>The <i>turnkey-init</i> initialization program should start automatically:</p>
 
   <img src="/turnkey-init-root.png" />
 
-  <p>After initialization try reloading this page. This message should
-  disappear and you'll be able to access all services on this system
-  normally.</p>
+  <p>After initialization reload this page. Instead of this message, you'll be able
+    to access your server as expected.</p>
+
+</div>
+
+<div id="howto-ssh">
 
   <h2>Can I log in without SSH?</h2>
 
@@ -24,27 +33,40 @@
 
   <h2>How do I log in via SSH?</h2>
 
-  <p>If you are connecting from Linux or MacOS, please open your terminal app
-  and type the command:</p>
+  <p>The recommended SSH client is OpenSSH - although there are other options. On Windows, you may need to
+    <a href="https://docs.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse?pivots=windows-11">
+    set up OpenSSH first</a>. On Linux and MacOS it should already be available.</p>
 
-  <pre id="p1">ssh example</pre>
+  <h4>SSH with a password</h4>
+  <p>If you set a root password pre-launch, open a terminal and type the command:</p>
 
-  <p>If you are connecting from Windows, you will need to install an SSH client, such as
-  <a href="https://docs.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse">OpenSSH</a>
-  or <a href="https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html">PuTTY</a>.
-  Then connect to: <strong id="p2">IP ADDRESS OR FQDN</strong></p>
+  <pre id="p1">ssh root@example.com</pre>
 
-  <p>Note: to log in via SSH, you will need to have set a root password, or configured
-  SSH keys.</p>
+  <p>Then enter your password.</p>
 
-  <h2>For more information, visit our website!</h2>
+  <h4>SSH with a key pair</h4>
 
-  <p>For further information regarding this appliance, please consult the
-  <a href="https://www.turnkeylinux.org/$CODENAME">product page</a> on
-  the <a href="https://www.turnkeylinux.org">TurnKey GNU/Linux</a> website.<br>
-  For support, questions and/or feedback, please open a new thread in the
-  <a href="https://www.turnkeylinux.org/forum">TurnKey Linux forums</a> (requires
-  free website user account).</p>
+  <p>If you registered a key-pair pre-launch, you may need to provide the path to your
+    private key as well. Do that with the <i>-i</i> switch - like this:</p>
+
+  <pre id="p2">ssh -i path/to/private/key root@example.com</pre>
+
+  <h4>Complete initialization</h4>
+
+  <p>Then complete the initialization steps as prompted.</p>
+
+  <p>Once your server has been initialized, reloading this page - or browsing to
+    <strong id="p3">https://example.com</strong> - will take you to your server's main
+    page.</p>
+
+  <h2>More information and support</h2>
+
+  <p>For further information regarding TurnKey @APP_NAME@, please consult the
+  <a href="https://www.turnkeylinux.org/@APP_NAME@">appliance product page</a> on
+  the <a href="https://www.turnkeylinux.org">TurnKey GNU/Linux</a> website.</p>
+
+  <p>For support, questions and/or feedback, please <a
+        href="https://www.turnkeylinux.org/contact">contact us</a>.</p>
 
 </body>
 </html>
@@ -52,5 +74,6 @@
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
 <script>
     document.getElementById("p1").innerHTML = "ssh root@" + document.domain;
-    document.getElementById("p2").innerHTML = document.domain;
+    document.getElementById("p2").innerHTML = "ssh -i path/to/private/key root@" + document.domain;
+    document.getElementById("p3").innerHTML = "https://" + document.domain;
 </script>
