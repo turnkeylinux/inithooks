@@ -4,7 +4,7 @@
 # initialized (admin password configure, etc)
 
 HTDOCS=lib/inithooks/turnkey-init-fence/htdocs
-PIDFILE=/run/init-fence
+PIDFILE=/run/init-fence.pid
 LOGFILE=/var/log/init-fence.log
 
 # shellcheck source=default/turnkey-init-fence
@@ -78,8 +78,8 @@ start_mini_server() {
         HTDOCS="/usr/$HTDOCS"
     fi
     echo "Starting init-fence mini-server (serving $HTDOCS)"
-    touch "$LOGFILE"
-    chown nobody "$LOGFILE"
+    touch "$LOGFILE" "$PIDFILE"
+    chown nobody "$LOGFILE" "$PIDFILE"
     /usr/lib/inithooks/bin/simplehttpd.py \
         --daemonize="$PIDFILE" \
         --runas=nobody \
@@ -89,7 +89,7 @@ start_mini_server() {
         "$HTTPS_FENCE_PORT" \
         "$HTTPS_FENCE_CERTFILE" \
         "$HTTPS_FENCE_KEYFILE" \
-        | echo "<3>init-fence mini server failed to start" >&2 \
+        || echo "<3>init-fence mini server failed to start" >&2 \
         && exit 1
 }
 
