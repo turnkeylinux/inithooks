@@ -1,14 +1,16 @@
-#!/bin/bash
-
-[ -z "$_TURNKEY_INIT" ] && exit 0; # ONLY run from within turnkey-init
+#!/bin/bash -e
 
 systemctl disable turnkey-init-fence
 systemctl stop turnkey-init-fence
 
-for home in /root /home/admin; do
-    [ -e $home/.profile.d/turnkey-init-fence ] && chmod -x $home/.profile.d/turnkey-init-fence;
-done
+# ONLY run this from within turnkey-init
+    if [[ -n "$_TURNKEY_INIT" ]]; then
+    for home in /root /home/admin; do
+        if [[ -e $home/.profile.d/turnkey-init-fence ]]; then
+            chmod -x $home/.profile.d/turnkey-init-fence
+        fi
+    done
+    chmod -x /usr/lib/inithooks/firstboot.d/??turnkey-init-fence*
+fi
 
-chmod -x /usr/lib/inithooks/firstboot.d/??turnkey-init-fence*
-
-echo 'turnkey-init-fence is down'
+echo "turnkey-init-fence is down"
