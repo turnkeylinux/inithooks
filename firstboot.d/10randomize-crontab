@@ -1,7 +1,7 @@
 #!/bin/bash
 
-[ ! -e /etc/crontab ] && exit 0
-[ -n "$_TURNKEY_INIT" ] && exit 0
+[[ -e /etc/crontab ]] || exit 0
+[[ -z "$_TURNKEY_INIT" ]] || exit 0
 
 getrnd() {
     echo $(($(hexdump -n 2 -e '"%1u"' /dev/urandom) % $1))
@@ -34,4 +34,3 @@ sed --in-place --regexp-extended \
     --expression="s/47(\s*)6(\s*)\*(\s*)\*(\s*)7(\s*)root/${WEEKLY_MINUTE}\1${WEEKLY_HOUR}\2*\3*\47\5root/g" \
     --expression="s/52(\s*)6(\s*)1(\s*)\*(\s*)\*(\s*)root/${MONTHLY_MINUTE}\1${MONTHLY_HOUR}\21\3*\4*\5root/g" \
     /etc/crontab
-

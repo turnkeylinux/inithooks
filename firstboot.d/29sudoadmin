@@ -1,11 +1,16 @@
-#!/bin/bash
+#!/bin/bash -e
 
-[ -n "$_TURNKEY_INIT" ] && exit 0
+[[ -z "$_TURNKEY_INIT" ]] || exit 0
 
-. /etc/default/inithooks
-if [ "$(echo $SUDOADMIN | tr [A-Z] [a-z] )" = "true" ]; then
-    turnkey-sudoadmin on --disable-setpass
-elif [ "$(echo $SUDOADMIN | tr [A-Z] [a-z] )" = "false" ]; then
-    turnkey-sudoadmin off --disable-setpass
+# shellcheck source=default/inithooks
+source /etc/default/inithooks
+if [[ -e "$INITHOOKS_CONF" ]]; then
+    # shellcheck disable=SC1090
+    source "$INITHOOKS_CONF"
 fi
 
+if [[ "${SUDOADMIN,,}" == "true" ]]; then
+    turnkey-sudoadmin on --disable-setpass
+elif [[ "${SUDOADMIN,,}" == "false" ]]; then
+    turnkey-sudoadmin off --disable-setpass
+fi

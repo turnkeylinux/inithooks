@@ -2,12 +2,17 @@
 # enable security alert emails
 # SEC_ALERTS: SKIP, $EMAIL (if none specified, will be interactive)
 
-. /etc/default/inithooks
+# shellcheck source=default/inithooks
+source /etc/default/inithooks
+if [[ -e "$INITHOOKS_CONF" ]]; then
+    # shellcheck disable=SC1090
+    source "$INITHOOKS_CONF"
+fi
 
-[ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
-[ "$SEC_ALERTS" == "SKIP" ] && exit 0
+if [[ "$SEC_ALERTS" == "SKIP" ]]; then
+   exit 0
+fi
 
 $INITHOOKS_PATH/bin/secalerts.py \
     --email="$SEC_ALERTS" \
     --email-placeholder="$($INITHOOKS_PATH/bin/inithooks_cache.py APP_EMAIL)"
-
