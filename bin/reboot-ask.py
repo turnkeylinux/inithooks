@@ -4,6 +4,7 @@
 import sys
 import getopt
 import signal
+import subprocess
 from typing import NoReturn
 
 from libinithooks.dialog_wrapper import Dialog
@@ -22,7 +23,7 @@ def usage(msg: str | getopt.GetoptError = "") -> NoReturn:
     sys.exit(1)
 
 
-def main():
+def main() -> None:
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     try:
         opts, _ = getopt.gnu_getopt(sys.argv[1:], "h", ["help"])
@@ -38,6 +39,7 @@ def main():
 
     if not reboot:
         sys.exit(1)
+    subprocess.run(["/usr/sbin/reboot"])
 
 
 if __name__ == "__main__":
