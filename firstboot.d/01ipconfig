@@ -3,6 +3,8 @@
 # firstboot network interfaces file generation - runs non-interactively.
 # - config can be customized via inithooks conf file (i.e. preseed)
 
+# TODO: update to also support ipv6
+
 # shellcheck source=default/inithooks
 source /etc/default/inithooks
 

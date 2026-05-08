@@ -1,13 +1,18 @@
-#!/bin/bash
+#!/bin/bash -e
 
 # Note that as of v19.0, the init-fence service is enabled by default
 
-[ -n "$_TURNKEY_INIT" ] && exit 0
+[[ -z "$_TURNKEY_INIT" ]] || exit 0
 
 USERNAME=root
-
-. /etc/default/inithooks
-[ "$(echo $SUDOADMIN | tr [A-Z] [a-z] )" = "true" ] && USERNAME=admin
+# shellcheck source=default/inithooks
+source /etc/default/inithooks
+USERNAME="root"
+if [[ "${SUDOADMIN,,}" == "true" ]]; then
+    USERNAME="admin"
+fi
 
 PROFILE_FIRSTLOGIN=$(eval printf ~$USERNAME)/.profile.d/turnkey-init-fence
-[ -f $PROFILE_FIRSTLOGIN ] && chmod +x $PROFILE_FIRSTLOGIN
+if [[ -f "$PROFILE_FIRSTLOGIN" ]]; then
+    chmod +x "$PROFILE_FIRSTLOGIN"
+fi

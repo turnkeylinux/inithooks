@@ -1,9 +1,7 @@
 #!/bin/bash -e
 # Regenerate self-signed TLS/SSL cert & key
 
-[[ -n "$_TURNKEY_INIT" ]] && exit 0
-
-[[ -e $INITHOOKS_CONF ]] && . "$INITHOOKS_CONF"
+[[ -z "$_TURNKEY_INIT" ]] || exit 0
 
 _hook=$(basename "$0")
 
@@ -21,7 +19,7 @@ info "Generating SSL/TLS cert & key."
 $turnkey_make_ssl_cert --default --force
 
 # Restart relevant services
-SERVICES=(nginx apache2 lighttpd tomcat10 tomcat11)
+SERVICES=(nginx apache2 lighttpd tomcat10 tomcat11 webmin)
 
 info "Restarting relevant services."
 for service in "${SERVICES[@]}"; do
@@ -34,5 +32,3 @@ done
 
 # final tidy up
 update-ca-certificates
-
-exit 0

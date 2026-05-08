@@ -1,13 +1,16 @@
 #!/bin/bash -e
 
-INITHOOKS_DEFAULT=/etc/default/inithooks
-. $INITHOOKS_DEFAULT
+# shellcheck source=default/inithooks
+source /etc/default/inithooks
+if [[ -e "$INITHOOKS_CONF" ]]; then
+    # shellcheck disable=SC1090
+    source "$INITHOOKS_CONF"
+fi
 
 # blank out configuration file (usually contains passwords)
-[ -e $INITHOOKS_CONF ] && echo > $INITHOOKS_CONF
+if [[ -e $INITHOOKS_CONF ]]; then
+    echo > $INITHOOKS_CONF
+fi
 
 # set run_firstboot to false
-sed -i '/RUN_FIRSTBOOT/ s/=.*/=false/g' $INITHOOKS_DEFAULT
-
-exit 0
-
+sed -i "\|RUN_FIRSTBOOT| s|=.*|=false|" /etc/default/inithooks

@@ -1,11 +1,14 @@
 #!/bin/bash -e
 # set hostname
 
-. /etc/default/inithooks
+# shellcheck source=default/inithooks
+source /etc/default/inithooks
+if [[ -e "$INITHOOKS_CONF" ]]; then
+    # shellcheck disable=SC1090
+    source "$INITHOOKS_CONF"
+fi
 
-[ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
-
-[ -z "$HOSTNAME" ] && exit 0
+[[ -n "$HOSTNAME" ]] || exit 0
 
 old=$(hostname)
 
@@ -24,9 +27,9 @@ for file in \
    /etc/motd \
    /etc/ssmtp/ssmtp.conf
 do
-   [ -f $file ] && sed -i -e "s:$old:$HOSTNAME:g" $file
+    if [[ -f $file ]]; then
+        sed -i -e "s:$old:$HOSTNAME:g" $file
+    fi
 done
 
-hostname $HOSTNAME
-
-exit 0
+hostname "$HOSTNAME"

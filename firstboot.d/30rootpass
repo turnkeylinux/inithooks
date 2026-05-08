@@ -1,11 +1,16 @@
 #!/bin/bash -e
 # set root password
 
-USERNAME=root
+# shellcheck source=default/inithooks
+source /etc/default/inithooks
+if [[ -e "$INITHOOKS_CONF" ]]; then
+    # shellcheck disable=SC1090
+    source "$INITHOOKS_CONF"
+fi
 
-. /etc/default/inithooks
-[ "$(echo $SUDOADMIN | tr [A-Z] [a-z] )" = "true" ] && USERNAME=admin
+USERNAME="root"
+if [[ "${SUDOADMIN,,}" == "true" ]]; then
+    USERNAME="admin"
+fi
 
-[ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
 $INITHOOKS_PATH/bin/setpass.py $USERNAME --pass="$ROOT_PASS"
-
