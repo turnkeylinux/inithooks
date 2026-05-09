@@ -2,12 +2,13 @@
 Description=TurnKey Initialization web interface fence
 After=network.target network-online.target
 After=iptables.service firewalld.service ip6tables.service ipset.service nftables.service
-Before=apache2.service nginx.service lighttpd.service
+Before=apache2.service nginx.service lighttpd.service tomcat10.service tomcat11.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=true
 ExecStart=/usr/lib/inithooks/bin/turnkey-init-fence start
+ExecReload=/usr/lib/inithooks/bin/turnkey-init-fence reload
 ExecStop=/usr/lib/inithooks/bin/turnkey-init-fence stop
 
 [Install]

@@ -38,11 +38,27 @@ The configuration dialogs run in one of two places:
    Xen).  that don't provide the option to interact with the system at
    boot time.
    
-   After boot, a virtual fence redirects attempts to access
-   potentially vulnerable services to a web page explaining how to SSH
-   into the machine for the first time to initialize the system. After
+   After boot, a virtual fence redirects attempts to access potentially
+   vulnerable services to a web page explaining how to SSH into the machine
+   for the first time to initialize the system. After
    initialization the virtual fence comes down and all services can be
    accessed normally.
+
+Initialization fence
+--------------------
+
+The "initialization fence" - aka 'turnkey-init-fence' - is a mechanism which
+blocks access to the included web services until initialization is complete. It
+uses iptables to redirect attempts to access the local web server to a static
+web page served by inithooks/bin/simplehttpd.py.
+
+This page explains that you need to initialize the system before you can access
+the web interfaces. The purpose of the fence is used to prevent users from
+accessing uninitialized web applications, which in some cases can pose a
+security risk.
+
+The init-fence runs as a standalone service and is automatically disabled once
+initalization is complete.
 
 Non-interactive system initialization
 -------------------------------------
@@ -109,21 +125,24 @@ How it works
 ------------
 
 Inithooks itself is as generic and barebones as possible, leaving
-the bulk of functionality up to the appliance specific "hook"
-scripts themselves,
-
-These scripts are located in two sub-directories under
-/usr/lib/inithooks - everyboot.d and firstboot.d. 
-
-They are executed in alphanumeric ordering. This means a script named
-1-foo would be executed before 2-bar, which would itself be executed
-before 3-foobar. That's why scripts in these directories have funny
-numbers at the beginning.  
+the bulk of functionality to specific "hook" scripts.
 
 The inithooks top-level init script is executed early on in system
-initialization, at runlevel 2 15. This enables configuration of the
-system prior to most services starting. This should be taken into
-consideration when developing hook scripts.
+initialization. This enables configuration of the system prior to most services
+starting. This should be taken into consideration when developing hook scripts.
+
+The hook scripts are located in two sub-directories under /usr/lib/inithooks
+- everyboot.d and firstboot.d.
+
+They are executed in alphanumeric ordering. This means a script named 01foo
+would be executed before 20bar, which would itself be executed before 99baz.
+That's why scripts in these directories have funny numbers at numbers at the
+beginning.
+
+**IMPORTANT**: firstboot.d scripts with a prefix less than 30 should _always_
+be non-interactive. E.g. firstboot.d/29foobar should be non-interactive, but
+firstboot.d/30barbaz could be interactive. That is because interactive scripts
+running too early will likely get overwritten by boot log output.
 
 firstboot.d scripts
 '''''''''''''''''''
@@ -134,18 +153,16 @@ following conditions:
 #. If the user executes "turnkey-init" from a root shell. This command
    can be used to rerun the firstboot.d inithooks interactively to
    reconfigure the appliance if needed. Certain scripts such as those that
-   regenerate secret keys are skipped. See BLACKLIST variable in
-   /usr/sbin/turnkey-init for details.
+   regenerate secret keys are skipped.
 
 #. When the user logs in as root for the first time into a headless
    system. This triggers "turnkey-init" to run so that the user can
    interactively complete appliance initialization.
 
-#. When a TurnKey appliance boots for the first time
-
-   inithooks checks whether or not this is the first boot by checking
-   the value of the RUN\_FIRSTBOOT flag in /etc/default/inithooks. If
-   the value is false it runs the scripts and toggles the flag to true.
+#. When a TurnKey appliance boots for the first time inithooks checks whether
+   or not this is the first boot by checking the value of the RUN_FIRSTBOOT
+   flag in /etc/default/inithooks. If the value is false it runs the scripts
+   and toggles the flag to true.
 
    The firstboot scripts may run in one of two modes, interactive or
    non-interactive, depending on the type of build.
@@ -158,21 +175,21 @@ following conditions:
    application settings, etc.). These are the same scripts that get
    executed if you run "turnkey-init".
 
-   **Non-interactive mode on headless builds - OpenStack, OpenVZ,
-   OpenNode, Xen**: with these image types interactive access to the
-   virtual console during boot can not be assumed.  The first boot has
-   to be capable of running non-interactively, otherwise we risk
-   hanging the boot while it waits for user interaction that never
-   happens.
-   
+   **Non-interactive mode on headless builds - AWS, OpenStack, LXC, Xen**:
+   with these image types interactive access to the virtual console during
+   boot can not be assumed.  The first boot has to be capable of running
+   non-interactively, otherwise we risk hanging the boot while it waits for
+   user interaction that never happens.
+
    So instead of interacting with the user the system pre-initializes
    application settings with dummy defaults and set all passwords to a
    random value. If a root password has already been set (e.g., in a
    pre-deployment script) the headless preseeding script will not
    overwrite it, so your root password should work just fine.
-   
+
    The output from the non-interactive running of the firstboot
-   scripts is logged to /var/log/inithooks.log.
+   scripts is logged to /var/log/inithooks.log. Inithooks also logs to
+   the systemd journal.
 
    Interactive appliance configuration is delayed until the first time
    the user logs in as root. This is accomplished with the help of the
@@ -195,40 +212,25 @@ following conditions:
     export HUB_APIKEY=SKIP
     export SEC_ALERTS=SKIP
     export SEC_UPDATES=FORCE
+    export AUTO_RUN=TRUE
     EOF
 
     chmod +x /usr/lib/inithooks/firstboot.d/30turnkey-init-fence
 
 
-   **Initialization fence**: the above headless preseeding hook also
-   activates the "initialization fence" mechanism which uses iptables to
-   redirect attempts to access the local web server to a static web page
-   served by inithooks/bin/simplehttpd.py. 
-   
-   This page explains you need to log in as root first in order to
-   finish initializing the system. The purpose of the fence is used to
-   prevent users from accessing uninitialized web applications, which in
-   some cases can pose a security risk.
+   **Initialization fence**: After the user logs in as root and completes the
+   initialization process the "initialization fence" is turned off. Users can
+   then access applications running on the local web server.
 
-   After the user logs in as root and completes the initialization
-   process the "initialization fence" is turned off. Users can then
-   access applications running on the local web server.
+   firstboot.d/30turnkey-init-fence historically controlled the initfence,
+   however the fence now runs by default so it's only functionality is to
+   activate ~$USERNAME/.profile.d/turnkey-init-fence which launches a dtach
+   session bound to a socket. This ensures that the user is presented with
+   the interactive initialization hooks when they first log in.
 
-   What firstboot.d/30turnkey-init-fence does:
-   
-   1) enables turnkey-init-fence as a service and starts it
+   what command are we running in the dtach session?
 
-      service is enabled / disabled via update-rc.d
-
-   2) activates ~$USERNAME/.profile.d/turnkey-init-fence
-
-      the .profile.d script launches a dtach session bound to a socket
-
-          if a session is already bound to the socket attach to it
-
-          what command are we running in the dtach session?
-
-                turnkey-init -> deactivate initfence (service and profile.d)
+        turnkey-init -> deactivate initfence (service and profile.d)
 
 everyboot.d scripts
 '''''''''''''''''''
@@ -244,26 +246,36 @@ Setting the root password in a headless deployment
 On headless deployments the user needs to login as root to complete the
 appliance initialization process, but how do you login as root?
 
-Not a problem if you're using OpenNode or ProxMox - those systems
-prompt you to choose a root password before deploying a TurnKey image.
+Not a problem if you're using LXC on ProxMox or a similar system that prompts
+you to choose a root password before deploying a TurnKey image.
 
-On OpenStack you can log in as root with your configured SSH keypair
-or retrieve the random root password from the "system log". 
+On AWS or OpenStack you can log in as root with your configured SSH keypair
+or retrieve the random root password from the "system log".
 
 Other virtualization / private cloud solutions should be able to use
 their existing deployment scripts to set the root password, just like
 they already do with Debian and Ubuntu.
 
 Another more advanced option is to "preseed" the /etc/inithooks.conf
-file in the apliance's filesystem before booting it for the first
+file in the appliance's filesystem before booting it for the first
 time. This lets you leverage inithooks to pre-configure not just the
 root password but also the database and application passwords, admin
 email, domain name, etc.
 
 However note that using preseeding deactivates the "initilization
 fence". If you're using preseeding TurnKey assumes you've already
-interacted with the user some other way (e.g., web control panel) to
-get the preseeded configuration values.
+interacted with the user some other way to get the preseeded configuration
+values.
+
+If you wish to leave the init-fence running when preseeding, include this
+additional line in your preseeds file (/etc/inithooks.conf):
+
+    export AUTO_RUN=TRUE
+
+That will leave the init-fence running, but it will then need to be manually
+disabled:
+
+    systemctl disable --now turnkey-init-fence
 
 Preseeding
 ----------

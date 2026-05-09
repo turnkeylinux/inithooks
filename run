@@ -28,15 +28,17 @@ mkdir -p "$(dirname "$INITHOOKS_LOGFILE")"
 touch "$INITHOOKS_LOGFILE"
 chmod 640 "$INITHOOKS_LOGFILE"
 
-# wait up to 10 secs for system to be running before starting; minimizes chance
-# of journal overwriting inithook dialog/confconsole
-logger -t inithooks "systemctl is-system-running: $(systemctl is-system-running)"
-for count in {1..10}; do
-    if [[ "$(systemctl is-system-running)" == "starting" ]]; then
-        logger -t inithooks "Waiting for boot to finish ($count/10 seconds)"
-        sleep 1
-    fi
-done
+wait_for_boot() {
+    # wait up to 10 secs for system to be running before starting; minimizes chance
+    # of journal overwriting inithook dialog/confconsole
+    logger -t inithooks "systemctl is-system-running: $(systemctl is-system-running)"
+    for count in {1..10}; do
+        if [[ "$(systemctl is-system-running)" == "starting" ]]; then
+            logger -t inithooks "Waiting for boot to finish ($count/10 seconds)"
+            sleep 1
+        fi
+    done
+}
 
 everyboot_ran() {
     # read lastboot time
@@ -90,6 +92,7 @@ fi
 
 exec_scripts() {
     local script_dir=$1
+    local firstboot=$2
     local script_executable=
     local script=
     [[ -d "$script_dir" ]] || return 0
@@ -102,6 +105,13 @@ exec_scripts() {
             source "$INITHOOKS_CONF"
         fi
         script=$(basename "$script_executable")
+        if [[ -n "$firstboot" ]]; then
+            # if firstboot, then only run <30 scripts - then wait
+            prefix="${script:0:2}"
+            if [[ $prefix =~ ^[0-9]+$ ]] && [[ $prefix -ge 30 ]]; then
+                wait_for_boot
+            fi
+        fi
         if [[ ! -x "$script_executable" ]]; then
             log warn "[$script] skipping"
             continue
@@ -128,7 +138,7 @@ exec_scripts() {
 
 if [[ "$RUN_FIRSTBOOT" == "true" ]]; then
     log info "Running firstboot scripts"
-    exec_scripts "$INITHOOKS_PATH/firstboot.d"
+    exec_scripts "$INITHOOKS_PATH/firstboot.d" firstboot
 fi
 
 if ! everyboot_ran; then

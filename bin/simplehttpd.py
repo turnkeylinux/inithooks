@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # Copyright (c) 2012-2015 Liraz Siri <liraz@turnkeylinux.org>
-# Copyright (c) 2015-2021 TurnKey GNU/Linux - https://www.turnkeylinux.org
+# Copyright (c) 2015-2026 TurnKey GNU/Linux - https://www.turnkeylinux.org
 
 """
 Simple HTTP server
@@ -25,6 +25,7 @@ Known bugs:
 import os
 from os.path import exists, abspath, isdir, splitext
 from tempfile import NamedTemporaryFile
+import socket
 import sys
 import getopt
 from typing import NoReturn
@@ -110,6 +111,12 @@ class SecureHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 class SimpleWebServer:
     class TCPServer(socketserver.ForkingTCPServer):
         allow_reuse_address = True
+        address_family = socket.AF_INET6  # enables IPv6
+
+        def server_bind(self):
+            # Disable IPV6_V6ONLY so the socket accepts IPv4 too (dual-stack)
+            self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+            super().server_bind()
 
     class HTTPRequestHandler(SecureHTTPRequestHandler):
         ALLOWED_EXTS = ["css", "gif", "html", "js", "png", "jpg", "txt"]
@@ -117,12 +124,62 @@ class SimpleWebServer:
     class Address:
         @staticmethod
         def parse_address(address: str) -> tuple[str, int]:
-            if ":" in address:
-                host, _port = address.split(":", 1)
-            else:
-                host = "0.0.0.0"
-                _port = address
+            """Parse address and return listening IP & port.
 
+            Accepts a port number or an IP & port string. Supports both IPv4
+            and IPv6.
+
+            Args:
+                address (str):
+                    Port to listen on (integer as a string) or an IP address
+                    (interface) and port to listen on.
+
+                    IP address and port should be separated by a colon (':').
+
+                    IPv6 address should be wrapped in square brakets ('[]').
+
+                    E.g.:
+                        '8080'                  (port only)
+                        '[dead::beef]:8080'     (IPv6 and port)
+                        '123.123.123.123:8080'  (IPv4 and port)
+
+            Returns:
+                tuple[str, int]:
+                    Tuple of IP address (interface) and port.
+
+                    If address=<port-only> then the address will default to
+                    '::' (i.e. all interfaces via IPv4 & IPv6).
+
+            Raises:
+                SimpleWebServerError:
+                    If address is malformed.
+
+            """
+            # Default to all interfaces, IPv4 & IPv6
+            host = "::"
+            # IPv6 with brackets: [::1]:8080
+            if address.startswith("["):
+                try:
+                    bracket_end = address.index("]")
+                except ValueError:
+                    raise SimpleWebServerError(
+                        f"Malformed IPv6 address: '{address}'"
+                        " - expected closing ']'",
+                    )
+                host = address[1:bracket_end]
+                rest = address[bracket_end + 1:]
+                if not rest.startswith(":"):
+                    raise SimpleWebServerError(
+                            f"Malformed address: '{address}'"
+                            " - expected ':port' after ']'",
+                        )
+                _port = rest[1:]
+            # IPv4 or bare port (no brackets, at most one colon)
+            elif address.count(":") == 1:
+                host, _port = address.split(":", 1)
+            # Bare port number only
+            else:
+                _port = address
             try:
                 port = int(_port)
                 assert port > 0 and port < 65535

@@ -1,16 +1,29 @@
-#!/bin/bash
+#!/bin/bash -e
 
-[ -z "$_TURNKEY_INIT" ] && exit 0; # ONLY run from within turnkey-init
-
-if systemctl is-active --quiet turnkey-init-fence; then
-    systemctl disable turnkey-init-fence
-    systemctl stop turnkey-init-fence
+# shellcheck source=default/inithooks
+source /etc/default/inithooks
+if [[ -e "$INITHOOKS_CONF" ]]; then
+    # shellcheck disable=SC1090
+    source "$INITHOOKS_CONF"
 fi
 
-for home in /root /home/admin; do
-    [ -e $home/.profile.d/turnkey-init-fence ] && chmod -x $home/.profile.d/turnkey-init-fence;
-done
+disable_init_fence() {
+    systemctl disable turnkey-init-fence
+    systemctl stop turnkey-init-fence
+    echo "turnkey-init-fence is down"
+}
 
-chmod -x /usr/lib/inithooks/firstboot.d/??turnkey-init-fence*
-
-echo 'turnkey-init-fence is down'
+if [[ -n "$_TURNKEY_INIT" ]]; then
+    # ONLY run this from within turnkey-init
+    for home in /root /home/admin; do
+        if [[ -e $home/.profile.d/turnkey-init-fence ]]; then
+            chmod -x $home/.profile.d/turnkey-init-fence
+        fi
+    done
+    chmod -x /usr/lib/inithooks/firstboot.d/??turnkey-init-fence*
+    disable_init_fence
+elif [[ -z "$AUTO_RUN" ]]; then
+    # disable the init-fence if AUTO_RUN not set (set by firstboot.d/29preseed
+    # on headless builds)
+    disable_init_fence
+fi

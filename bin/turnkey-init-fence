@@ -19,7 +19,10 @@ iptables_delete_redirect() {
     local to_port=$2
     echo "Removing REDIRECT firewall rule: $dport => $to_port"
     while true; do
-        (2>&1 iptables -t nat -D PREROUTING -p tcp --dport "$dport" -j REDIRECT --to-port "$to_port") > /dev/null || break
+        (2>&1 iptables -t nat -D PREROUTING -p tcp --dport "$dport" -j REDIRECT --to-port "$to_port") \
+            > /dev/null || break
+        (2>&1 ip6tables -t nat -D PREROUTING -p tcp --dport "$dport" -j REDIRECT --to-port "$to_port") \
+            > /dev/null || break
     done
 }
 
@@ -29,6 +32,7 @@ iptables_add_redirect() {
     echo "Adding REDIRECT firewall rule: $dport => $to_port"
     iptables_delete_redirect "$dport" "$to_port"
     iptables -t nat -A PREROUTING -p tcp --dport "$dport" -j REDIRECT --to-port "$to_port"
+    ip6tables -t nat -A PREROUTING -p tcp --dport "$dport" -j REDIRECT --to-port "$to_port"
 }
 
 iptables_unensure_accept() {
@@ -36,7 +40,10 @@ iptables_unensure_accept() {
     local dport=$1
     echo "Removing ACCEPT firewall rule for fence port: $dport"
     while true; do
-        (2>&1 iptables -t filter -D INPUT -p tcp -m tcp --dport "$dport" -j ACCEPT) > /dev/null || break
+        (2>&1 iptables -t filter -D INPUT -p tcp -m tcp --dport "$dport" -j ACCEPT) \
+            > /dev/null || break
+        (2>&1 ip6tables -t filter -D INPUT -p tcp -m tcp --dport "$dport" -j ACCEPT) \
+            > /dev/null || break
     done
 }
 
@@ -46,6 +53,7 @@ iptables_ensure_accept() {
     echo "Adding ACCEPT firewall rule for fence port: $dport"
     iptables_unensure_accept "$dport"
     iptables -t filter -A INPUT -p tcp -m tcp --dport "$dport" -j ACCEPT
+    ip6tables -t filter -A INPUT -p tcp -m tcp --dport "$dport" -j ACCEPT
 }
 
 iptables_redirect() {
@@ -132,6 +140,12 @@ case "$1" in
         iptables_redirect stop
         stop_mini_server
         echo "Stopped turnkey-init-fence"
+        ;;
+    reload)
+        echo "Reloading turnkey-init-fence"
+        stop_mini_server
+        start_mini_server
+        echo "Reloaded turnkey-init-fence"
         ;;
     *)
         echo "Unknown command: $1" >&2
