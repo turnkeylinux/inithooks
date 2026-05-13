@@ -73,7 +73,14 @@
 
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
 <script>
-    document.getElementById("p1").innerHTML = "ssh root@" + document.domain;
-    document.getElementById("p2").innerHTML = "ssh -i path/to/private/key root@" + document.domain;
+    /*
+      '[]' is stripped from address for SSH text substitution - in case the
+      address is IPv6 IP. IPv6 addresses always need to be wrapped in '[]' when
+      used via HTTP/HTTPS but are not valid when used with SSH. Stripping '[]'
+      unconditionally is safe as they are only ever used to wrap IPv6 IPs.
+    */
+    let ssh_address = document.domain.replace(/^\[|\]$/g, "");
+    document.getElementById("p1").innerHTML = "ssh root@" + ssh_address;
+    document.getElementById("p2").innerHTML = "ssh -i path/to/private/key root@" + ssh_address;
     document.getElementById("p3").innerHTML = "https://" + document.domain;
 </script>
