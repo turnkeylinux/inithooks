@@ -131,6 +131,8 @@ fi
 if [[ "$REDIRECT_OUTPUT" == "true" ]]; then
     log info "Inithook run completed, exiting."
 else
+    # ensure confconsole --usage isn't overwritten on reboots
+    wait_for_boot
     log info "Inithook run completed, now starting confconsole"
     sleep 2 # anyway to replace this?
     confconsole --usage
