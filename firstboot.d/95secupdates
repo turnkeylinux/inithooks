@@ -43,10 +43,32 @@ install_updates() {
     fi
 }
 
+# SEC_UPDATES preseeded - unset SEC_UPDATES will run interactive (below)
 if [[ "$SEC_UPDATES" == "skip" ]]; then
+    logger -t inithooks -p warn "[95secupdates] security updates skipped"
     exit 0
 elif [[ "$SEC_UPDATES" == "force" ]]; then
+    logger -t inithooks "[95secupdates] security updates being installed"
     install_updates
+    exit 0
+elif [[ -n "$SEC_UPDATES" ]]; then
+    logger -t inithooks -p err "[95secupdates] invalid preseed value: $SEC_UPDATES"
+    exit 1
+fi
+
+# interactive
+exit_code=0
+$INITHOOKS_PATH/bin/secupdates-ask.py || exit_code=$?
+if [[ $exit_code -eq 99 ]]; then
+    # secupdates-ask.py returns 99 if user selects 'skip'
+    logger -t inithooks -p warn "[95secupdates] security updates skipped"
+    exit 0
+elif [[ $exit_code -ne 0 ]]; then
+    # any other non-zero return code signals an unknown error; the run script
+    # will flag the falure in the log
+    exit "$exit_code"
 else
-    $INITHOOKS_PATH/bin/secupdates-ask.py && install_updates
+    # exit_code == 0
+    logger -t inithooks "[95secupdates] security updates being installed"
+    install_updates
 fi

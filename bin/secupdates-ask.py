@@ -50,7 +50,7 @@ def main():
     install = d.yesno("Security updates", TEXT, "Install", "Skip")
     logging.debug(f"secupdates.main()\n\tinstall:`{install}'\n")
     if not install:
-        sys.exit(1)
+        sys.exit(99)
 
     try:
         subprocess.run(
