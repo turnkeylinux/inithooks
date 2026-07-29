@@ -28,13 +28,15 @@ install_updates() {
     #
     # shellcheck disable=SC2012
     OLDMD5=$(ls -la /lib/modules /boot 2>/dev/null | md5sum)
-    for actionfile in /etc/cron-apt/action.d/*; do
-        while read -r aptcmd; do
-            aptcmd="${aptcmd%% -q}"
-            aptcmd="${aptcmd%% -o quiet=*}"
-            DEBIAN_FRONTEND=noninteractive apt-get "$aptcmd" | tee -a $LOGFILE
-        done < "$actionfile"
-    done
+
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get autoclean -y
+    DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y \
+        -o APT::Get::Show-Upgraded=true \
+        -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/security.sources.sources \
+        -o DPkg::Options::=--force-confdef \
+        -o DPkg::Options::=--force-confold | tee -a $LOGFILE
+
     # per above note re containers
     # shellcheck disable=SC2012
     NEWMD5=$(ls -la /lib/modules /boot 2>/dev/null | md5sum)
@@ -43,10 +45,32 @@ install_updates() {
     fi
 }
 
+# SEC_UPDATES preseeded - unset SEC_UPDATES will run interactive (below)
 if [[ "$SEC_UPDATES" == "skip" ]]; then
+    logger -t inithooks -p warn "[95secupdates] security updates skipped"
     exit 0
 elif [[ "$SEC_UPDATES" == "force" ]]; then
+    logger -t inithooks "[95secupdates] security updates being installed"
     install_updates
+    exit 0
+elif [[ -n "$SEC_UPDATES" ]]; then
+    logger -t inithooks -p err "[95secupdates] invalid preseed value: $SEC_UPDATES"
+    exit 1
+fi
+
+# interactive
+exit_code=0
+$INITHOOKS_PATH/bin/secupdates-ask.py || exit_code=$?
+if [[ $exit_code -eq 99 ]]; then
+    # secupdates-ask.py returns 99 if user selects 'skip'
+    logger -t inithooks -p warn "[95secupdates] security updates skipped"
+    exit 0
+elif [[ $exit_code -ne 0 ]]; then
+    # any other non-zero return code signals an unknown error; the run script
+    # will flag the falure in the log
+    exit "$exit_code"
 else
-    $INITHOOKS_PATH/bin/secupdates-ask.py && install_updates
+    # exit_code == 0
+    logger -t inithooks "[95secupdates] security updates being installed"
+    install_updates
 fi
