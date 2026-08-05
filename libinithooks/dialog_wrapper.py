@@ -7,6 +7,7 @@ import dialog
 import traceback
 from io import StringIO
 from os import environ
+from urllib.parse import urlparse
 import logging
 
 EMAIL_RE = re.compile(r"(?:^|\s).*\S@\S+(?:\s|$)", re.IGNORECASE)
@@ -311,6 +312,27 @@ class Dialog:
 
             return email
 
+    def get_domain(self, title: str, text: str, init: str = "") -> str | None:
+        """Validated domain input box with optional prefilled value. Strips scheme
+        Returns domain"""
+        logging.debug(
+            f"get_domain(title={title!r}, text=<redacted>, init={init!r})"
+        )
+        while 1:
+            domain = self.inputbox(title, text, init, "Apply", "")[1]
+
+            domain, scheme, message = validate_domain(domain)
+
+            if not domain:
+                self.error(message)
+                continue
+            elif message == 'Extra parts':
+                if self.yesno('Domain Confirmation', f'Extra non-domain parts recieved, is this the domain you want to set? `{p.netloc}`'):
+                    return (scheme, domain)
+                continue
+            else:
+                return (scheme, domain)
+
     def get_input(self, title: str, text: str, init: str = "") -> str | None:
         """Input box within optional prefilled value & 'Ok' button
         Returns input"""
@@ -320,3 +342,80 @@ class Dialog:
                 self.error(f"{title} is required.")
                 continue
             return s
+
+_LABEL_RE = re.compile(r'^(?!-)[A-Za-z0-9-]{1,63}(?<!-)$')
+_SCHEME_RE = re.compile(r'^[a-zA-Z][a-zA-Z0-9+.\-]*://')
+ 
+def validate_domain(domain: str) -> tuple[str | None, str | None, str | None]:
+    """
+    Returns (domain, scheme, message).
+ 
+    - domain is None only on a hard failure (input could not be salvaged);
+      `message` explains why and the UI should block submission.
+    - domain is not None and message is not None when something *meaningful*
+      was removed (path, query, fragment, port) - UI should confirm (yes/no)
+      before accepting the cleaned value.
+    - domain is not None and message is None when input was already clean,
+      or only had a non-meaningful change removed (scheme pulled into its
+      own field, a lone trailing slash, surrounding whitespace).
+    - scheme is None if the input had no scheme, or on hard failure.
+    """
+    if not domain or not domain.strip():
+        return None, None, "Domain is required."
+ 
+    raw = domain
+    domain = domain.strip()
+ 
+    if domain.startswith('//'):
+        return None, None, "Domain cannot start with `//`"
+ 
+    has_scheme = bool(_SCHEME_RE.match(domain))
+    candidate = domain if has_scheme else '//' + domain
+ 
+    try:
+        p = urlparse(candidate)
+    except ValueError:
+        return None, None, "Domain is invalid"
+ 
+    scheme = p.scheme or None
+    if scheme and scheme not in ('http', 'https'):
+        return None, None, f'Unsupported scheme "{scheme}"'
+ 
+    netloc = p.netloc
+ 
+    if '@' in netloc:
+        return None, None, "Domain cannot include a username or password"
+ 
+    host, sep, port = netloc.partition(':')
+ 
+    # A doubled/nested scheme (e.g. "http://http://example.com") ends up
+    # looking like a host of "http" with an empty/garbage port.
+    if sep and not port.isdigit():
+        return None, None, f'Domain "{raw}" contains a nested URL'
+ 
+    if sep and not (0 < int(port) < 65536):
+        return None, None, 'Domain port specifier is malformed'
+ 
+    if not host:
+        return None, None, f'Domain "{raw}" is invalid'
+ 
+    labels = host.rstrip('.').split('.')
+    if len(host) > 253 or not labels or not all(_LABEL_RE.match(l) for l in labels):
+        return None, None, f'Domain "{raw}" is invalid'
+ 
+    meaningful_changes = []
+    if sep:
+        meaningful_changes.append('port')
+    if p.path not in ('', '/'):
+        meaningful_changes.append('path')
+    if p.query:
+        meaningful_changes.append('query string')
+    if p.fragment:
+        meaningful_changes.append('fragment')
+ 
+    if meaningful_changes:
+        parts = ', '.join(meaningful_changes)
+        return host, scheme, f'The {parts} in "{raw}" will be removed - is "{host}" correct?'
+ 
+    return host, scheme, None
+
