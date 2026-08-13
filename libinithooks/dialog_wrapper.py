@@ -312,7 +312,7 @@ class Dialog:
 
             return email
 
-    def get_domain(self, title: str, text: str, init: str = "") -> str | None:
+    def get_domain(self, title: str, text: str, init: str = "") -> tuple[str, str] | None:
         """Validated domain input box with optional prefilled value. Strips scheme
         Returns domain"""
         logging.debug(
