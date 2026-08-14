@@ -15,13 +15,33 @@ info() { echo "INFO: [$_hook] $*" ; }
 turnkey_make_ssl_cert=$(which turnkey-make-ssl-cert) \
     || fatal "turnkey-make-ssl-cert executable not found."
 
-# As of v17.0 a predefined 4096 bits default dhparams file is provided. Please
-# see https://github.com/turnkeylinux/tracker/issues/1653 for more info.
+# We use predefined 4096 bits default dhparams file for TLS1.2 (not needed for
+# TLS1.3)
+# See https://github.com/turnkeylinux/tracker/issues/1653 for more info.
 info "Generating SSL/TLS cert & key."
 $turnkey_make_ssl_cert --default --force
 
 # Restart relevant services
 SERVICES=(nginx apache2 lighttpd tomcat10 tomcat11)
+
+# make sure that generated keys are ready to use - avoids occasional race
+# condition where cert & key don't (yet) match. a single sleep should be plenty
+# but let's be sure
+for _wait in {1..5}; do
+    cert_md5=$(openssl x509 -noout -modulus -in /etc/ssl/private/cert.pem \
+        | openssl md5)
+    key_md5=$(openssl rsa -noout -modulus -in /etc/ssl/private/cert.key \
+        | openssl md5)
+    if [[ "$cert_md5" == "$key_md5" ]]; then
+        echo "SSL cert and key have been written - ready to restart services"
+        break
+    elif [[ $_wait -eq 1 ]]; then
+        echo "Waiting for updated ssl cert & key to be written to disk"
+    else
+        echo "..."
+    fi
+    sleep 1
+done
 
 info "Restarting relevant services."
 for service in "${SERVICES[@]}"; do
