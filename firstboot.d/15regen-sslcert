@@ -7,8 +7,16 @@
 
 _hook=$(basename "$0")
 
-fatal() { echo "FATAL: [$_hook] $*" 1>&2 ; exit 1 ; }
-info() { echo "INFO: [$_hook] $*" ; }
+
+log() {
+    local level=$1
+    shift
+    logger -t inithooks -p "$level" "[$_hook] $*"
+}
+
+fatal() { log 3 "$*"; echo "FATAL: [$_hook] $*" 1>&2 ; exit 1 ; }
+info() { log 5 "$*"; echo "INFO: [$_hook] $*" ; }
+
 
 # Check for 'turnkey-make-ssl-cert' - should be provided by
 # turnkey-ssl package.
@@ -33,10 +41,10 @@ for _wait in {1..5}; do
     key_md5=$(openssl rsa -noout -modulus -in /etc/ssl/private/cert.key \
         | openssl md5)
     if [[ "$cert_md5" == "$key_md5" ]]; then
-        echo "SSL cert and key have been written - ready to restart services"
+        info "SSL cert and key have been written - ready to restart services"
         break
     elif [[ $_wait -eq 1 ]]; then
-        echo "Waiting for updated ssl cert & key to be written to disk"
+        info "Waiting for updated ssl cert & key to be written to disk"
     else
         echo "..."
     fi
