@@ -84,7 +84,7 @@ exec_scripts() {
         if [[ -n "$firstboot" ]]; then
             # if firstboot, then only run <30 scripts - then wait
             prefix="${script:0:2}"
-            if [[ $prefix =~ ^[0-9]+$ ]] && [[ $prefix -ge 30 ]]; then
+            if [[ $prefix =~ ^[0-9]+$ ]] && (( 10#$prefix >= 30 )); then
                 wait_for_boot
             fi
         fi
