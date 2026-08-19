@@ -11,6 +11,7 @@ RUN_FIRSTBOOT="${RUN_FIRSTBOOT,,}"
 TKLINFO="${TKLINFO:-/var/lib/turnkey-info}"
 REDIRECT_OUTPUT="${REDIRECT_OUTPUT,,}"
 PID=
+REBOOT_REQUIRED=
 
 # load preseeds if they exist - although preseeds file should always be empty
 # unless RUN_FIRSTBOOT=true (firstboot will wipe preseeds file)
@@ -100,10 +101,8 @@ exec_scripts() {
         elif [[ "$script" = "95secupdates" ]] && [[ "$exit_code" -eq 2 ]]; then
             log info "[$script] detected live system - skipping"
         elif [[ "$script" = "95secupdates" ]] && [[ "$exit_code" -eq 42 ]]; then
+            REBOOT_REQUIRED=true
             log warn "[$script] reboot is required"
-            log err 'Rebooting now!'
-            systemctl reboot
-            exit 0
         else
             log err "[$script] failed - exit code $exit_code"
         fi
@@ -126,6 +125,12 @@ fi
 if [[ -n "$PID" ]];  then
     log info "Killing inithooks pid $PID"
     kill -9 $PID || true
+fi
+
+if [[ -n "$REBOOT_REQUIRED" ]]; then
+    log err "Security updates installed; rebooting now"
+    systemctl reboot
+    exit 0
 fi
 
 if [[ "$REDIRECT_OUTPUT" == "true" ]]; then
