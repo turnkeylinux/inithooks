@@ -32,6 +32,6 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] \
     fi
 fi
 
-chmod 755 /usr/lib/inithooks/bin/inithooks_cache.py
+chmod 755 /usr/lib/python3/dist-packages/libinithooks/inithooks_cache.py
 
 exit 0
