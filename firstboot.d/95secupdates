@@ -20,7 +20,7 @@ install_updates() {
         hubclient-status sec-updates
     fi
 
-    LOGFILE=/var/log/cron-apt/log
+    LOGFILE=/var/log/inithools/log
     # 'ls' stderr is suppressed as containers don't have the checked paths. If
     # any other errors occur we've got much bigger problems!
     # SC2012 is a shellcheck warning re use of 'ls'. 'ls' used to provide
@@ -28,11 +28,19 @@ install_updates() {
     #
     # shellcheck disable=SC2012
     OLDMD5=$(ls -la /lib/modules /boot 2>/dev/null | md5sum)
-
+    if [[ -n "$(dpkg --audit 2>/dev/null)" ]]; then
+        msg="[95secupdates] dpkg in an inconsistent state (see $LOGFILE)"
+        logger -t inithooks -p warn "$msg"
+        echo "WARNING: $msg" >> $LOGFILE
+        dpkg --audit 2>&1 | tee -a $LOGFILE
+    fi
+    DEBIAN_FRONTEND=noninteractive dpkg --force-confdef --force-confold \
+        --configure -a 2>&1 | tee -a $LOGFILE
     apt-get update
     DEBIAN_FRONTEND=noninteractive apt-get autoclean -y
     DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y \
         -o APT::Get::Show-Upgraded=true \
+        -o Dir::Etc::sourceparts=/dev/null \
         -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/security.sources.sources \
         -o DPkg::Options::=--force-confdef \
         -o DPkg::Options::=--force-confold | tee -a $LOGFILE
