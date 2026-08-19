@@ -20,7 +20,8 @@ install_updates() {
         hubclient-status sec-updates
     fi
 
-    LOGFILE=/var/log/inithools/log
+    LOGFILE=/var/log/inithooks/secupdates.log
+    mkdir -p /var/log/inithooks
     # 'ls' stderr is suppressed as containers don't have the checked paths. If
     # any other errors occur we've got much bigger problems!
     # SC2012 is a shellcheck warning re use of 'ls'. 'ls' used to provide
