@@ -127,21 +127,22 @@ if [[ -n "$PID" ]];  then
     kill -9 $PID || true
 fi
 
+log info "Inithooks run completed"
 if [[ -n "$REBOOT_REQUIRED" ]]; then
-    log err "Security updates installed; rebooting now"
+    log err "Rebooting now to ensure all security updates are applied"
     systemctl reboot
     exit 0
 fi
 
 if [[ "$REDIRECT_OUTPUT" == "true" ]]; then
-    log info "Inithook run completed, exiting."
+    log info "Inithooks exiting."
 else
     # ensure confconsole --usage isn't overwritten on reboots
     wait_for_boot
-    log info "Inithook run completed, now starting confconsole"
+    log info "Inithooks starting Confconsole"
     sleep 2 # anyway to replace this?
+    log info "Confconsole started, Inithooks exiting"
     confconsole --usage
-    log info "Confconsole started, inithooks exiting"
 fi
 
 exit 0
