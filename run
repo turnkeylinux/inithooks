@@ -70,6 +70,7 @@ fi
 exec_scripts() {
     local script_dir=$1
     local firstboot=$2
+    local boot_wait_complete=
     local script_executable=
     local script=
     [[ -d "$script_dir" ]] || return 0
@@ -82,11 +83,12 @@ exec_scripts() {
             source "$INITHOOKS_CONF"
         fi
         script=$(basename "$script_executable")
-        if [[ -n "$firstboot" ]]; then
+        if [[ -n "$firstboot" && -z "$boot_wait_complete" ]]; then
             # if firstboot, then only run <30 scripts - then wait
             prefix="${script:0:2}"
             if [[ $prefix =~ ^[0-9]+$ ]] && (( 10#$prefix >= 30 )); then
                 wait_for_boot
+                boot_wait_complete=true
             fi
         fi
         if [[ ! -x "$script_executable" ]]; then
