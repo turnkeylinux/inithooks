@@ -10,6 +10,11 @@ export PYTHONDONTWRITEBYTECODE=1
 %:
 	dh $@ --with=python3 --buildsystem=pybuild
 
+override_dh_fixperms:
+	dh_fixperms
+	# This Python module is also the executable target of the cache command.
+	chmod 755 debian/inithooks/usr/lib/python3/dist-packages/libinithooks/inithooks_cache.py
+
 override_dh_installsystemd:
 	dh_installsystemd --name=inithooks
 	dh_installsystemd --name=inithooks-restart-getty1

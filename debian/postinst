@@ -2,36 +2,20 @@
 
 set -e
 
+chmod 755 /usr/lib/python3/dist-packages/libinithooks/inithooks_cache.py
+
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] \
         || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
     systemctl daemon-reload >/dev/null || true
-    if [ -n "$2" ]; then
-        # this is an upgrade ($2 is the old version)
-        # systemctl restart will start services if not running
-
-        # /run/_service_-was-active is created by preinst script
-        if [ -f "/run/inithooks-was-active" ]; then
-            rm -f /run/inithooks-was-active
-            # restart will start if not running
-            systemctl restart inithooks.service
-            # unlikely that turnkey-init-fence is running when package is
-            # upgraded but just in case
-            if [ -f "/run/turnkey-init-fence-was-active" ]; then
-                rm -f /run/turnkey-init-fence-was-active
-                systemctl restart turnkey-init-fence.service
-            fi
-        else
-            # getty1 should already be running if inithooks wasn't, but let's
-            # make sure
-            systemctl restart getty@tty1.service container-getty@1.service 2>/dev/null || true
-        fi
-    else
+    # Firstboot runs package upgrades itself. Restarting initialization or
+    # its console here can kill dpkg before configuration has completed.
+    # Existing services use the updated scripts on their next invocation.
+    rm -f /run/inithooks-was-active /run/turnkey-init-fence-was-active
+    if [ -z "$2" ]; then
         # fresh install ($2 is empty) - enable services
         systemctl enable inithooks.service
         systemctl enable turnkey-init-fence.service
     fi
 fi
-
-chmod 755 /usr/lib/python3/dist-packages/libinithooks/inithooks_cache.py
 
 exit 0

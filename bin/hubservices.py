@@ -95,11 +95,17 @@ def main():
             fqdn = val
 
     if apikey:
-        subprocess.run(
-            ["tklbam-init", apikey],
-            encoding=sys.stdin.encoding,
-            check=True,
-        )
+        # Status 10 means linked but no backup yet; 11 means not linked.
+        # Retrying firstboot must retain an existing backup identity.
+        status = subprocess.run(["tklbam-status", "--short"], capture_output=True)
+        if status.returncode == 11:
+            subprocess.run(
+                ["tklbam-init", apikey],
+                encoding=sys.stdin.encoding,
+                check=True,
+            )
+        elif status.returncode not in (0, 10):
+            status.check_returncode()
 
         if fqdn:
             subprocess.run(
