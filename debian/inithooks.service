@@ -9,6 +9,8 @@ OnFailure=inithooks-restart-getty1.service
 
 [Service]
 Type=exec
+# Upgrades can reload this unit while the previous oneshot is still starting.
+TimeoutStartSec=infinity
 ExecStart=/usr/lib/inithooks/run
 # (re)start getty1 if inithooks.service exits cleanly
 ExecStopPost=/bin/systemctl start inithooks-restart-getty1.service
