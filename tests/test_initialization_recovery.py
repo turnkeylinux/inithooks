@@ -96,13 +96,13 @@ class HubRetryTest(unittest.TestCase):
         with patch.dict(sys.modules, {"libinithooks.dialog_wrapper": dialog}):
             spec.loader.exec_module(self.module)
 
-    def run_main(self, status, init_status=0, fqdn=False):
+    def run_main(self, init_status=0, stderr="", fqdn=False):
         calls = []
 
         def run(command, **kwargs):
             calls.append(command)
-            code = status if command[0] == "tklbam-status" else init_status
-            result = subprocess.CompletedProcess(command, code)
+            code = init_status if command[0] == "tklbam-init" else 0
+            result = subprocess.CompletedProcess(command, code, stderr=stderr)
             if kwargs.get("check"):
                 result.check_returncode()
             return result
@@ -115,27 +115,36 @@ class HubRetryTest(unittest.TestCase):
             self.module.main()
         return calls
 
-    def test_retry_preserves_existing_identity_with_and_without_backup(self):
-        for status in (0, 10):
-            with self.subTest(status=status):
-                self.assertEqual(self.run_main(status), [["tklbam-status", "--short"]])
+    def test_retry_accepts_only_tklbam_completed_initialization(self):
+        self.assertEqual(self.run_main(1, "error: already initialized\n"),
+                         [["tklbam-init", "test-key"]])
 
     def test_new_account_is_initialized(self):
-        self.assertEqual(self.run_main(11), [["tklbam-status", "--short"],
-                                             ["tklbam-init", "test-key"]])
+        self.assertEqual(self.run_main(), [["tklbam-init", "test-key"]])
 
     def test_existing_backup_account_does_not_skip_dns_configuration(self):
-        self.assertEqual(self.run_main(10, fqdn=True), [
-            ["tklbam-status", "--short"],
+        self.assertEqual(self.run_main(1, "error: already initialized\n", fqdn=True), [
+            ["tklbam-init", "test-key"],
             ["hubdns-init", "test-key", "example.tklapp.com"], ["hubdns-update"]])
 
-    def test_unexpected_status_failure_is_not_treated_as_initialized(self):
-        with self.assertRaises(subprocess.CalledProcessError):
-            self.run_main(1)
+    def test_partial_initialization_retries_profile_download(self):
+        # A linked account without a profile still needs tklbam-init, even
+        # though tklbam-status would report NO BACKUPS (10).
+        self.assertEqual(self.run_main(), [["tklbam-init", "test-key"]])
 
-    def test_real_initialization_failure_propagates(self):
-        with self.assertRaises(subprocess.CalledProcessError):
-            self.run_main(11, init_status=1)
+    def test_partial_initialization_profile_failure_propagates(self):
+        with patch.object(sys, "stderr") as stderr:
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.run_main(1, "error: profile download failed\n")
+            self.assertIn("error: profile download failed\n",
+                          [call.args[0] for call in stderr.write.call_args_list])
+
+    def test_other_failure_containing_already_initialized_still_propagates(self):
+        with patch.object(sys, "stderr"):
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.run_main(1, "error: already initialized\nerror: corrupt profile\n")
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.run_main(2, "error: already initialized\n")
 
 
 if __name__ == "__main__":

@@ -95,17 +95,19 @@ def main():
             fqdn = val
 
     if apikey:
-        # Status 10 means linked but no backup yet; 11 means not linked.
-        # Retrying firstboot must retain an existing backup identity.
-        status = subprocess.run(["tklbam-status", "--short"], capture_output=True)
-        if status.returncode == 11:
-            subprocess.run(
-                ["tklbam-init", apikey],
-                encoding=sys.stdin.encoding,
-                check=True,
-            )
-        elif status.returncode not in (0, 10):
-            status.check_returncode()
+        # Let TKLBAM complete interrupted initialization, including its profile.
+        # Its already-initialized error is the only benign failure on a retry.
+        tklbam_init = subprocess.run(
+            ["tklbam-init", apikey], stderr=subprocess.PIPE, text=True,
+        )
+        already_initialized = (
+            tklbam_init.returncode == 1
+            and tklbam_init.stderr.strip() == "error: already initialized"
+        )
+        if not already_initialized:
+            if tklbam_init.stderr:
+                print(tklbam_init.stderr, file=sys.stderr, end="")
+            tklbam_init.check_returncode()
 
         if fqdn:
             subprocess.run(
