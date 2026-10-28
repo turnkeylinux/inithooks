@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Keep package upgrades and Hub-service retries safe during initialization."""
 import importlib.util
+import io
 import os
 from pathlib import Path
 import subprocess
@@ -96,13 +97,14 @@ class HubRetryTest(unittest.TestCase):
         with patch.dict(sys.modules, {"libinithooks.dialog_wrapper": dialog}):
             spec.loader.exec_module(self.module)
 
-    def run_main(self, init_status=0, stderr="", fqdn=False):
+    def run_main(self, init_status=0, stderr="", fqdn=False, failed_command="tklbam-init"):
         calls = []
 
         def run(command, **kwargs):
             calls.append(command)
-            code = init_status if command[0] == "tklbam-init" else 0
-            result = subprocess.CompletedProcess(command, code, stderr=stderr)
+            code = init_status if command[0] == failed_command else 0
+            result = subprocess.CompletedProcess(
+                command, code, stderr=stderr if command[0] == failed_command else "")
             if kwargs.get("check"):
                 result.check_returncode()
             return result
@@ -134,17 +136,31 @@ class HubRetryTest(unittest.TestCase):
 
     def test_partial_initialization_profile_failure_propagates(self):
         with patch.object(sys, "stderr") as stderr:
-            with self.assertRaises(subprocess.CalledProcessError):
+            with self.assertRaises(SystemExit):
                 self.run_main(1, "error: profile download failed\n")
             self.assertIn("error: profile download failed\n",
                           [call.args[0] for call in stderr.write.call_args_list])
 
     def test_other_failure_containing_already_initialized_still_propagates(self):
         with patch.object(sys, "stderr"):
-            with self.assertRaises(subprocess.CalledProcessError):
+            with self.assertRaises(SystemExit):
                 self.run_main(1, "error: already initialized\nerror: corrupt profile\n")
-            with self.assertRaises(subprocess.CalledProcessError):
+            with self.assertRaises(SystemExit):
                 self.run_main(2, "error: already initialized\n")
+
+    def test_initialization_errors_do_not_disclose_api_key(self):
+        for command in ("tklbam-init", "hubdns-init"):
+            for message in ("error: profile download failed\n",
+                            "error: 'test-key' is an invalid API-KEY\n"):
+                with self.subTest(command=command, message=message):
+                    output = io.StringIO()
+                    with patch.object(sys, "stderr", output):
+                        with self.assertRaises(SystemExit) as raised:
+                            self.run_main(1, message, fqdn=True, failed_command=command)
+                    self.assertNotEqual(raised.exception.code, 0)
+                    diagnostic = output.getvalue() + str(raised.exception)
+                    self.assertNotIn("test-key", diagnostic)
+                    self.assertIn("failed", diagnostic)
 
 
 if __name__ == "__main__":

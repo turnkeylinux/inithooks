@@ -106,15 +106,19 @@ def main():
         )
         if not already_initialized:
             if tklbam_init.stderr:
-                print(tklbam_init.stderr, file=sys.stderr, end="")
-            tklbam_init.check_returncode()
+                print(tklbam_init.stderr.replace(apikey, "[redacted]"), file=sys.stderr, end="")
+            if tklbam_init.returncode:
+                sys.exit(f"TKLBAM initialization failed (exit status {tklbam_init.returncode})")
 
         if fqdn:
-            subprocess.run(
+            hubdns_init = subprocess.run(
                 ["hubdns-init", apikey, fqdn],
-                encoding=sys.stdin.encoding,
-                check=True,
+                stderr=subprocess.PIPE, text=True,
             )
+            if hubdns_init.stderr:
+                print(hubdns_init.stderr.replace(apikey, "[redacted]"), file=sys.stderr, end="")
+            if hubdns_init.returncode:
+                sys.exit(f"HubDNS initialization failed (exit status {hubdns_init.returncode})")
             subprocess.run(
                 ["hubdns-update"],
                 encoding=sys.stdin.encoding,
