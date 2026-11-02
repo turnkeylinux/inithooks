@@ -4,8 +4,6 @@
 import re
 import sys
 import dialog
-import traceback
-from io import StringIO
 from os import environ
 from urllib.parse import urlparse
 import logging
@@ -46,7 +44,11 @@ class Dialog:
         self.console.add_persistent_args(["--backtitle", title])
         self.console.add_persistent_args(["--no-mouse"])
 
-    def _handle_exitcode(self, retcode: int) -> bool:
+    def _handle_exitcode(self, retcode: str | tuple[str, str]) -> bool:
+        # Input widgets return (status, value); message widgets return status.
+        # Inspect only the status so answers never enter the debug log.
+        if isinstance(retcode, tuple):
+            retcode = retcode[0]
         logging.debug(f"_handle_exitcode(retcode={retcode!r})")
         if retcode == self.console.ESC:  # ESC, ALT+?
             text = "Do you really want to quit?"
@@ -67,11 +69,10 @@ class Dialog:
 
     def wrapper(
         self, dialog_name: str, text: str, *args, **kws
-    ) -> tuple[int, str]:
-        retcode = 0
+    ) -> str | tuple[str, str]:
         logging.debug(
-            f"wrapper(dialog_name={dialog_name!r}, text=<redacted>,"
-            f" *{args!r}, **{kws!r})"
+            "wrapper(dialog_name=%r, text=<redacted>, arguments=<redacted>)",
+            dialog_name,
         )
         try:
             method = getattr(self.console, dialog_name)
@@ -82,25 +83,12 @@ class Dialog:
             )
             raise Error("dialog not supported: " + dialog_name)
 
-        while 1:
-            try:
-                retcode = method("\n" + text, *args, **kws)
-                logging.debug(
-                    f"wrapper(dialog_name={dialog_name!r}, ...) -> {retcode!r}"
-                )
-                if self._handle_exitcode(retcode):
-                    break
-
-            except Exception as e:
-                sio = StringIO()
-                traceback.print_exc(file=sio)
-                logging.error(
-                    f"wrapper(dialog_name={dialog_name!r}) raised exception",
-                    exc_info=e,
-                )
-                self.msgbox("Caught exception", sio.getvalue())
-
-        return retcode
+        while True:
+            # A failed backend cannot reliably display another error dialog.
+            # Let the caller report the failure or select a different frontend.
+            result = method("\n" + text, *args, **kws)
+            if self._handle_exitcode(result):
+                return result
 
     def error(self, text: str) -> tuple[int, str]:
         """'Error' titled message with single 'ok' button
