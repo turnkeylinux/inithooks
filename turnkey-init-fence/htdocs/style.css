@@ -1,7 +1,8 @@
 body {
   font-family: "proxima-nova","Helvetica Neue",Helvetica,Arial,sans-serif;
   -webkit-font-smoothing: antialiased;
-  width: 980px;
+  max-width: 860px;
+  padding: 0 24px;
   margin: 20px auto;
   line-height: 30px;
 }
@@ -19,6 +20,20 @@ h2 {
   font-weight: 400;
 }
 img {
-  width: 980px;
+  max-width: 100%;
   text-align: center;
+}
+pre {
+  background: #f3f4f5;
+  border-left: 4px solid #e76f00;
+  padding: 12px 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+a { overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  body { padding: 0 16px; line-height: 1.6; }
+  h1 { font-size: 28px; margin-top: 24px; text-align: left; }
+  h2 { font-size: 23px; }
 }

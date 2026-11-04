@@ -30,6 +30,9 @@ touch "$INITHOOKS_LOGFILE"
 chmod 640 "$INITHOOKS_LOGFILE"
 
 wait_for_boot() {
+    # Headless initialization has no dialog to protect from console messages.
+    # A oneshot container service also keeps systemd in "starting" itself.
+    [[ "$REDIRECT_OUTPUT" == "true" ]] && return 0
     # wait up to 10 secs for system to be running before starting; minimizes chance
     # of journal overwriting inithook dialog/confconsole
     logger -t inithooks "systemctl is-system-running: $(systemctl is-system-running)"

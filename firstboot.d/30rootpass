@@ -1,6 +1,9 @@
 #!/bin/bash -e
 # set root password
 
+# Proxmox supplies this password when creating the container.
+[[ -e /var/lib/turnkey-info/inithooks.service/lxc ]] && exit 0
+
 USERNAME=root
 
 . /etc/default/inithooks

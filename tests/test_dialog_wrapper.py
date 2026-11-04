@@ -44,7 +44,7 @@ class DialogWrapperTest(unittest.TestCase):
                 self.console.yesno.reset_mock()
                 with self.assertRaises(SystemExit) as caught:
                     self.dialog.wrapper("passwordbox", "Password")
-                self.assertEqual(caught.exception.code, 0)
+                self.assertEqual(caught.exception.code, 130)
                 self.console.yesno.assert_called_once_with(
                     "Do you really want to quit?")
 

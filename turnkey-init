@@ -62,10 +62,14 @@ class InitHooks:
 
     @staticmethod
     def _exec(cmd):
-        subprocess.run(['env',
+        result = subprocess.run(['env',
                         'PATH=/usr/local/sbin:/usr/local/bin:'
                         '/usr/sbin:/usr/bin:/sbin:/bin',
                         cmd])
+        # Security updates are intentionally skipped on live media.
+        if os.path.basename(cmd) == '95secupdates' and result.returncode == 2:
+            return
+        result.check_returncode()
 
     def execute(self, dname):
         os.environ['_TURNKEY_INIT'] = '1'
@@ -101,7 +105,11 @@ def main():
                 confconsole = confconsole[:-1]
 
     inithooks = InitHooks()
-    inithooks.execute('firstboot.d')
+    try:
+        inithooks.execute('firstboot.d')
+    except subprocess.CalledProcessError as error:
+        fatal("Setup stopped at %s. Correct the error and run turnkey-init again."
+              % os.path.basename(error.cmd[-1]))
 
     subprocess.run(confconsole)
 

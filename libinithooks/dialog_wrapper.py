@@ -53,7 +53,9 @@ class Dialog:
         if retcode == self.console.ESC:  # ESC, ALT+?
             text = "Do you really want to quit?"
             if self.console.yesno(text) == self.console.OK:
-                sys.exit(0)
+                # A cancelled hook is not successful initialization. Let the
+                # runner stop before disabling the appliance's web fence.
+                sys.exit(130)
             return False
         logging.debug(
             "_handle_exitcode(): [no conditions met, returning True]"

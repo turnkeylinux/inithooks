@@ -1,24 +1,30 @@
 <html>
 <head>
   <title>Initialization required</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="/style.css" rel="stylesheet" type="text/css">
 </head>
 
 <body>
 
 <div id="please-initialize">
-  <h1>Please initialize this system...</h1>
+  <h1>Finish setting up your appliance</h1>
 
   <p>Welcome to your TurnKey <strong>@APP_NAME@</strong> appliance!</p>
 
-  <p>Before your server is fully exposed to a hostile Internet, this system needs to
-    be initialized. This will setup passwords, install security updates, etc.</p>
+  <p>Complete setup to choose your application passwords and install security
+    updates. This page protects the application until setup is complete.</p>
 
-  <p>To initialize the system, you need to log into the "<b>root</b>" account via SSH.</p>
+  <h2>Using Proxmox?</h2>
+  <p>Open your container's <strong>Console</strong> and log in as
+    <strong>root</strong> with the password you chose when creating the container.
+    Setup should open automatically.</p>
 
-  <p>The <i>turnkey-init</i> initialization program should start automatically:</p>
+  <p>If you reach a shell prompt, start setup with:</p>
+  <pre>turnkey-init</pre>
 
-  <img src="/turnkey-init-root.png" />
+  <p>Keep this protection enabled while completing setup. Stopping the fence
+    service does not configure the application passwords.</p>
 
   <p>After initialization reload this page. Instead of this message, you'll be able
     to access your server as expected.</p>
@@ -27,11 +33,7 @@
 
 <div id="howto-ssh">
 
-  <h2>Can I log in without SSH?</h2>
-
-  <p>No. Unfortunately not.</p>
-
-  <h2>How do I log in via SSH?</h2>
+  <h2>Connect using SSH instead</h2>
 
   <p>The recommended SSH client is OpenSSH - although there are other options. On Windows, you may need to
     <a href="https://docs.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse?pivots=windows-11">
@@ -53,7 +55,8 @@
 
   <h4>Complete initialization</h4>
 
-  <p>Then complete the initialization steps as prompted.</p>
+  <p>Complete the initialization steps as prompted. If setup does not open,
+    run <code>turnkey-init</code> at the shell prompt.</p>
 
   <p>Once your server has been initialized, reloading this page - or browsing to
     <strong id="p3">https://example.com</strong> - will take you to your server's main
@@ -68,10 +71,6 @@
   <p>For support, questions and/or feedback, please <a
         href="https://www.turnkeylinux.org/contact">contact us</a>.</p>
 
-</body>
-</html>
-
-<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
 <script>
     /*
       '[]' is stripped from address for SSH text substitution - in case the
@@ -80,7 +79,9 @@
       unconditionally is safe as they are only ever used to wrap IPv6 IPs.
     */
     let ssh_address = document.domain.replace(/^\[|\]$/g, "");
-    document.getElementById("p1").innerHTML = "ssh root@" + ssh_address;
-    document.getElementById("p2").innerHTML = "ssh -i path/to/private/key root@" + ssh_address;
-    document.getElementById("p3").innerHTML = "https://" + document.domain;
+    document.getElementById("p1").textContent = "ssh root@" + ssh_address;
+    document.getElementById("p2").textContent = "ssh -i path/to/private/key root@" + ssh_address;
+    document.getElementById("p3").textContent = "https://" + document.domain;
 </script>
+</body>
+</html>
