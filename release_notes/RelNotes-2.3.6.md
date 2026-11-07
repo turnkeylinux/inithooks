@@ -1,6 +1,8 @@
 ## v2.3.6 Release notes
 
   * Bugfix:
+    - Restart an already running Webmin after firstboot certificate regeneration
+      so it serves the new certificate rather than its boot-loaded factory copy.
     - Stop boot-time initialization when a firstboot hook fails. Keep setup
       pending and the web initialization fence active, and explain how to retry
       with turnkey-init. Optional skips and security-update completion statuses

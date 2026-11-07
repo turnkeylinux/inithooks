@@ -30,7 +30,7 @@ info "Generating SSL/TLS cert & key."
 $turnkey_make_ssl_cert --default --force
 
 # Restart relevant services
-SERVICES=(nginx apache2 lighttpd tomcat10 tomcat11)
+SERVICES=(nginx apache2 lighttpd tomcat10 tomcat11 webmin)
 
 # make sure that generated keys are ready to use - avoids occasional race
 # condition where cert & key don't (yet) match. a single sleep should be plenty
