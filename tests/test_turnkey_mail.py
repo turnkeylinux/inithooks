@@ -15,6 +15,7 @@ loader = importlib.machinery.SourceFileLoader("turnkey_mail", str(ROOT / "bin/tu
 spec = importlib.util.spec_from_loader(loader.name, loader)
 mail = importlib.util.module_from_spec(spec)
 loader.exec_module(mail)
+LEGACY_DNS = mail.Mail.legacy_dns
 
 TOKEN = "t" * 43
 PASSWORD = "p" * 43
@@ -41,13 +42,13 @@ class MailTest(unittest.TestCase):
         self.main = self.root / "postfix/main.cf"
         self.main.write_text("myhostname = original.example\nrelayhost = [existing.example]:587\n")
         self.calls = []
-        self.fail = None
+        self.fail_command = None
 
         def run(command, data=None, timeout=30):
             self.calls.append((command, data))
             if command[0] == "postmap":
                 Path(command[1][5:] + ".db").write_bytes(b"compiled-map")
-            if command == self.fail:
+            if command == self.fail_command:
                 raise mail.Error("command failed", retryable=True)
             return b""
 
@@ -102,6 +103,99 @@ class MailTest(unittest.TestCase):
         self.assertNotIn("hostname", payload)
         self.assertEqual(payload["ipv4"], "203.0.113.8")
 
+    def assert_dns_updates(self):
+        response = unittest.mock.MagicMock()
+        response.__enter__.return_value.read.return_value = b"203.0.113.8\n"
+        opener = unittest.mock.Mock()
+        opener.open.return_value = response
+        with patch.object(mail.Mail, "legacy_dns", return_value=False), \
+                patch.object(mail.urllib.request, "build_opener", return_value=opener), \
+                patch.object(mail, "request", return_value={"status": "updated"}) as request:
+            result = mail.Mail().dns_update()
+        self.assertEqual(result["status"], "updated")
+        self.assertEqual(request.call_args.args, ("dns/update", {
+            "username": CONFIG["smtp"]["username"], "dns_password": DNS_PASSWORD,
+            "ipv4": "203.0.113.8"}))
+
+    def test_custom_smtp_preserves_linked_dns(self):
+        self.configured()
+        custom = mail.checked_config({"smtp": {"host": "custom.example.net", "port": 587,
+                                               "username": "custom-user"}}, "custom-secret", custom=True)
+        self.client.apply(custom)
+        self.assertEqual(mail.Mail().state["active"]["mode"], "custom")
+        self.assert_dns_updates()
+
+    def test_mail_only_reset_preserves_link_and_dns_timer(self):
+        self.configured()
+        self.client.timers(dns=True)
+        original_identity = CONFIG["device_id"]
+        self.client.reset_mail()
+        self.assertNotIn("active", self.client.state)
+        self.assertEqual(self.client.state["link"]["device_id"], original_identity)
+        self.assertTrue((mail.SYSTEMD_DIR / "turnkey-mail-dns.timer").exists())
+        self.assert_dns_updates()
+        with patch.object(mail, "request") as request:
+            mail.Mail().retry()
+        request.assert_not_called()
+
+    def test_existing_combined_state_survives_custom_and_mail_reset(self):
+        self.configured()
+        self.client.state.pop("link", None)
+        self.client.save()
+        previous = mail.Mail()
+        custom = mail.checked_config({"smtp": {"host": "custom.example.net", "port": 587,
+                                               "username": "custom-user"}}, "custom-secret", custom=True)
+        previous.apply(custom)
+        previous.reset_mail()
+        self.assert_dns_updates()
+        with patch.object(mail, "request") as request:
+            previous.reset()
+        request.assert_not_called()
+        self.assertEqual(previous.state, {})
+        self.assertNotIn(DNS_PASSWORD, (mail.STATE_DIR / "state.json").read_text())
+
+    def test_repeated_completed_bootstrap_preserves_mail_only_choices(self):
+        with patch.object(mail, "request", return_value=CONFIG):
+            self.client.enroll(TOKEN)
+        custom = {"smtp": {"host": "custom.example.net", "port": 587, "username": "custom-user"},
+                  "password": "custom-secret"}
+        original_umask = os.umask(0o077)
+        try:
+            with patch.object(mail.sys, "argv", ["turnkey-mail", "configure", "--stdin", "--json"]), \
+                    patch.object(mail.sys, "stdin", io.StringIO(json.dumps(custom))), \
+                    patch.object(mail.sys, "stdout", io.StringIO()), \
+                    patch.object(mail.os, "geteuid", return_value=0):
+                self.assertEqual(mail.main(), 0)
+        finally:
+            os.umask(original_umask)
+        client = mail.Mail()
+        with patch.object(mail, "request") as request:
+            self.assertEqual(client.enroll(TOKEN)["mode"], "custom")
+            client.reset_mail()
+            self.assertEqual(client.enroll(TOKEN)["status"], "disconnected")
+        request.assert_not_called()
+
+    def test_legacy_dns_initialized_after_enrollment_owns_later_updates(self):
+        self.configured()
+        ready = [False]
+        response = unittest.mock.MagicMock()
+        response.__enter__.return_value.read.return_value = b"203.0.113.8\n"
+        opener = unittest.mock.Mock()
+        opener.open.return_value = response
+        with patch.object(mail.Mail, "legacy_dns", new=LEGACY_DNS), \
+                patch.object(mail.Path, "exists", autospec=True,
+                             side_effect=lambda path: ready[0] and str(path) == "/var/lib/hubdns/sub_apikey"), \
+                patch.object(mail.os, "access", return_value=True), \
+                patch.object(mail.urllib.request, "build_opener", return_value=opener), \
+                patch.object(mail, "request", return_value={"status": "updated"}) as request:
+            self.assertEqual(self.client.dns_update()["status"], "updated")
+            ready[0] = True  # Existing hook80 initializes HubDNS after enrollment.
+            request.reset_mock()
+            opener.reset_mock()
+            self.assertEqual(self.client.dns_update()["status"], "unchanged")
+            request.assert_not_called()
+            opener.open.assert_not_called()
+
     def test_invalid_ip_discovery_does_not_change_dns(self):
         self.configured()
         response = unittest.mock.MagicMock()
@@ -132,7 +226,7 @@ class MailTest(unittest.TestCase):
 
     def test_reload_failure_restores_config_and_removes_new_credentials(self):
         before = self.main.read_bytes()
-        self.fail = ["postfix", "reload"]
+        self.fail_command = ["postfix", "reload"]
         with self.assertRaises(mail.Error):
             self.configured()
         self.assertEqual(self.main.read_bytes(), before)

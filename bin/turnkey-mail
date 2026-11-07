@@ -270,8 +270,14 @@ class Mail:
             self.save()
             raise
 
+    def linked(self):
+        # Read older combined state until the next successful configuration change.
+        config = self.state.get("link", self.state.get("active", {}))
+        return config if config.get("mode") == "hub" else {}
+
     def apply(self, config):
         smtp_check(config)
+        linked = self.linked()
         original = (POSTFIX_DIR / "main.cf").read_text()
         values = cf_entries(original)
         suffix = secrets.token_hex(8)
@@ -319,6 +325,10 @@ class Mail:
             run(["postfix", "reload"])
             self.state.update(active=config, baseline=baseline, owned_options=options,
                               owned_files=[str(path) for path in created])
+            if config["mode"] == "hub":
+                self.state["link"] = dict(config)
+            elif linked:
+                self.state["link"] = linked
             self.state.pop("guard", None)
             self.state.pop("applying", None)
             self.save()
@@ -343,7 +353,7 @@ class Mail:
         if token:
             if not TOKEN.fullmatch(token):
                 raise Error("The connection code is invalid. Start a new connection.")
-            if self.state.get("enrolled_token_hash") == hashlib.sha256(token.encode()).hexdigest() and self.state.get("active"):
+            if self.state.get("enrolled_token_hash") == hashlib.sha256(token.encode()).hexdigest() and self.linked():
                 return self.status(refresh=False)
             previous = self.state.get("pending", {})
             if previous.get("token") != token:
@@ -440,12 +450,12 @@ class Mail:
                 "message": self.state.get("error", {}).get("message", "")}
 
     def legacy_dns(self):
-        return (Path("/var/lib/hubdns/subkey").exists()
+        return (Path("/var/lib/hubdns/sub_apikey").exists()
                 and os.access("/etc/cron.hourly/hubdns-update", os.X_OK))
 
     def dns_update(self):
-        config = self.state.get("active", {})
-        if config.get("mode") != "hub" or not config.get("dyndns") or self.legacy_dns():
+        config = self.linked()
+        if not config.get("dyndns") or self.legacy_dns():
             return {"status": "unchanged"}
         try:
             opener = urllib.request.build_opener(NoRedirect(), urllib.request.HTTPSHandler(context=ssl.create_default_context()))
@@ -456,7 +466,10 @@ class Mail:
         request("dns/update", {"username": config["smtp"]["username"], "dns_password": config["dns_password"], "ipv4": address})
         return {"status": "updated", "hostname": config["dyndns"]["hostname"], "ipv4": address}
 
-    def reset(self):
+    def reset_mail(self):
+        return self.reset(mail_only=True)
+
+    def reset(self, mail_only=False):
         original = (POSTFIX_DIR / "main.cf").read_text()
         values = cf_entries(original)
         restore = {key: self.state.get("baseline", {}).get(key)
@@ -475,14 +488,18 @@ class Mail:
                 run(["postfix", "reload"])
             raise
         self.remove_files(self.state.get("owned_files", []))
-        for name in ("turnkey-mail-retry", "turnkey-mail-dns"):
+        names = ("turnkey-mail-retry",) if mail_only else ("turnkey-mail-retry", "turnkey-mail-dns")
+        for name in names:
             timer = SYSTEMD_DIR / (name + ".timer")
             if timer.exists():
                 run(["systemctl", "disable", "--now", name + ".timer"])
             for extension in ("timer", "service"):
                 (SYSTEMD_DIR / (name + "." + extension)).unlink(missing_ok=True)
         run(["systemctl", "daemon-reload"])
-        self.state = {}
+        retained = {"link": self.linked()} if mail_only and self.linked() else {}
+        if retained and "enrolled_token_hash" in self.state:
+            retained["enrolled_token_hash"] = self.state["enrolled_token_hash"]
+        self.state = retained
         self.save()
         return {"status": "disconnected"}
 
@@ -525,7 +542,7 @@ def main():
     custom.add_argument("--stdin", action="store_true", required=True)
     status = commands.add_parser("status")
     status.add_argument("--local", action="store_true")
-    for name in ("reset", "retry", "dns-update"):
+    for name in ("reset", "reset-mail", "retry", "dns-update"):
         commands.add_parser(name)
     test = commands.add_parser("test")
     test.add_argument("--recipient", required=True)
@@ -547,7 +564,7 @@ def main():
                         raise ValueError()
                     config = json.loads(raw)
                     mail.apply(checked_config(config, config["password"], custom=True))
-                    for field in ("pending", "pairing", "enrolled_token_hash", "error"):
+                    for field in ("pending", "pairing", "error"):
                         mail.state.pop(field, None)
                     mail.save()
                     result = mail.status(refresh=False)
@@ -562,7 +579,7 @@ def main():
             elif args.command == "status":
                 result = mail.status(refresh=not args.local)
             else:
-                result = getattr(mail, args.command)()
+                result = getattr(mail, args.command.replace("-", "_"))()
         if args.command == "connect" and not args.start and not args.poll:
             print("Open %s\nConnection code: %s\nSign in or create a free Hub account, then approve this appliance.\nWaiting for approval (Ctrl-C to cancel)..." %
                   (result["verification_uri"], result["user_code"]), flush=True)

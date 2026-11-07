@@ -18,7 +18,7 @@ A successful test command means the local queue accepted the message. Check the 
 
 Confconsole also supports another SMTP provider through **Custom SMTP**. Enter the host, port, username and password. Port 587 uses STARTTLS; port 465 uses implicit TLS. The server's certificate is verified before settings change. Existing settings are restored if applying the new configuration fails.
 
-**Reset mail** restores the previous local mail settings. Revoke its credential on the Hub email page if you also want to prevent another copy from using that credential.
+**Reset mail** restores the previous local mail settings while preserving the Hub link and dynamic DNS. Revoke its credential on the Hub email page if you also want to prevent another copy from using that credential.
 
 ## Operations and integration
 
@@ -26,7 +26,7 @@ The standalone `bin/turnkey-mail` file is packaged by inithooks. The Hub install
 
 Enrollment saves a short-lived token and independently generated SMTP/DNS secrets under `/var/lib/turnkey-mail/`, accessible only to root. The retry timer resumes an incomplete connection after firstboot clears its preseed file. A new connection with no existing relay holds direct SMTP delivery until enrollment succeeds. Repeating a completed token preserves the existing device identity.
 
-The DNS updater uses a separate hostname-scoped capability and leaves an enabled existing HubDNS hourly updater in control. The mail credential cannot update DNS. Connection state and credentials must be reset when cloning a server; the Hub snapshot path invokes `turnkey-mail reset` before enrollment with a new token. Reset does not revoke the source server's credential.
+The DNS updater uses a separate hostname-scoped capability and leaves an enabled existing HubDNS hourly updater in control. The mail credential cannot update DNS. Connection state and credentials must be reset when cloning a server; the Hub snapshot path invokes `turnkey-mail reset` before enrollment with a new token. The full `reset` command clears local mail and DNS credentials without revoking the source server's credential. Use `reset-mail` for the mail-only action. Switching to Custom SMTP also preserves dynamic DNS.
 
 Custom automation can pipe a JSON object to `turnkey-mail configure --stdin`. Its shape is `{"smtp":{"host":"smtp.example.com","port":587,"username":"user"},"password":"..."}`. Obtain the password from protected input rather than placing it in command arguments or shell history.
 

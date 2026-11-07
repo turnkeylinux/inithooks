@@ -16,6 +16,7 @@ import stat
 import subprocess
 import sys
 import time
+from unittest.mock import MagicMock, Mock, patch
 
 if os.environ.get('TURNKEY_MAIL_DISPOSABLE_FIXTURE') != 'yes':
     raise SystemExit('Only run inside the disposable Postfix client fixture.')
@@ -26,6 +27,8 @@ loader.exec_module(mail)
 raw = json.loads(Path(sys.argv[2]).read_text())
 password = raw['smtp'].pop('password')
 config = mail.checked_config(raw, password)
+config['dns_password'] = 'fixture-independent-dns-secret'
+config['dyndns'] = {'hostname': config['domain'], 'update_uri': mail.HUB + '/api/appmail/dns/update'}
 # Reset this disposable fixture after an interrupted previous run.
 command = mail.run
 mail.run = lambda argv, *args, **kwargs: b'' if argv[0] == 'systemctl' else command(argv, *args, **kwargs)
@@ -101,7 +104,27 @@ with mail.locked():
     # The container has no systemd; exercise real reset config/reload/map removal
     # while stubbing only its service-manager call.
     mail.run = lambda argv, *args, **kwargs: b'' if argv[0] == 'systemctl' else command(argv, *args, **kwargs)
-    client.reset()
+    client.timers(dns=True)
+    custom = mail.checked_config({'smtp': config['smtp']}, password, custom=True)
+    client.apply(custom)
+    assert client.state['active']['mode'] == 'custom'
+    assert client.state['link']['dns_password'] == config['dns_password']
+    client.reset_mail()
+    assert 'active' not in client.state
+    assert (mail.SYSTEMD_DIR / 'turnkey-mail-dns.timer').exists()
+    response = MagicMock()
+    response.__enter__.return_value.read.return_value = b'203.0.113.8\n'
+    opener = Mock()
+    opener.open.return_value = response
+    with patch.object(mail.Mail, 'legacy_dns', return_value=False), \
+            patch.object(mail.urllib.request, 'build_opener', return_value=opener), \
+            patch.object(mail, 'request', return_value={'status': 'updated'}) as request:
+        assert mail.Mail().dns_update()['status'] == 'updated'
+    assert request.call_args.args == ('dns/update', {
+        'username': config['smtp']['username'], 'dns_password': config['dns_password'], 'ipv4': '203.0.113.8'})
     assert mail.cf_entries((mail.POSTFIX_DIR / 'main.cf').read_text()) == baseline
     assert not list(mail.POSTFIX_DIR.glob('turnkey-mail-*'))
-print('Real Postfix apply, auth failure, rollback, map ownership, queue and reset: PASS')
+    client.reset()
+    assert client.state == {}
+    assert not (mail.SYSTEMD_DIR / 'turnkey-mail-dns.timer').exists()
+print('Real Postfix apply, auth failure, rollback, map ownership, queue, independent DNS, mail-only and full reset: PASS')
