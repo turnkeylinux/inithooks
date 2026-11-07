@@ -1,0 +1,601 @@
+#!/usr/bin/python3
+"""Connect an appliance's system mail service to TurnKey Hub.
+
+This file deliberately uses only the standard library: Hub bootstrap installs
+this exact helper on already-published appliances as well as new images.
+"""
+import argparse
+import contextlib
+import email.message
+import fcntl
+import hashlib
+import ipaddress
+import json
+import os
+from pathlib import Path
+import re
+import secrets
+import smtplib
+import socket
+import ssl
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+HUB = "https://hub.turnkeylinux.org"
+STATE_DIR = Path("/var/lib/turnkey-mail")
+POSTFIX_DIR = Path("/etc/postfix")
+SYSTEMD_DIR = Path("/etc/systemd/system")
+HELPER = "/usr/lib/inithooks/bin/turnkey-mail"
+MAX_JSON = 65536
+TOKEN = re.compile(r"^[A-Za-z0-9_-]{32,256}$")
+HOST = re.compile(r"^(?=.{1,253}$)[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$", re.I)
+ADDRESS = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+$")
+ERRORS = {
+    "expired": "This connection request expired. Start a new connection.",
+    "denied": "The connection was not approved. Start again when ready.",
+    "invalid_token": "This connection request is invalid or expired. Start a new connection.",
+    "revoked": "This appliance's connection was revoked. Connect it again in the Hub.",
+    "not_authorized": "This appliance is no longer authorized. Check its connection in the Hub.",
+    "rate_limited": "The Hub is busy. Please wait and try again.",
+}
+
+
+class Error(Exception):
+    def __init__(self, message, code="failed", retryable=False):
+        super().__init__(message)
+        self.code = code
+        self.retryable = retryable
+
+
+def atomic(path, content, mode=0o600):
+    path = Path(path)
+    fd, temporary = tempfile.mkstemp(prefix="." + path.name + "-", dir=str(path.parent))
+    try:
+        os.fchmod(fd, mode)
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(content.encode() if isinstance(content, str) else content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def run(command, data=None, timeout=30):
+    try:
+        result = subprocess.run(command, input=data, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired):
+        raise Error("A required system command could not finish. Check the service and try again.", retryable=True)
+    if result.returncode:
+        # Command stderr may include SMTP or Postfix credential data.
+        raise Error("The mail service could not apply these settings. Existing settings were restored.", retryable=True)
+    return result.stdout
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def request(route, payload):
+    """Only post credentials to the fixed, certificate-verified Hub origin."""
+    if not re.fullmatch(r"[a-z/]+", route):
+        raise Error("Invalid Hub operation.")
+    body = json.dumps(payload).encode()
+    req = urllib.request.Request(HUB + "/api/appmail/" + route, data=body,
+                                 headers={"Content-Type": "application/json", "Accept": "application/json"})
+    opener = urllib.request.build_opener(NoRedirect(), urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+    try:
+        with opener.open(req, timeout=15) as response:
+            raw = response.read(MAX_JSON + 1)
+    except urllib.error.HTTPError as exc:
+        code = "unavailable"
+        try:
+            detail = json.loads(exc.read(MAX_JSON + 1))
+            code = detail.get("error", code)
+        except (ValueError, AttributeError):
+            pass
+        retryable = exc.code in (408, 429) or exc.code >= 500
+        raise Error(ERRORS.get(code, "The Hub could not complete this request. Check the connection in the Hub and try again."),
+                    code=code if code in ERRORS else "unavailable", retryable=retryable)
+    except (OSError, urllib.error.URLError):
+        raise Error("The Hub is temporarily unavailable. Your connection will be retried.", code="unavailable", retryable=True)
+    try:
+        value = json.loads(raw)
+        if len(raw) > MAX_JSON or not isinstance(value, dict):
+            raise ValueError()
+        return value
+    except (ValueError, UnicodeError):
+        raise Error("The Hub returned an invalid response. Please try again.", retryable=True)
+
+
+def checked_config(value, password, custom=False):
+    try:
+        smtp = value["smtp"]
+        host = smtp["host"].lower()
+        port = int(smtp["port"])
+        username = smtp["username"]
+        if not HOST.fullmatch(host) or ".." in host or not 1 <= port <= 65535:
+            raise ValueError()
+        if not isinstance(username, str) or not username or any(c.isspace() or ord(c) < 32 for c in username) or ":" in username:
+            raise ValueError()
+        if not isinstance(password, str) or not password or any(ord(c) < 32 or ord(c) == 127 for c in password):
+            raise ValueError()
+        result = {"smtp": {"host": host, "port": port, "username": username}, "password": password,
+                  "mode": "custom" if custom else "hub", "status": value.get("status", "ready")}
+        if not custom:
+            domain = value["domain"].lower()
+            sender = value["sender"]
+            dns = value.get("dyndns")
+            if value.get("version") != 1 or result["status"] not in ("ready", "pending"):
+                raise ValueError()
+            if not HOST.fullmatch(domain) or not ADDRESS.fullmatch(sender) or sender.rsplit("@", 1)[1] != domain:
+                raise ValueError()
+            if dns and (not HOST.fullmatch(dns["hostname"]) or not dns["hostname"].endswith(".tklapp.com")
+                        or dns["update_uri"] != HUB + "/api/appmail/dns/update"):
+                raise ValueError()
+            result.update(domain=domain, sender=sender, device_id=value["device_id"], dyndns=dns)
+        return result
+    except (KeyError, ValueError, TypeError, AttributeError):
+        raise Error("The mail settings are incomplete or invalid. Existing settings were kept.")
+
+
+def smtp_check(config):
+    smtp = config["smtp"]
+    try:
+        context = ssl.create_default_context()
+        if smtp["port"] == 465:
+            client = smtplib.SMTP_SSL(smtp["host"], smtp["port"], timeout=10, context=context)
+        else:
+            client = smtplib.SMTP(smtp["host"], smtp["port"], timeout=10)
+            client.ehlo()
+            client.starttls(context=context)
+            client.ehlo()
+        with client:
+            client.login(smtp["username"], config["password"])
+    except (OSError, smtplib.SMTPException):
+        raise Error("The SMTP server could not be authenticated over a verified encrypted connection. Check the settings and try again.", retryable=True)
+
+
+def cf_entries(text):
+    entries = {}
+    for line in text.splitlines():
+        if line[:1].isspace() and entries and not line.lstrip().startswith("#"):
+            entries[key] += " " + line.strip()
+        else:
+            match = re.match(r"^([a-zA-Z0-9_]+)\s*=\s*(.*)$", line)
+            if match:
+                key = match[1]
+                entries[key] = match[2]
+    return entries
+
+
+def change_cf(text, changes):
+    """Replace exact parameter assignments, preserving unrelated configuration."""
+    result = []
+    skip = False
+    for line in text.splitlines(keepends=True):
+        if line[:1].isspace() and not line.lstrip().startswith("#"):
+            if not skip:
+                result.append(line)
+            continue
+        match = re.match(r"^([a-zA-Z0-9_]+)\s*=", line)
+        skip = bool(match and match[1] in changes)
+        if not skip:
+            result.append(line)
+    suffix = "".join("%s = %s\n" % (key, value) for key, value in changes.items() if value is not None)
+    return "".join(result).rstrip("\n") + "\n" + suffix
+
+
+def sender_maps(domain, sender):
+    # Envelope-only canonical mapping: Reply-To is a header_sender in Postfix.
+    escaped = re.escape(domain)
+    envelope = "/^([^@]+@%s)$/ $1\n/./ %s\n" % (escaped, sender)
+    # SMTP header checks touch only From/Sender. Existing Reply-To, recipients,
+    # body and attachments are deliberately left to the ordinary mail pipeline.
+    header = (r"/^(From|Sender):[[:space:]]*([^<>]*<)?[^@<>[:space:]]+@%s>?[[:space:]]*$/ DUNNO" % escaped
+              + "\n" + r"/^(From|Sender):[[:space:]]*(.*<)[^<>]*>[[:space:]]*$/ REPLACE $1: ${2}%s>" % sender
+              + "\n" + r"/^(From|Sender):/ REPLACE $1: %s" % sender + "\n")
+    return envelope, header
+
+
+class Mail:
+    def __init__(self):
+        self.state = self.load()
+        self.recover()
+
+    def load(self):
+        path = STATE_DIR / "state.json"
+        try:
+            value = json.loads(path.read_text())
+            if not isinstance(value, dict):
+                raise ValueError()
+            return value
+        except FileNotFoundError:
+            return {}
+        except (ValueError, OSError):
+            raise Error("Saved mail settings could not be read. Restore the state file before changing the connection.")
+
+    def save(self):
+        atomic(STATE_DIR / "state.json", json.dumps(self.state, sort_keys=True) + "\n")
+
+    def recover(self):
+        # A root-only journal covers interruption between config and state writes.
+        transaction = self.state.get("applying")
+        if not transaction:
+            return
+        atomic(POSTFIX_DIR / "main.cf", transaction["original"], 0o644)
+        self.remove_files(transaction["files"])
+        run(["postfix", "reload"])
+        self.state.pop("applying")
+        self.save()
+
+    def timers(self, dns=False):
+        name = "turnkey-mail-dns" if dns else "turnkey-mail-retry"
+        command = "dns-update" if dns else "retry"
+        interval = "1h" if dns else "1min"
+        service = ("[Unit]\nDescription=TurnKey %s\nAfter=network-online.target\n"
+                   "[Service]\nType=oneshot\nExecStart=%s %s\nTimeoutStartSec=90\nUMask=0077\n" % (command, HELPER, command))
+        timer = "[Unit]\nDescription=TurnKey %s schedule\n[Timer]\nOnBootSec=30s\nOnUnitActiveSec=%s\n[Install]\nWantedBy=timers.target\n" % (command, interval)
+        for suffix, text in (("service", service), ("timer", timer)):
+            path = SYSTEMD_DIR / (name + "." + suffix)
+            if not path.exists() or path.read_text() != text:
+                atomic(path, text, 0o644)
+        run(["systemctl", "daemon-reload"])
+        run(["systemctl", "enable", "--now", name + ".timer"])
+
+    def guard(self):
+        """A fresh automatic enrollment queues SMTP while Hub is unavailable."""
+        text = (POSTFIX_DIR / "main.cf").read_text()
+        values = cf_entries(text)
+        if self.state.get("active") or values.get("relayhost") or self.state.get("guard"):
+            return
+        old = values.get("defer_transports")
+        held = " ".join(filter(None, (old, "smtp")))
+        self.state["guard"] = {"before": old, "value": held}
+        self.save()
+        atomic(POSTFIX_DIR / "main.cf", change_cf(text, {"defer_transports": held}), 0o644)
+        try:
+            run(["postfix", "reload"])
+        except Error:
+            atomic(POSTFIX_DIR / "main.cf", text, 0o644)
+            self.state.pop("guard", None)
+            self.save()
+            raise
+
+    def apply(self, config):
+        smtp_check(config)
+        original = (POSTFIX_DIR / "main.cf").read_text()
+        values = cf_entries(original)
+        suffix = secrets.token_hex(8)
+        sasl = POSTFIX_DIR / ("turnkey-mail-" + suffix + ".sasl")
+        created = [sasl, Path(str(sasl) + ".db")]
+        target = "[%s]:%s" % (config["smtp"]["host"], config["smtp"]["port"])
+        options = {
+            "relayhost": target, "smtp_sasl_auth_enable": "yes",
+            "smtp_sasl_password_maps": "hash:" + str(sasl),
+            "smtp_sasl_security_options": "noanonymous", "smtp_sasl_tls_security_options": "noanonymous",
+            "smtp_tls_security_level": "secure", "smtp_tls_CAfile": "/etc/ssl/certs/ca-certificates.crt",
+            "smtp_tls_wrappermode": "yes" if config["smtp"]["port"] == 465 else "no",
+            "smtp_fallback_relay": "", "smtp_sasl_auth_soft_bounce": "yes",
+        }
+        if config["mode"] == "hub":
+            envelope, header = sender_maps(config["domain"], config["sender"])
+            for extension, content in (("sender", envelope), ("headers", header)):
+                path = POSTFIX_DIR / ("turnkey-mail-" + suffix + "." + extension)
+                atomic(path, content)
+                created.append(path)
+            options.update(sender_canonical_classes="envelope_sender",
+                           sender_canonical_maps="regexp:" + str(created[2]),
+                           smtp_header_checks="regexp:" + str(created[3]))
+        elif self.state.get("active", {}).get("mode") == "hub":
+            # Switching to custom SMTP restores the prior sender policy.
+            for key in ("sender_canonical_classes", "sender_canonical_maps", "smtp_header_checks"):
+                options[key] = self.state.get("baseline", {}).get(key)
+        if self.state.get("guard"):
+            options["defer_transports"] = self.state["guard"]["before"]
+        baseline = dict(self.state.get("baseline", {}))
+        for key in options:
+            if key not in baseline:
+                baseline[key] = values.get(key)
+        if self.state.get("guard"):
+            baseline["defer_transports"] = self.state["guard"]["before"]
+        old_state = json.loads(json.dumps(self.state))
+        self.state["applying"] = {"original": original, "files": [str(path) for path in created]}
+        self.save()
+        try:
+            atomic(sasl, "%s %s:%s\n" % (target, config["smtp"]["username"], config["password"]))
+            run(["postmap", "hash:" + str(sasl)])
+            os.chmod(str(sasl) + ".db", 0o600)
+            atomic(POSTFIX_DIR / "main.cf", change_cf(original, options), 0o644)
+            run(["postfix", "check"])
+            run(["postfix", "reload"])
+            self.state.update(active=config, baseline=baseline, owned_options=options,
+                              owned_files=[str(path) for path in created])
+            self.state.pop("guard", None)
+            self.state.pop("applying", None)
+            self.save()
+        except (Error, OSError):
+            atomic(POSTFIX_DIR / "main.cf", original, 0o644)
+            for path in created:
+                path.unlink(missing_ok=True)
+            with contextlib.suppress(Error):
+                run(["postfix", "reload"])
+            self.state = old_state
+            self.save()
+            raise Error("The mail service could not apply these settings. Existing settings were restored.", retryable=True)
+        self.remove_files(old_state.get("owned_files", []))
+
+    def remove_files(self, files):
+        for name in files:
+            path = Path(name)
+            if path.parent == POSTFIX_DIR and path.name.startswith("turnkey-mail-"):
+                path.unlink(missing_ok=True)
+
+    def enroll(self, token=None):
+        if token:
+            if not TOKEN.fullmatch(token):
+                raise Error("The connection code is invalid. Start a new connection.")
+            if self.state.get("enrolled_token_hash") == hashlib.sha256(token.encode()).hexdigest() and self.state.get("active"):
+                return self.status(refresh=False)
+            previous = self.state.get("pending", {})
+            if previous.get("token") != token:
+                self.state["pending"] = {"token": token, "password": secrets.token_urlsafe(32),
+                                         "dns_password": secrets.token_urlsafe(32)}
+            self.save()
+        pending = self.state.get("pending")
+        if not pending:
+            return self.status(refresh=False)
+        self.timers()
+        self.guard()
+        try:
+            result = request("enroll", {key: pending[key] for key in ("token", "password", "dns_password")})
+            config = checked_config(result, pending["password"])
+            config["dns_password"] = pending["dns_password"]
+            if config.get("dyndns") and not self.legacy_dns():
+                self.timers(dns=True)
+            self.apply(config)
+            self.state["enrolled_token_hash"] = hashlib.sha256(pending["token"].encode()).hexdigest()
+            self.state.pop("pending", None)
+            self.state.pop("pairing", None)
+            self.state.pop("error", None)
+            self.save()
+            if config.get("dyndns") and not self.legacy_dns():
+                # DNS failure must not roll back a working mail connection.
+                with contextlib.suppress(Error):
+                    self.dns_update()
+            return self.status(refresh=False)
+        except Error as error:
+            self.state["error"] = {"code": error.code, "message": str(error)}
+            if not error.retryable:
+                self.state["pending"]["stopped"] = True
+            self.save()
+            raise
+
+    def retry(self):
+        pending = self.state.get("pending")
+        if pending and not pending.get("stopped"):
+            return self.enroll()
+        return self.status(refresh=False)
+
+    def start(self):
+        result = request("device/start", {})
+        try:
+            uri = urllib.parse.urlsplit(result["verification_uri"])
+            if uri.scheme != "https" or uri.netloc != urllib.parse.urlsplit(HUB).netloc:
+                raise ValueError()
+            if not TOKEN.fullmatch(result["device_code"]):
+                raise ValueError()
+            if not re.fullmatch(r"[A-Z0-9]{4}&[A-Z0-9]{4}", result["user_code"]):
+                raise ValueError()
+            ttl = min(900, max(1, int(result["expires_in"])))
+            interval = min(30, max(5, int(result["interval"])))
+        except (KeyError, TypeError, ValueError):
+            raise Error("The Hub returned an invalid connection request.")
+        self.state["pairing"] = {"device_code": result["device_code"], "expires": time.time() + ttl,
+                                 "interval": interval, "next_poll": 0,
+                                 "verification_uri": result["verification_uri"], "user_code": result["user_code"]}
+        self.save()
+        return {key: result[key] for key in ("verification_uri", "user_code", "expires_in", "interval")}
+
+    def poll(self):
+        pairing = self.state.get("pairing", {})
+        if pairing.get("expires", 0) <= time.time():
+            return {"status": "expired"}
+        if pairing.get("next_poll", 0) > time.time():
+            return {"status": "pending", "interval": pairing["interval"]}
+        pairing["next_poll"] = time.time() + pairing["interval"]
+        self.save()
+        result = request("device/poll", {"device_code": pairing["device_code"]})
+        if result.get("status") == "approved":
+            token = result.get("enrollment_token", "")
+            if not isinstance(token, str) or not TOKEN.fullmatch(token):
+                raise Error("The Hub returned an invalid connection approval.")
+            return self.enroll(token)
+        if result.get("status") not in ("pending", "expired", "denied"):
+            raise Error("The Hub returned an invalid connection status.")
+        return {"status": result["status"], "interval": pairing["interval"]}
+
+    def status(self, refresh=True):
+        active = self.state.get("active")
+        if not active:
+            return {"status": "connecting" if self.state.get("pending") else "disconnected",
+                    "message": self.state.get("error", {}).get("message", "")}
+        status = active.get("status", "ready")
+        if refresh and active["mode"] == "hub":
+            result = request("status", {"username": active["smtp"]["username"], "password": active["password"]})
+            if result.get("status") in ("ready", "pending", "revoked", "suspended", "expired"):
+                status = result["status"]
+                active["status"] = status
+                self.save()
+        return {"status": status, "mode": active["mode"], "domain": active.get("domain", ""),
+                "sender": active.get("sender", ""), "host": active["smtp"]["host"],
+                "message": self.state.get("error", {}).get("message", "")}
+
+    def legacy_dns(self):
+        return (Path("/var/lib/hubdns/subkey").exists()
+                and os.access("/etc/cron.hourly/hubdns-update", os.X_OK))
+
+    def dns_update(self):
+        config = self.state.get("active", {})
+        if config.get("mode") != "hub" or not config.get("dyndns") or self.legacy_dns():
+            return {"status": "unchanged"}
+        try:
+            opener = urllib.request.build_opener(NoRedirect(), urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+            with opener.open("https://checkip.amazonaws.com/", timeout=10) as response:
+                address = str(ipaddress.IPv4Address(response.read(64).decode().strip()))
+        except (OSError, ValueError, urllib.error.URLError):
+            raise Error("The public IP address could not be checked. The existing DNS record was kept.", retryable=True)
+        request("dns/update", {"username": config["smtp"]["username"], "dns_password": config["dns_password"], "ipv4": address})
+        return {"status": "updated", "hostname": config["dyndns"]["hostname"], "ipv4": address}
+
+    def reset(self):
+        original = (POSTFIX_DIR / "main.cf").read_text()
+        values = cf_entries(original)
+        restore = {key: self.state.get("baseline", {}).get(key)
+                   for key, value in self.state.get("owned_options", {}).items() if values.get(key) == value}
+        guard = self.state.get("guard")
+        if guard and values.get("defer_transports") == guard["value"]:
+            restore["defer_transports"] = guard["before"]
+        try:
+            if restore:
+                atomic(POSTFIX_DIR / "main.cf", change_cf(original, restore), 0o644)
+                run(["postfix", "check"])
+                run(["postfix", "reload"])
+        except Error:
+            atomic(POSTFIX_DIR / "main.cf", original, 0o644)
+            with contextlib.suppress(Error):
+                run(["postfix", "reload"])
+            raise
+        self.remove_files(self.state.get("owned_files", []))
+        for name in ("turnkey-mail-retry", "turnkey-mail-dns"):
+            timer = SYSTEMD_DIR / (name + ".timer")
+            if timer.exists():
+                run(["systemctl", "disable", "--now", name + ".timer"])
+            for extension in ("timer", "service"):
+                (SYSTEMD_DIR / (name + "." + extension)).unlink(missing_ok=True)
+        run(["systemctl", "daemon-reload"])
+        self.state = {}
+        self.save()
+        return {"status": "disconnected"}
+
+    def test(self, recipient):
+        if not ADDRESS.fullmatch(recipient) or len(recipient) > 254:
+            raise Error("Enter a valid recipient email address.")
+        config = self.state.get("active")
+        if not config:
+            raise Error("Connect a mail relay before sending a test.")
+        sender = config.get("sender", "root@localhost")
+        message = email.message.EmailMessage()
+        message["From"] = sender
+        message["To"] = recipient
+        message["Subject"] = "TurnKey app email test"
+        message.set_content("This message was submitted through your appliance's system mail service.\n")
+        run(["/usr/sbin/sendmail", "-i", "-f", sender, "--", recipient], message.as_bytes())
+        return {"status": "queued", "message": "Test message accepted by the local mail queue. Check the recipient inbox for delivery."}
+
+
+@contextlib.contextmanager
+def locked():
+    STATE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    os.chmod(STATE_DIR, 0o700)
+    with (STATE_DIR / "lock").open("a") as lock:
+        os.chmod(STATE_DIR / "lock", 0o600)
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    enroll = commands.add_parser("enroll")
+    enroll.add_argument("--token-stdin", action="store_true", required=True)
+    connect = commands.add_parser("connect")
+    mode = connect.add_mutually_exclusive_group()
+    mode.add_argument("--start", action="store_true")
+    mode.add_argument("--poll", action="store_true")
+    custom = commands.add_parser("configure")
+    custom.add_argument("--stdin", action="store_true", required=True)
+    status = commands.add_parser("status")
+    status.add_argument("--local", action="store_true")
+    for name in ("reset", "retry", "dns-update"):
+        commands.add_parser(name)
+    test = commands.add_parser("test")
+    test.add_argument("--recipient", required=True)
+    for command in commands.choices.values():
+        command.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+    try:
+        if os.geteuid() != 0:
+            raise Error("Run this command as root.")
+        os.umask(0o077)
+        with locked():
+            mail = Mail()
+            if args.command == "enroll":
+                result = mail.enroll(sys.stdin.read(512).strip())
+            elif args.command == "configure":
+                try:
+                    raw = sys.stdin.read(MAX_JSON + 1)
+                    if len(raw) > MAX_JSON:
+                        raise ValueError()
+                    config = json.loads(raw)
+                    mail.apply(checked_config(config, config["password"], custom=True))
+                    for field in ("pending", "pairing", "enrolled_token_hash", "error"):
+                        mail.state.pop(field, None)
+                    mail.save()
+                    result = mail.status(refresh=False)
+                except (ValueError, KeyError, TypeError):
+                    raise Error("The custom SMTP settings are invalid.")
+            elif args.command == "connect":
+                result = mail.poll() if args.poll else mail.start()
+            elif args.command == "dns-update":
+                result = mail.dns_update()
+            elif args.command == "test":
+                result = mail.test(args.recipient)
+            elif args.command == "status":
+                result = mail.status(refresh=not args.local)
+            else:
+                result = getattr(mail, args.command)()
+        if args.command == "connect" and not args.start and not args.poll:
+            print("Open %s\nConnection code: %s\nSign in or create a free Hub account, then approve this appliance.\nWaiting for approval (Ctrl-C to cancel)..." %
+                  (result["verification_uri"], result["user_code"]), flush=True)
+            while True:
+                time.sleep(result.get("interval", 5))
+                with locked():
+                    result = Mail().poll()
+                if result.get("status") != "pending" or result.get("domain"):
+                    break
+            if result.get("status") in ("expired", "denied"):
+                raise Error(ERRORS[result["status"]], code=result["status"])
+        if args.json:
+            print(json.dumps(result, sort_keys=True))
+        elif result.get("message"):
+            print(result["message"])
+        else:
+            print("Mail connection: %s%s" % (result.get("status", "waiting"),
+                  (" (" + result["domain"] + ")") if result.get("domain") else ""))
+        return 0
+    except Error as error:
+        if args.json:
+            print(json.dumps({"status": "error", "error": error.code, "message": str(error)}))
+        else:
+            print(str(error), file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        print("Connection cancelled. Existing mail settings were kept.", file=sys.stderr)
+        return 130
+    except (OSError, ValueError, KeyError, TypeError):
+        # Never emit tracebacks that could contain tokens or configuration.
+        print("Mail setup could not finish. Check the system services and try again.", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

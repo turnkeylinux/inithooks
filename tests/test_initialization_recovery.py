@@ -99,6 +99,7 @@ class HubRetryTest(unittest.TestCase):
 
     def run_main(self, init_status=0, stderr="", fqdn=False, failed_command="tklbam-init"):
         calls = []
+        self.last_calls = calls
 
         def run(command, **kwargs):
             calls.append(command)
@@ -116,6 +117,26 @@ class HubRetryTest(unittest.TestCase):
                 patch.object(self.module.subprocess, "run", side_effect=run):
             self.module.main()
         return calls
+
+    def test_backup_failure_still_attempts_dns(self):
+        with patch.object(sys, "stderr"), self.assertRaises(SystemExit):
+            self.run_main(1, "backup unavailable\n", fqdn=True)
+        self.assertEqual([command[0] for command in self.last_calls],
+                         ["tklbam-init", "hubdns-init", "hubdns-update"])
+
+    def test_free_browser_connection_does_not_attempt_backup(self):
+        dialog = unittest.mock.Mock()
+        dialog.menu.return_value = "Link"
+        dialog.yesno.return_value = True
+        responses = [{"verification_uri": "https://hub.turnkeylinux.org/link", "user_code": "ABCD&1234"},
+                     {"status": "ready", "domain": "sample.tklapp.com"}]
+        with patch.object(sys, "argv", ["hubservices.py"]), patch.object(self.module.signal, "signal"), \
+                patch.object(self.module, "Dialog", return_value=dialog), \
+                patch.object(self.module, "mail_call", side_effect=responses), \
+                patch.object(self.module.subprocess, "run") as run:
+            self.module.main()
+        run.assert_not_called()
+        self.assertIn("sample.tklapp.com", dialog.msgbox.call_args.args[1])
 
     def test_retry_accepts_only_tklbam_completed_initialization(self):
         self.assertEqual(self.run_main(1, "error: already initialized\n"),

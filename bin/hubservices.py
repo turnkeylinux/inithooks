@@ -1,69 +1,22 @@
 #!/usr/bin/python3
 # Copyright (c) 2011 Alon Swartz <alon@turnkeylinux.org>
-"""Initialize Hub Services (TKLBAM, HubDNS)
+"""Initialize independent Hub services (app email, DNS and backups)
 
 Options:
-    --apikey=    if not provided, will ask interactively
-    --fqdn=      if not provided, will ask interactively
+    --apikey=    legacy unattended backup and DNS initialization
+    --fqdn=      hostname for legacy unattended DNS initialization
 """
 
 import sys
 import getopt
+import json
+import os
 import signal
+import shutil
 import subprocess
 from typing import NoReturn
 
 from libinithooks.dialog_wrapper import Dialog
-
-TEXT_SERVICES = (
-    "1) TurnKey Backup and Migration: saves changes to files,\n"
-    "   databases and package management to encrypted storage\n"
-    "   which servers can be automatically restored from.\n"
-    "   https://www.turnkeylinux.org/tklbam\n\n"
-    "2) TurnKey Domain Management and Dynamic DNS:\n"
-    "   https://www.turnkeylinux.org/dns\n\n"
-    "You can start using these services immediately if you initialize now. Or"
-    " you can do this manually later (e.g., from the command line/Webmin)\n\n"
-    "API Key: (see https://hub.turnkeylinux.org/profile)"
-)
-
-TEXT_HUBDNS = (
-    "TurnKey supports dynamic DNS configuration, powered by Amazon Route 53,"
-    " a robust cloud DNS service: https://www.turnkeylinux.org/dns\n\n"
-    "You can assign a hostname under:\n\n"
-    "1) Any custom domain you are managing with the Hub.\n"
-    "   For example: myhostname.mydomain.com\n\n"
-    "2) The tklapp.com domain, if the hostname is untaken.\n"
-    "   For example: myhostname.tklapp.com\n\n"
-    "Set hostname (or press Enter to skip):"
-)
-
-SUCCESS_TKLBAM = (
-    "Now that TKLBAM is initialized, you can backup using the following shell"
-    " command (no arguments required):\n\n"
-    "    tklbam-backup\n\n"
-    "You can enable daily automatic backup updates with this command:\n\n"
-    "    chmod +x /etc/cron.daily/tklbam-backup\n\n"
-    "Documentation: https://www.turnkeylinux.org/tklbam\n"
-    "Manage your backups: https://hub.turnkeylinux.org"
-)
-
-SUCCESS_HUBDNS = (
-    "You can enable hourly automatic updates with this command:\n\n"
-    "    chmod +x /etc/cron.hourly/hubdns-update\n\n"
-    "Documentation: https://www.turnkeylinux.org/dns\n"
-    "Manage your hostnames: https://hub.turnkeylinux.org"
-)
-
-CONNECTIVITY_ERROR = (
-    "Unable to connect to the Hub.\n\n"
-    "Please try again once your network settings are configured, either via"
-    " the Webmin interface, or by using the following shell commands:\n\n"
-    "    tklbam-init APIKEY\n\n"
-    "    hubdns-init APIKEY FQDN\n"
-    "    hubdns-update"
-)
-
 
 def usage(msg: str | getopt.GetoptError = "") -> NoReturn:
     if msg:
@@ -71,6 +24,46 @@ def usage(msg: str | getopt.GetoptError = "") -> NoReturn:
     print(f"Syntax: {sys.argv[0]} [options]", file=sys.stderr)
     print(__doc__, file=sys.stderr)
     sys.exit(1)
+
+
+MAIL_HELPER = os.path.join(os.path.dirname(__file__), "turnkey-mail")
+
+
+def mail_call(*arguments):
+    try:
+        result = subprocess.run([MAIL_HELPER, *arguments, "--json"],
+                                capture_output=True, text=True, timeout=90)
+        data = json.loads(result.stdout)
+        if result.returncode or not isinstance(data, dict):
+            raise ValueError()
+        return data
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return {"status": "error", "message": "The Hub connection could not finish. Try again from Confconsole's App email menu."}
+
+
+def connect_mail(d):
+    result = mail_call("connect", "--start")
+    if result.get("status") == "error":
+        d.error(result["message"])
+        return
+    message = (
+        "Open this address on your phone or computer:\n\n%s\n\n"
+        "Link code: %s\n\nSign in or create a free Hub account and "
+        "enter this code to link your appliance. Then select Check connection."
+    ) % (result["verification_uri"].split("?", 1)[0], result["user_code"])
+    while d.yesno("Link to TurnKey Hub", message, "Check connection", "Skip"):
+        result = mail_call("connect", "--poll")
+        if result.get("domain"):
+            state = ("Your appliance is linked. App email and dynamic DNS are configured." if result["status"] == "ready" else
+                     "Mail is connected and waiting for domain verification. Messages will queue until it is ready.")
+            d.msgbox("Hub linked", "%s\n\nHostname: %s\n\nManage the connection at https://hub.turnkeylinux.org/email/" % (state, result["domain"]))
+            return
+        status = result.get("status")
+        if status == "pending":
+            message = "Waiting for approval in your browser.\n\n" + message.split("Waiting for approval in your browser.\n\n")[-1]
+        else:
+            d.error(result.get("message") or "This connection request %s. Start a new connection in Confconsole." % status)
+            return
 
 
 def main():
@@ -95,8 +88,8 @@ def main():
             fqdn = val
 
     if apikey:
-        # Let TKLBAM complete interrupted initialization, including its profile.
-        # Its already-initialized error is the only benign failure on a retry.
+        # Backup and DNS are independent. Failure in one must not skip the other.
+        errors = []
         tklbam_init = subprocess.run(
             ["tklbam-init", apikey], stderr=subprocess.PIPE, text=True,
         )
@@ -104,98 +97,40 @@ def main():
             tklbam_init.returncode == 1
             and tklbam_init.stderr.strip() == "error: already initialized"
         )
-        if not already_initialized:
-            if tklbam_init.stderr:
-                print(tklbam_init.stderr.replace(apikey, "[redacted]"), file=sys.stderr, end="")
-            if tklbam_init.returncode:
-                sys.exit(f"TKLBAM initialization failed (exit status {tklbam_init.returncode})")
-
+        if tklbam_init.returncode and not already_initialized:
+            print(tklbam_init.stderr.replace(apikey, "[redacted]"), file=sys.stderr, end="")
+            errors.append("TKLBAM initialization failed")
         if fqdn:
             hubdns_init = subprocess.run(
-                ["hubdns-init", apikey, fqdn],
-                stderr=subprocess.PIPE, text=True,
+                ["hubdns-init", apikey, fqdn], stderr=subprocess.PIPE, text=True,
             )
-            if hubdns_init.stderr:
-                print(hubdns_init.stderr.replace(apikey, "[redacted]"), file=sys.stderr, end="")
             if hubdns_init.returncode:
-                sys.exit(f"HubDNS initialization failed (exit status {hubdns_init.returncode})")
-            subprocess.run(
-                ["hubdns-update"],
-                encoding=sys.stdin.encoding,
-                check=True,
-            )
+                print(hubdns_init.stderr.replace(apikey, "[redacted]"), file=sys.stderr, end="")
+                errors.append("HubDNS initialization failed")
+            else:
+                update = subprocess.run(["hubdns-update"], stderr=subprocess.PIPE, text=True)
+                if update.returncode:
+                    errors.append("HubDNS update failed")
+        if errors:
+            sys.exit("; ".join(errors) + ". Other Hub services were attempted independently.")
         return
 
-    initialized_tklbam = False
-    d = Dialog("TurnKey GNU/Linux - First boot configuration")
-    while 1:
-        retcode, apikey = d.inputbox(
-            "Initialize Hub services",
-            TEXT_SERVICES,
-            apikey,
-            "Apply",
-            "Skip",
-        )
+    d = Dialog("TurnKey GNU/Linux - First boot configuration",
+               width=min(60, shutil.get_terminal_size((80, 24)).columns - 4), height=min(18, shutil.get_terminal_size((80, 24)).lines - 2))
+    choice = d.menu(
+        "Link to TurnKey Hub",
+        "A free Hub account includes a tklapp.com hostname, dynamic DNS and "
+        "app email delivery. Sign in or create an account in your browser. "
+        "No card or AWS account is needed for these services.",
+        [("Link", "Free app email and dynamic DNS"),
+         ("Skip", "Set up later in Confconsole")],
+    )
+    if choice == "Skip" or not choice:
+        return
+    if choice == "Link":
+        connect_mail(d)
+        return
 
-        if not apikey or retcode == 1:
-            break
-
-        d.infobox("Linking TKLBAM to the TurnKey Hub...")
-
-        hub_connect = subprocess.run(
-            ["host", "-W", "2", "hub.turnkeylinux.org"],
-            capture_output=True,
-        )
-        if hub_connect.returncode != 0:
-            d.error(CONNECTIVITY_ERROR)
-            break
-
-        tklbam_init = subprocess.run(
-            ["tklbam-init", apikey],
-            capture_output=True,
-            text=True,
-        )
-        if tklbam_init.returncode == 0:
-            d.msgbox("Success! Linked TKLBAM to Hub", SUCCESS_TKLBAM)
-            initialized_tklbam = True
-            break
-        else:
-            d.msgbox("Failure", tklbam_init.stderr)
-            continue
-
-    if initialized_tklbam:
-        while 1:
-            retcode, fqdn = d.inputbox(
-                "Assign TurnKey DNS hostname",
-                TEXT_HUBDNS,
-                fqdn,
-                "Apply",
-                "Skip",
-            )
-
-            if not fqdn or retcode == 1:
-                break
-
-            d.infobox("Linking HubDNS to the TurnKey Hub...")
-
-            hubdns_init = subprocess.run(
-                ["hubdns-init", apikey, fqdn],
-                capture_output=True,
-                text=True,
-            )
-            hubdns_update = subprocess.run(
-                ["hubdns-update"],
-                capture_output=True,
-                text=True,
-            )
-            if hubdns_init.returncode != 0:
-                d.msgbox("Failure", hubdns_init.stderr)
-                continue
-            elif hubdns_update.returncode != 0:
-                d.msgbox("Failure", hubdns_update.stderr)
-                continue
-            else:
-                d.msgbox(f"Success! Assigned {fqdn}", SUCCESS_HUBDNS)
 
 
 if __name__ == "__main__":

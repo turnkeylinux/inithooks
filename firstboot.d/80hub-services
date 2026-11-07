@@ -1,10 +1,15 @@
 #!/bin/bash -e
-# initialize hub services (tklbam, hubdns)
-
+# Initialize independent Hub services without exposing enrollment capability.
+set +x
 . /etc/default/inithooks
+[ ! -e "$INITHOOKS_CONF" ] || . "$INITHOOKS_CONF"
 
-[ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
-[ "$HUB_APIKEY" == "SKIP" ] && exit 0
-
-$INITHOOKS_PATH/bin/hubservices.py --apikey="$HUB_APIKEY" --fqdn="$FQDN"
-
+if [ -n "${HUB_EMAIL_TOKEN:-}" ]; then
+    if ! printf '%s' "$HUB_EMAIL_TOKEN" | "$INITHOOKS_PATH/bin/turnkey-mail" enroll --token-stdin; then
+        echo 'App email setup did not finish. Check turnkey-mail status; temporary failures retry automatically.' >&2
+    fi
+    # Token-only deployments must remain unattended.
+    [ -n "${HUB_APIKEY:-}" ] || exit 0
+fi
+[ "${HUB_APIKEY:-}" != "SKIP" ] || exit 0
+"$INITHOOKS_PATH/bin/hubservices.py" --apikey="${HUB_APIKEY:-}" --fqdn="${FQDN:-}"
