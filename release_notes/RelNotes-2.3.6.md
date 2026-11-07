@@ -1,6 +1,8 @@
 ## v2.3.6 Release notes
 
   * Bugfix:
+    - Finish starting the initialization web fence before Webmin starts, so its
+      remote login interface follows the existing setup protection ordering.
     - Restart an already running Webmin after firstboot certificate regeneration
       so it serves the new certificate rather than its boot-loaded factory copy.
     - Stop boot-time initialization when a firstboot hook fails. Keep setup

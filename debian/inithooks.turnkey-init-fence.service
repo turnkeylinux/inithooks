@@ -2,7 +2,7 @@
 Description=TurnKey Initialization web interface fence
 After=network.target network-online.target
 After=iptables.service firewalld.service ip6tables.service ipset.service nftables.service
-Before=apache2.service nginx.service lighttpd.service tomcat10.service tomcat11.service
+Before=apache2.service nginx.service lighttpd.service tomcat10.service tomcat11.service webmin.service
 
 [Service]
 Type=oneshot
