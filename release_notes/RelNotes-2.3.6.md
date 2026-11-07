@@ -1,6 +1,10 @@
 ## v2.3.6 Release notes
 
   * Bugfix:
+    - Stop boot-time initialization when a firstboot hook fails. Keep setup
+      pending and the web initialization fence active, and explain how to retry
+      with turnkey-init. Optional skips and security-update completion statuses
+      retain their existing behavior.
     - Do not show error message for '09...' firstboot script/s.
       Somewhat cosmetic issue; numerical bash tests assume leading zero means
       an octal number and obviously 09 is not a valid octal number!

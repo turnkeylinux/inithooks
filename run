@@ -54,6 +54,16 @@ log() {
     fi
 }
 
+stop_output_tail() {
+    if [[ -n "$PID" ]]; then
+        log info "Killing inithooks pid $PID"
+        kill -9 "$PID" 2>/dev/null || true
+        wait "$PID" 2>/dev/null || true
+        PID=
+    fi
+}
+trap stop_output_tail EXIT
+
 if [[ "$REDIRECT_OUTPUT" == "true" ]]; then
     # on xen redirection is performed by the inithooks-xen service
     # on lxc and other headless deployments, redirection is handled below
@@ -108,6 +118,12 @@ exec_scripts() {
             log warn "[$script] reboot is required"
         else
             log err "[$script] failed - exit code $exit_code"
+            if [[ -n "$firstboot" ]]; then
+                message="Setup stopped at $script. Correct the error and run turnkey-init again."
+                log err "$message"
+                echo "$message"
+                return "$exit_code"
+            fi
         fi
     done
     return 0
@@ -116,6 +132,10 @@ exec_scripts() {
 if [[ "$RUN_FIRSTBOOT" == "true" ]]; then
     log info "Running firstboot scripts"
     exec_scripts "$INITHOOKS_PATH/firstboot.d" firstboot
+    firstboot_status=$?
+    if [[ "$firstboot_status" -ne 0 ]]; then
+        exit "$firstboot_status"
+    fi
 fi
 
 # ensure everyboot scripts only run once per boot
@@ -125,10 +145,7 @@ if [[ ! -f /run/inithooks-complete ]]; then
     touch /run/inithooks-complete
 fi
 
-if [[ -n "$PID" ]];  then
-    log info "Killing inithooks pid $PID"
-    kill -9 $PID || true
-fi
+stop_output_tail
 
 log info "Inithooks run completed"
 if [[ -n "$REBOOT_REQUIRED" ]]; then
