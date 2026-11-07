@@ -25,3 +25,14 @@ python3 tests/exercise_hub_services_terminal.py /path/to/evidence
 
 Inspect the captured terminal screens at 60, 80 and 120 columns. These rendered
 screens supplement the interaction assertions and do not prove a live Hub link.
+
+Version 2 link tests cover discovery before SMTP-secret registration, stable
+retry secrets, manual mail preference across synchronization and restart,
+independent custom sender/DNS state, backup authentication conversion and failed
+initialization retries. The helper retains existing backup encryption/history
+and explicit legacy initialization paths.
+
+`turnkey-mail sync` updates approved services. `use-hub` resumes Hub mail without
+pairing, while `reset-mail` selects manual mail and preserves DNS and backup.
+Actual installed-client backup and filesystem restore proof is coordinated with
+the Hub fixtures; keep registry/config/profile data in dedicated QA directories.

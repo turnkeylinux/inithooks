@@ -2,6 +2,7 @@
 import importlib.machinery
 import importlib.util
 import io
+import copy
 import json
 import os
 from pathlib import Path
@@ -58,13 +59,189 @@ class MailTest(unittest.TestCase):
         patch.object(mail, "run", side_effect=run).start()
         patch.object(mail, "smtp_check").start()
         patch.object(mail.Mail, "legacy_dns", return_value=True).start()
+        self.hub_active = False
         self.client = mail.Mail()
+
+    def hub(self, route, payload):
+        if route == "enroll":
+            return {"version": 2, "device_id": CONFIG["device_id"], "connection_status": "linked"}
+        if route == "configure":
+            if "smtp_password" in payload:
+                self.hub_active = True
+            return {"device_id": CONFIG["device_id"], "connection_status": "linked",
+                    "dns": dict(enabled=True, **CONFIG["dyndns"]),
+                    "mail": {"enabled": True, "status": "active" if self.hub_active else "secret_required",
+                             "grant_id": CONFIG["device_id"], "smtp": CONFIG["smtp"],
+                             "domain": CONFIG["domain"], "sender": CONFIG["sender"]},
+                    "backup": {"requested": False, "status": "disabled"}}
+        return {"status": "updated"}
 
     def configured(self):
         config = mail.checked_config(CONFIG, PASSWORD)
         config["dns_password"] = DNS_PASSWORD
         self.client.apply(config)
         return config
+
+    def test_sync_persists_exact_grant_secret_before_registration_and_retries(self):
+        self.client.state["link"] = {"mode": "hub", "device_id": CONFIG["device_id"],
+                                     "control_secret": "c" * 43, "dns_password": DNS_PASSWORD}
+        self.client.save()
+        sent = []
+        def timeout(route, payload):
+            if "smtp_password" in payload:
+                saved = json.loads((mail.STATE_DIR / "state.json").read_text())["smtp_secret"]
+                self.assertEqual(saved["grant_id"], payload["smtp_grant_id"])
+                self.assertEqual(saved["password"], payload["smtp_password"])
+                sent.append(payload.copy())
+                raise mail.Error("lost response", retryable=True)
+            return self.hub(route, payload)
+        with patch.object(mail, "request", side_effect=timeout):
+            for unused in range(2):
+                with self.assertRaises(mail.Error):
+                    mail.Mail().sync()
+        self.assertEqual(sent[0], sent[1])
+        self.assertNotEqual(sent[0]["smtp_password"], DNS_PASSWORD)
+
+    def test_manual_mail_survives_sender_change_sync_and_restart(self):
+        with patch.object(mail, "request", side_effect=self.hub):
+            self.client.enroll(TOKEN)
+        self.client.reset_mail()
+        before = self.main.read_text()
+        original = self.hub
+        def changed(route, payload):
+            value = original(route, payload)
+            if route == "configure":
+                value["mail"].update(grant_id="b" * 32, domain="new.tklapp.com", status="secret_required")
+            return value
+        with patch.object(mail, "request", side_effect=changed) as request:
+            restored = mail.Mail()
+            restored.retry()
+        self.assertEqual(before, self.main.read_text())
+        self.assertEqual("manual", restored.state["mail_preference"])
+        self.assertFalse(any("smtp_password" in call.args[1] for call in request.call_args_list))
+        self.assertTrue(restored.linked()["control_secret"])
+        with patch.object(mail, "request", side_effect=self.hub):
+            restored.use_hub()
+        self.assertEqual("hub", restored.state["mail_preference"])
+        self.assertIn("relayhost", self.main.read_text())
+
+    def test_backup_auth_conversion_preserves_encryption_and_history(self):
+        backup_dir = self.root / "backup"
+        (backup_dir / "profile").mkdir(parents=True)
+        originals = {"secret": "keep-secret", "key": "keep-key", "hbr": "keep-history", "profile/profile_id": "custom"}
+        for name, content in originals.items():
+            (backup_dir / name).write_text(content)
+        (backup_dir / "sub_apikey").write_text("old-account-key")
+        (backup_dir / "credentials").write_text("old-cached-provider-creds")
+        self.client.state.update(link={"mode": "hub", "device_id": CONFIG["device_id"]}, backup_secret="s" * 43)
+        with patch.object(mail, "BACKUP_DIR", backup_dir):
+            self.client.backup_init()
+        for name, content in originals.items():
+            self.assertEqual(content, (backup_dir / name).read_text())
+        self.assertTrue((backup_dir / "sub_apikey").read_text().startswith("tklbam2."))
+        self.assertFalse((backup_dir / "credentials").exists())
+        self.assertFalse(any(call[0][0] == "tklbam-init" for call in self.calls))
+
+    def test_failed_backup_init_retries_after_token_is_saved(self):
+        backup_dir = self.root / "uninitialized-backup"
+        self.client.state.update(link={"mode": "hub", "device_id": CONFIG["device_id"]}, backup_secret="s" * 43)
+        self.fail_command = ["tklbam-init"]
+        with patch.object(mail, "BACKUP_DIR", backup_dir):
+            with self.assertRaises(mail.Error) as caught:
+                self.client.backup_init()
+            self.assertIn("Backup initialization", str(caught.exception))
+            self.assertTrue((backup_dir / "sub_apikey").exists())
+            self.fail_command = None
+            self.client.backup_init()
+        self.assertEqual(2, sum(call[0] == ["tklbam-init"] for call in self.calls))
+
+    def test_custom_sender_without_dns_is_a_valid_independent_service(self):
+        original = self.hub
+        def custom(route, payload):
+            value = original(route, payload)
+            if route == "configure":
+                value["dns"].update(enabled=False, hostname="")
+                value["mail"].update(domain="custom.example.test", sender="noreply@custom.example.test")
+            return value
+        with patch.object(mail, "request", side_effect=custom):
+            result = self.client.enroll(TOKEN)
+        self.assertEqual("ready", result["status"])
+        self.assertEqual("custom.example.test", result["domain"])
+        self.assertIsNone(self.client.linked()["dyndns"])
+        self.assertFalse((mail.SYSTEMD_DIR / "turnkey-mail-dns.timer").exists())
+
+    def test_legacy_dns_retires_only_after_same_hostname_scoped_success(self):
+        legacy = self.root / "legacy-dns"
+        legacy.mkdir()
+        (legacy / "fqdn").write_text(CONFIG["domain"])
+        key = legacy / "sub_apikey"
+        key.write_text("legacy-key")
+        cron = self.root / "legacy-cron"
+        cron.write_text("updater")
+        cron.chmod(0o755)
+        self.client.state["link"] = {"mode": "hub", "device_id": CONFIG["device_id"], "dyndns": CONFIG["dyndns"]}
+        def path(value):
+            return cron if str(value) == "/etc/cron.hourly/hubdns-update" else Path(value)
+        with patch.object(mail, "HUBDNS_DIR", legacy), patch.object(mail, "Path", side_effect=path), \
+                patch.object(self.client, "dns_update", side_effect=[{}, mail.Error("offline", retryable=True)]):
+            with self.assertRaises(mail.Error):
+                self.client.migrate_dns()
+        self.assertTrue(key.exists())
+        self.assertTrue(cron.stat().st_mode & 0o111)
+        self.assertEqual(self.calls[-1][0], ["systemctl", "enable", "--now", "hubdns.service"])
+        self.assertIn("updater was restored", self.client.state["legacy_dns"])
+        with patch.object(mail, "HUBDNS_DIR", legacy), patch.object(mail, "Path", side_effect=path), \
+                patch.object(self.client, "dns_update", return_value={}) as update:
+            self.client.migrate_dns()
+        self.assertEqual(update.call_count, 2)
+        self.assertFalse(key.exists())
+        self.assertFalse(cron.stat().st_mode & 0o111)
+
+    def test_full_local_reset_removes_only_owned_backup_auth_preserving_history(self):
+        backup = self.root / "reset-backup"
+        backup.mkdir()
+        (backup / "sub_apikey").write_text("tklbam2.%s.%s" % (CONFIG["device_id"], "s" * 43))
+        (backup / "credentials").write_text("cached-session")
+        (backup / "secret").write_text("preserve-secret")
+        (backup / "hbr").write_text("preserve-history")
+        self.client.state["link"] = {"mode": "hub", "device_id": CONFIG["device_id"]}
+        with patch.object(mail, "BACKUP_DIR", backup):
+            self.client.reset()
+        self.assertFalse((backup / "sub_apikey").exists())
+        self.assertFalse((backup / "credentials").exists())
+        self.assertEqual("preserve-secret", (backup / "secret").read_text())
+        self.assertEqual("preserve-history", (backup / "hbr").read_text())
+        (backup / "sub_apikey").write_text("explicit-legacy-key")
+        self.client.state["link"] = {"mode": "hub", "device_id": CONFIG["device_id"]}
+        with patch.object(mail, "BACKUP_DIR", backup):
+            self.client.reset()
+        self.assertEqual("explicit-legacy-key", (backup / "sub_apikey").read_text())
+
+    def test_new_pairing_rotates_service_auth_without_erasing_backup_history(self):
+        with patch.object(mail, "request", side_effect=self.hub):
+            self.client.enroll(TOKEN)
+        self.client.state["backup_secret"] = "old-revoked-backup-secret"
+        previous = self.client.state["smtp_secret"]["password"]
+        original = self.hub
+        self.hub_active = False
+        def fresh(route, payload):
+            value = copy.deepcopy(original(route, payload))
+            value["device_id"] = "b" * 32
+            if route == "configure":
+                value["mail"]["grant_id"] = "b" * 32
+                value["mail"]["smtp"]["username"] = "tkl-" + "b" * 32
+            return value
+        with patch.object(mail, "request", side_effect=fresh):
+            self.client.enroll("c" * 32 + "." + "d" * 64)
+        self.assertEqual("b" * 32, self.client.linked()["device_id"])
+        self.assertNotEqual(previous, self.client.state["smtp_secret"]["password"])
+        self.assertNotIn("backup_secret", self.client.state)
+
+    def test_sync_timer_noop_does_not_reload_systemd(self):
+        self.client.timers()
+        before = len(self.calls)
+        self.client.timers()
+        self.assertEqual(before, len(self.calls))
 
     def test_interrupted_apply_restores_config_before_reusing_state(self):
         original = self.main.read_text()
@@ -79,17 +256,18 @@ class MailTest(unittest.TestCase):
         self.assertNotIn("applying", recovered.state)
 
     def test_automatic_enrollment_accepts_hub_signed_token_shape(self):
-        with patch.object(mail, "request", return_value=CONFIG) as request:
+        with patch.object(mail, "request", side_effect=self.hub) as request:
             result = self.client.enroll(TOKEN)
         self.assertEqual(result["status"], "ready")
-        self.assertEqual(request.call_args.args[0], "enroll")
-        self.assertEqual(request.call_args.args[1]["token"], TOKEN)
+        self.assertEqual(request.call_args_list[0].args[0], "enroll")
+        self.assertEqual(request.call_args_list[0].args[1]["token"], TOKEN)
 
     def test_approved_pairing_enrolls_with_hub_signed_token_unchanged(self):
         self.client.state["pairing"] = {"expires": mail.time.time() + 900,
                                        "interval": 5, "device_code": DEVICE_CODE}
         with patch.object(mail, "request", side_effect=[
-                {"status": "approved", "enrollment_token": TOKEN}, CONFIG]) as request:
+                {"status": "approved", "enrollment_token": TOKEN}, self.hub("enroll", {}),
+                self.hub("configure", {}), self.hub("configure", {"smtp_password": "registered"})]) as request:
             result = self.client.poll()
         self.assertEqual(result["status"], "ready")
         self.assertEqual(request.call_args_list[0].args,
@@ -127,7 +305,7 @@ class MailTest(unittest.TestCase):
         self.assertNotIn("pairing", self.client.state)
 
     def test_completed_enrollment_is_a_noop_when_firstboot_repeats_token(self):
-        with patch.object(mail, "request", return_value=CONFIG):
+        with patch.object(mail, "request", side_effect=self.hub):
             self.client.enroll(TOKEN)
         secret = self.client.state["active"]["password"]
         with patch.object(mail, "request") as request:
@@ -205,7 +383,7 @@ class MailTest(unittest.TestCase):
         self.assertNotIn(DNS_PASSWORD, (mail.STATE_DIR / "state.json").read_text())
 
     def test_repeated_completed_bootstrap_preserves_mail_only_choices(self):
-        with patch.object(mail, "request", return_value=CONFIG):
+        with patch.object(mail, "request", side_effect=self.hub):
             self.client.enroll(TOKEN)
         custom = {"smtp": {"host": "custom.example.net", "port": 587, "username": "custom-user"},
                   "password": "custom-secret"}
@@ -222,7 +400,7 @@ class MailTest(unittest.TestCase):
         with patch.object(mail, "request") as request:
             self.assertEqual(client.enroll(TOKEN)["mode"], "custom")
             client.reset_mail()
-            self.assertEqual(client.enroll(TOKEN)["status"], "disconnected")
+            self.assertEqual(client.enroll(TOKEN)["status"], "linked")
         request.assert_not_called()
 
     def test_legacy_dns_initialized_after_enrollment_owns_later_updates(self):
@@ -307,7 +485,7 @@ class MailTest(unittest.TestCase):
             first.append(payload.copy())
             saved = json.loads((mail.STATE_DIR / "state.json").read_text())["pending"]
             self.assertEqual(saved["token"], TOKEN)
-            self.assertEqual(saved["password"], payload["password"])
+            self.assertEqual(saved["control_secret"], payload["control_secret"])
             raise mail.Error("network unavailable", retryable=True)
 
         with patch.object(mail, "request", side_effect=unavailable):
@@ -315,11 +493,11 @@ class MailTest(unittest.TestCase):
                 self.client.enroll(TOKEN)
         # Firstboot's preseed file is absent; a new process uses only state.
         retry = mail.Mail()
-        with patch.object(mail, "request", return_value=CONFIG) as request:
+        with patch.object(mail, "request", side_effect=self.hub) as request:
             result = retry.retry()
-        self.assertEqual(request.call_args.args, ("enroll", first[0]))
+        self.assertEqual(request.call_args_list[0].args, ("enroll", first[0]))
         self.assertEqual(result["status"], "ready")
-        self.assertNotEqual(first[0]["password"], first[0]["dns_password"])
+        self.assertNotEqual(first[0]["control_secret"], first[0]["dns_password"])
         self.assertNotIn("pending", retry.state)
         self.assertNotIn(TOKEN, json.dumps(retry.state))
 
@@ -329,7 +507,7 @@ class MailTest(unittest.TestCase):
             with self.assertRaises(mail.Error):
                 self.client.enroll(TOKEN)
         self.assertEqual(mail.cf_entries(self.main.read_text())["defer_transports"], "smtp")
-        with patch.object(mail, "request", return_value=CONFIG):
+        with patch.object(mail, "request", side_effect=self.hub):
             self.client.retry()
         self.assertNotIn("defer_transports", mail.cf_entries(self.main.read_text()))
 

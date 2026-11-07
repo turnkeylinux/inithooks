@@ -8,7 +8,7 @@ if [ -n "${HUB_EMAIL_TOKEN:-}" ]; then
     if ! printf '%s' "$HUB_EMAIL_TOKEN" | "$INITHOOKS_PATH/bin/turnkey-mail" enroll --token-stdin; then
         echo 'App email setup did not finish. Check turnkey-mail status; temporary failures retry automatically.' >&2
     fi
-    # Token-only deployments must remain unattended.
+    # Explicit legacy keys remain supported; new Hub launches use only a token.
     [ -n "${HUB_APIKEY:-}" ] || exit 0
 fi
 [ "${HUB_APIKEY:-}" != "SKIP" ] || exit 0

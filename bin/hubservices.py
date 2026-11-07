@@ -53,10 +53,17 @@ def connect_mail(d):
     ) % (result["verification_uri"].split("?", 1)[0], result["user_code"])
     while d.yesno("Link to TurnKey Hub", message, "Check connection", "Skip"):
         result = mail_call("connect", "--poll")
-        if result.get("domain"):
-            state = ("Your appliance is linked. App email and dynamic DNS are configured." if result["status"] == "ready" else
-                     "Mail is connected and waiting for domain verification. Messages will queue until it is ready.")
-            d.msgbox("Hub linked", "%s\n\nHostname: %s\n\nManage the connection at https://hub.turnkeylinux.org/email/" % (state, result["domain"]))
+        if result.get("connection_status") == "linked" or result.get("domain"):
+            services = result.get("services", {})
+            hostname = services.get("dns", {}).get("hostname", result.get("domain", ""))
+            details = "Your appliance is linked to the Hub."
+            if hostname:
+                details += "\n\nHostname: " + hostname
+            backup = services.get("backup", {})
+            if backup.get("requested"):
+                details += "\nBackup and restore: " + backup.get("status", "pending").replace("_", " ")
+            details += "\n\nManage services at https://hub.turnkeylinux.org/email/"
+            d.msgbox("Hub linked", details)
             return
         status = result.get("status")
         if status == "pending":

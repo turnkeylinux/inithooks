@@ -186,3 +186,31 @@ class HubRetryTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ExplicitLegacyPreseedTests(unittest.TestCase):
+    def exercise(self, apikey):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'bin').mkdir()
+            config = root / 'inithooks.conf'
+            config.write_text('HUB_EMAIL_TOKEN=fixture-token\nHUB_APIKEY=' + apikey + '\nFQDN=fixture.tklapp.com\n')
+            defaults = root / 'defaults'
+            defaults.write_text('INITHOOKS_CONF=' + str(config) + '\nINITHOOKS_PATH=' + str(root) + '\n')
+            log = root / 'calls'
+            helper = root / 'bin/turnkey-mail'
+            helper.write_text('#!/bin/sh\nread token\n[ "$token" = fixture-token ] || exit 1\necho enroll >> "' + str(log) + '"\n')
+            legacy = root / 'bin/hubservices.py'
+            legacy.write_text('#!/bin/sh\n[ "$1" = --apikey=legacy-fixture-key ] || exit 1\n[ "$2" = --fqdn=fixture.tklapp.com ] || exit 1\necho legacy >> "' + str(log) + '"\n')
+            helper.chmod(0o755)
+            legacy.chmod(0o755)
+            script = (ROOT / 'firstboot.d/80hub-services').read_text().replace('/etc/default/inithooks', str(defaults))
+            result = subprocess.run(['bash'], input=script, text=True, capture_output=True)
+            self.assertEqual(0, result.returncode, result.stderr)
+            return log.read_text().splitlines()
+
+    def test_explicit_legacy_key_preseed_runs_after_token_enrollment(self):
+        self.assertEqual(['enroll', 'legacy'], self.exercise('legacy-fixture-key'))
+
+    def test_new_token_only_launch_never_runs_legacy_key_initializer(self):
+        self.assertEqual(['enroll'], self.exercise(''))

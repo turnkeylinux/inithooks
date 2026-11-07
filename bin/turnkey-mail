@@ -30,6 +30,8 @@ HUB = "https://hub.turnkeylinux.org"
 STATE_DIR = Path("/var/lib/turnkey-mail")
 POSTFIX_DIR = Path("/etc/postfix")
 SYSTEMD_DIR = Path("/etc/systemd/system")
+BACKUP_DIR = Path("/var/lib/tklbam")
+HUBDNS_DIR = Path("/var/lib/hubdns")
 HELPER = "/usr/lib/inithooks/bin/turnkey-mail"
 MAX_JSON = 65536
 DEVICE_CODE = re.compile(r"^[A-Za-z0-9_-]{32,256}$")
@@ -37,6 +39,8 @@ ENROLLMENT_TOKEN = re.compile(r"^[a-f0-9]{32}\.[a-f0-9]{64}$")
 HOST = re.compile(r"^(?=.{1,253}$)[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$", re.I)
 ADDRESS = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+$")
 ERRORS = {
+    "stale_configuration": "The Hub settings changed. Synchronize again.",
+    "invalid_credentials": "This Hub connection is no longer authorized. Link it again.",
     "expired": "This connection request expired. Start a new connection.",
     "denied": "The connection was not approved. Start again when ready.",
     "invalid_token": "This connection request is invalid or expired. Start a new connection.",
@@ -239,6 +243,7 @@ class Mail:
         self.save()
 
     def timers(self, dns=False):
+        changed = False
         name = "turnkey-mail-dns" if dns else "turnkey-mail-retry"
         command = "dns-update" if dns else "retry"
         interval = "1h" if dns else "1min"
@@ -249,8 +254,10 @@ class Mail:
             path = SYSTEMD_DIR / (name + "." + suffix)
             if not path.exists() or path.read_text() != text:
                 atomic(path, text, 0o644)
-        run(["systemctl", "daemon-reload"])
-        run(["systemctl", "enable", "--now", name + ".timer"])
+                changed = True
+        if changed:
+            run(["systemctl", "daemon-reload"])
+            run(["systemctl", "enable", "--now", name + ".timer"])
 
     def guard(self):
         """A fresh automatic enrollment queues SMTP while Hub is unavailable."""
@@ -326,10 +333,12 @@ class Mail:
             run(["postfix", "reload"])
             self.state.update(active=config, baseline=baseline, owned_options=options,
                               owned_files=[str(path) for path in created])
-            if config["mode"] == "hub":
+            if config["mode"] == "hub" and not linked.get("control_secret"):
                 self.state["link"] = dict(config)
             elif linked:
                 self.state["link"] = linked
+            if config["mode"] == "custom":
+                self.state["mail_preference"] = "manual"
             self.state.pop("guard", None)
             self.state.pop("applying", None)
             self.save()
@@ -356,45 +365,146 @@ class Mail:
                 raise Error("The connection code is invalid. Start a new connection.")
             if self.state.get("enrolled_token_hash") == hashlib.sha256(token.encode()).hexdigest() and self.linked():
                 return self.status(refresh=False)
-            previous = self.state.get("pending", {})
-            if previous.get("token") != token:
-                self.state["pending"] = {"token": token, "password": secrets.token_urlsafe(32),
+            if self.state.get("pending", {}).get("token") != token:
+                self.state["pending"] = {"token": token, "control_secret": secrets.token_urlsafe(32),
                                          "dns_password": secrets.token_urlsafe(32)}
             self.save()
         pending = self.state.get("pending")
         if not pending:
             return self.status(refresh=False)
         self.timers()
-        self.guard()
+        if self.state.get('mail_preference', 'hub') == 'hub':
+            self.guard()
         try:
-            result = request("enroll", {key: pending[key] for key in ("token", "password", "dns_password")})
-            config = checked_config(result, pending["password"])
-            config["dns_password"] = pending["dns_password"]
-            if config.get("dyndns") and not self.legacy_dns():
-                self.timers(dns=True)
-            self.apply(config)
+            result = request("enroll", {key: pending[key] for key in ("token", "control_secret", "dns_password")})
+            if result.get("version") != 2 or not re.fullmatch(r"[a-f0-9]{32}", result.get("device_id", "")):
+                raise Error("The Hub returned an invalid connection.")
+            if self.linked().get("device_id") != result["device_id"]:
+                for key in ("smtp_secret", "backup_secret", "services"):
+                    self.state.pop(key, None)
+            self.state["link"] = dict(mode="hub", device_id=result["device_id"],
+                                      control_secret=pending["control_secret"], dns_password=pending["dns_password"])
             self.state["enrolled_token_hash"] = hashlib.sha256(pending["token"].encode()).hexdigest()
-            self.state.pop("pending", None)
-            self.state.pop("pairing", None)
-            self.state.pop("error", None)
+            for key in ("pending", "pairing", "error"):
+                self.state.pop(key, None)
+            self.state.setdefault("mail_preference", "hub")
             self.save()
-            if config.get("dyndns") and not self.legacy_dns():
-                # DNS failure must not roll back a working mail connection.
-                with contextlib.suppress(Error):
-                    self.dns_update()
-            return self.status(refresh=False)
+            return self.sync()
         except Error as error:
             self.state["error"] = {"code": error.code, "message": str(error)}
-            if not error.retryable:
+            if not error.retryable and self.state.get("pending"):
                 self.state["pending"]["stopped"] = True
             self.save()
+            if self.linked().get("control_secret"):
+                return self.status(refresh=False)
             raise
 
     def retry(self):
         pending = self.state.get("pending")
         if pending and not pending.get("stopped"):
             return self.enroll()
+        return self.sync() if self.linked().get("control_secret") else self.status(refresh=False)
+
+    def sync(self):
+        link = self.linked()
+        if not link.get("control_secret"):
+            return self.status(refresh=False)
+        proof = {key: link[key] for key in ("device_id", "control_secret")}
+        value = request("configure", proof)
+        if value.get("device_id") != link["device_id"] or value.get("connection_status") != "linked":
+            raise Error("The Hub returned an invalid connection.")
+        registration = {}
+        mail = value["mail"]
+        if mail.get("enabled") and self.state.get("mail_preference", "hub") == "hub":
+            self.guard()
+            grant = mail.get("grant_id", "")
+            if not re.fullmatch(r"[a-f0-9]{32}", grant):
+                raise Error("The Hub returned an invalid email grant.")
+            if self.state.get("smtp_secret", {}).get("grant_id") != grant:
+                self.state["smtp_secret"] = {"grant_id": grant, "password": secrets.token_urlsafe(32)}
+                self.save()
+            if mail["status"] == "secret_required":
+                registration.update(smtp_grant_id=grant, smtp_password=self.state["smtp_secret"]["password"])
+        if value["backup"]["status"] == "secret_required":
+            if not self.state.get("backup_secret"):
+                self.state["backup_secret"] = secrets.token_urlsafe(32)
+                self.save()
+            registration["backup_secret"] = self.state["backup_secret"]
+        if registration:
+            value = request("configure", dict(proof, **registration))
+        self.state["services"] = value
+        dns = value["dns"]
+        link["dyndns"] = {"hostname": dns["hostname"], "update_uri": dns["update_uri"]} if dns["enabled"] else None
+        self.save()
+        if dns["enabled"]:
+            self.timers(dns=True)
+            with contextlib.suppress(Error):
+                self.migrate_dns()
+        mail = value["mail"]
+        if (self.state.get("mail_preference", "hub") == "hub" and mail.get("enabled") and
+                mail["status"] in ("active", "pending_verification") and mail.get("smtp")):
+            envelope = dict(version=1, device_id=link["device_id"], smtp=mail["smtp"],
+                            domain=mail["domain"], sender=mail["sender"],
+                            status="ready" if mail["status"] == "active" else "pending")
+            config = checked_config(envelope, self.state["smtp_secret"]["password"])
+            if self.state.get("active") != config:
+                try:
+                    self.apply(config)
+                except Error as error:
+                    mail["error"] = str(error)
+        if value["backup"]["status"] == "active":
+            try:
+                self.backup_init()
+            except Error as error:
+                value["backup"]["error"] = str(error)
+                value["backup"]["status"] = "setup_required"
+        self.state["services"] = value
+        self.save()
         return self.status(refresh=False)
+
+    def backup_init(self):
+        secret = self.state.get("backup_secret")
+        if not secret:
+            raise Error("Backup credentials are missing. Check this connection in the Hub.")
+        BACKUP_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+        token = "tklbam2.%s.%s\n" % (self.linked()["device_id"], secret)
+        path = BACKUP_DIR / "sub_apikey"
+        if not path.exists() or path.read_text() != token:
+            atomic(path, token)
+            (BACKUP_DIR / "credentials").unlink(missing_ok=True)
+        if not (BACKUP_DIR / "profile/profile_id").exists():
+            try:
+                run(["tklbam-init"], timeout=60)
+            except Error:
+                raise Error("Backup initialization did not finish. Check backup setup in the Hub; it will retry.", retryable=True)
+
+    def use_hub(self):
+        self.state["mail_preference"] = "hub"
+        self.save()
+        return self.sync()
+
+    def migrate_dns(self):
+        if not self.legacy_dns():
+            return
+        # A custom-zone legacy writer remains independently configured.
+        fqdn = HUBDNS_DIR / "fqdn"
+        if not fqdn.exists() or fqdn.read_text().strip().rstrip(".") != self.linked()["dyndns"]["hostname"]:
+            self.state["legacy_dns"] = "Existing DNS remains separately managed."
+            return
+        self.dns_update(scoped=True)
+        run(["systemctl", "disable", "--now", "hubdns.service"])
+        try:
+            self.dns_update(scoped=True)
+        except Error:
+            self.state["legacy_dns"] = "DNS migration paused. Legacy DNS settings were retained; check its service if updates remain unavailable."
+            run(["systemctl", "enable", "--now", "hubdns.service"])
+            self.state["legacy_dns"] = "DNS migration paused. Your existing DNS updater was restored."
+            raise
+        (HUBDNS_DIR / "sub_apikey").unlink(missing_ok=True)
+        cron = Path("/etc/cron.hourly/hubdns-update")
+        if cron.exists():
+            cron.chmod(cron.stat().st_mode & ~0o111)
+        self.state.pop("legacy_dns", None)
 
     def start(self):
         result = request("device/start", {})
@@ -435,28 +545,25 @@ class Mail:
         return {"status": result["status"], "interval": pairing["interval"]}
 
     def status(self, refresh=True):
-        active = self.state.get("active")
-        if not active:
-            return {"status": "connecting" if self.state.get("pending") else "disconnected",
-                    "message": self.state.get("error", {}).get("message", "")}
-        status = active.get("status", "ready")
-        if refresh and active["mode"] == "hub":
-            result = request("status", {"username": active["smtp"]["username"], "password": active["password"]})
-            if result.get("status") in ("ready", "pending", "revoked", "suspended", "expired"):
-                status = result["status"]
-                active["status"] = status
-                self.save()
-        return {"status": status, "mode": active["mode"], "domain": active.get("domain", ""),
-                "sender": active.get("sender", ""), "host": active["smtp"]["host"],
-                "message": self.state.get("error", {}).get("message", "")}
+        link = self.linked()
+        if refresh and link.get("control_secret"):
+            return self.sync()
+        active = self.state.get("active", {})
+        services = self.state.get("services", {})
+        return {"status": active.get("status", "linked" if link.get("control_secret") else "connecting" if self.state.get("pending") else "disconnected"),
+                "connection_status": "linked" if link.get("control_secret") else "disconnected",
+                "mode": active.get("mode", ""), "mail_preference": self.state.get("mail_preference", "hub"),
+                "domain": active.get("domain", ""), "sender": active.get("sender", ""),
+                "host": active.get("smtp", {}).get("host", ""), "services": services,
+                "message": self.state.get("error", {}).get("message", self.state.get("legacy_dns", ""))}
 
     def legacy_dns(self):
         return (Path("/var/lib/hubdns/sub_apikey").exists()
                 and os.access("/etc/cron.hourly/hubdns-update", os.X_OK))
 
-    def dns_update(self):
+    def dns_update(self, scoped=False):
         config = self.linked()
-        if not config.get("dyndns") or self.legacy_dns():
+        if not config.get("dyndns") or (self.legacy_dns() and not scoped):
             return {"status": "unchanged"}
         try:
             opener = urllib.request.build_opener(NoRedirect(), urllib.request.HTTPSHandler(context=ssl.create_default_context()))
@@ -464,7 +571,7 @@ class Mail:
                 address = str(ipaddress.IPv4Address(response.read(64).decode().strip()))
         except (OSError, ValueError, urllib.error.URLError):
             raise Error("The public IP address could not be checked. The existing DNS record was kept.", retryable=True)
-        request("dns/update", {"username": config["smtp"]["username"], "dns_password": config["dns_password"], "ipv4": address})
+        request("dns/update", {"username": "tkl-" + config["device_id"], "dns_password": config["dns_password"], "ipv4": address})
         return {"status": "updated", "hostname": config["dyndns"]["hostname"], "ipv4": address}
 
     def reset_mail(self):
@@ -489,7 +596,7 @@ class Mail:
                 run(["postfix", "reload"])
             raise
         self.remove_files(self.state.get("owned_files", []))
-        names = ("turnkey-mail-retry",) if mail_only else ("turnkey-mail-retry", "turnkey-mail-dns")
+        names = () if mail_only else ("turnkey-mail-retry", "turnkey-mail-dns")
         for name in names:
             timer = SYSTEMD_DIR / (name + ".timer")
             if timer.exists():
@@ -497,7 +604,14 @@ class Mail:
             for extension in ("timer", "service"):
                 (SYSTEMD_DIR / (name + "." + extension)).unlink(missing_ok=True)
         run(["systemctl", "daemon-reload"])
-        retained = {"link": self.linked()} if mail_only and self.linked() else {}
+        credential = BACKUP_DIR / "sub_apikey"
+        if not mail_only and credential.exists() and self.linked().get("device_id"):
+            if credential.read_text().startswith("tklbam2." + self.linked()["device_id"] + "."):
+                credential.unlink()
+                (BACKUP_DIR / "credentials").unlink(missing_ok=True)
+        retained = {key: value for key, value in self.state.items() if key not in ("active", "baseline", "owned_options", "owned_files", "guard", "applying")} if mail_only else {}
+        if mail_only:
+            retained["mail_preference"] = "manual"
         if retained and "enrolled_token_hash" in self.state:
             retained["enrolled_token_hash"] = self.state["enrolled_token_hash"]
         self.state = retained
@@ -535,6 +649,7 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     enroll = commands.add_parser("enroll")
     enroll.add_argument("--token-stdin", action="store_true", required=True)
+    enroll.add_argument("--require-backup", action="store_true")
     connect = commands.add_parser("connect")
     mode = connect.add_mutually_exclusive_group()
     mode.add_argument("--start", action="store_true")
@@ -543,7 +658,7 @@ def main():
     custom.add_argument("--stdin", action="store_true", required=True)
     status = commands.add_parser("status")
     status.add_argument("--local", action="store_true")
-    for name in ("reset", "reset-mail", "retry", "dns-update"):
+    for name in ("reset", "reset-mail", "retry", "dns-update", "sync", "use-hub"):
         commands.add_parser(name)
     test = commands.add_parser("test")
     test.add_argument("--recipient", required=True)
@@ -558,6 +673,11 @@ def main():
             mail = Mail()
             if args.command == "enroll":
                 result = mail.enroll(sys.stdin.read(512).strip())
+                if args.require_backup:
+                    result = mail.retry()
+                    backup = result.get("services", {}).get("backup", {})
+                    if backup.get("status") != "active" or backup.get("error"):
+                        raise Error("Backup setup must finish before automatic restore. Check Hub services.", retryable=True)
             elif args.command == "configure":
                 try:
                     raw = sys.stdin.read(MAX_JSON + 1)
