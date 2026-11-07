@@ -32,7 +32,8 @@ POSTFIX_DIR = Path("/etc/postfix")
 SYSTEMD_DIR = Path("/etc/systemd/system")
 HELPER = "/usr/lib/inithooks/bin/turnkey-mail"
 MAX_JSON = 65536
-TOKEN = re.compile(r"^[A-Za-z0-9_-]{32,256}$")
+DEVICE_CODE = re.compile(r"^[A-Za-z0-9_-]{32,256}$")
+ENROLLMENT_TOKEN = re.compile(r"^[a-f0-9]{32}\.[a-f0-9]{64}$")
 HOST = re.compile(r"^(?=.{1,253}$)[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$", re.I)
 ADDRESS = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+$")
 ERRORS = {
@@ -351,7 +352,7 @@ class Mail:
 
     def enroll(self, token=None):
         if token:
-            if not TOKEN.fullmatch(token):
+            if not ENROLLMENT_TOKEN.fullmatch(token):
                 raise Error("The connection code is invalid. Start a new connection.")
             if self.state.get("enrolled_token_hash") == hashlib.sha256(token.encode()).hexdigest() and self.linked():
                 return self.status(refresh=False)
@@ -401,7 +402,7 @@ class Mail:
             uri = urllib.parse.urlsplit(result["verification_uri"])
             if uri.scheme != "https" or uri.netloc != urllib.parse.urlsplit(HUB).netloc:
                 raise ValueError()
-            if not TOKEN.fullmatch(result["device_code"]):
+            if not DEVICE_CODE.fullmatch(result["device_code"]):
                 raise ValueError()
             if not re.fullmatch(r"[A-Z0-9]{4}&[A-Z0-9]{4}", result["user_code"]):
                 raise ValueError()
@@ -426,7 +427,7 @@ class Mail:
         result = request("device/poll", {"device_code": pairing["device_code"]})
         if result.get("status") == "approved":
             token = result.get("enrollment_token", "")
-            if not isinstance(token, str) or not TOKEN.fullmatch(token):
+            if not isinstance(token, str) or not ENROLLMENT_TOKEN.fullmatch(token):
                 raise Error("The Hub returned an invalid connection approval.")
             return self.enroll(token)
         if result.get("status") not in ("pending", "expired", "denied"):

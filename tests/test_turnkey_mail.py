@@ -17,7 +17,9 @@ mail = importlib.util.module_from_spec(spec)
 loader.exec_module(mail)
 LEGACY_DNS = mail.Mail.legacy_dns
 
-TOKEN = "t" * 43
+# Hub service.enrollment_token emits device.pk + a dot + SHA256 hexdigest.
+TOKEN = "a" * 32 + "." + "b" * 64
+DEVICE_CODE = "t" * 43
 PASSWORD = "p" * 43
 DNS_PASSWORD = "d" * 43
 CONFIG = {"version": 1, "device_id": "a" * 32,
@@ -75,6 +77,54 @@ class MailTest(unittest.TestCase):
         self.assertEqual(self.main.read_text(), original)
         self.assertFalse(artifact.exists())
         self.assertNotIn("applying", recovered.state)
+
+    def test_automatic_enrollment_accepts_hub_signed_token_shape(self):
+        with patch.object(mail, "request", return_value=CONFIG) as request:
+            result = self.client.enroll(TOKEN)
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(request.call_args.args[0], "enroll")
+        self.assertEqual(request.call_args.args[1]["token"], TOKEN)
+
+    def test_approved_pairing_enrolls_with_hub_signed_token_unchanged(self):
+        self.client.state["pairing"] = {"expires": mail.time.time() + 900,
+                                       "interval": 5, "device_code": DEVICE_CODE}
+        with patch.object(mail, "request", side_effect=[
+                {"status": "approved", "enrollment_token": TOKEN}, CONFIG]) as request:
+            result = self.client.poll()
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(request.call_args_list[0].args,
+                         ("device/poll", {"device_code": DEVICE_CODE}))
+        self.assertEqual(request.call_args_list[1].args[0], "enroll")
+        self.assertEqual(request.call_args_list[1].args[1]["token"], TOKEN)
+        self.assertNotIn("pairing", self.client.state)
+
+    def test_malformed_enrollment_tokens_are_rejected_before_enrollment(self):
+        invalid = (DEVICE_CODE, TOKEN.replace(".", "_"), TOKEN.replace(".", ".."),
+                   TOKEN[1:], TOKEN + "b", TOKEN.upper(), TOKEN.replace("b", "g"),
+                   TOKEN + "\n")
+        for token in invalid:
+            with self.subTest(token=token):
+                with patch.object(mail, "request") as request:
+                    with self.assertRaises(mail.Error):
+                        self.client.enroll(token)
+                request.assert_not_called()
+                self.assertNotIn("pending", self.client.state)
+                self.client.state["pairing"] = {"expires": mail.time.time() + 900,
+                                               "interval": 5, "device_code": DEVICE_CODE}
+                with patch.object(mail, "request", return_value={
+                        "status": "approved", "enrollment_token": token}) as request:
+                    with self.assertRaises(mail.Error):
+                        self.client.poll()
+                self.assertEqual(request.call_count, 1)
+                self.assertNotIn("pending", self.client.state)
+
+    def test_pairing_device_code_does_not_accept_enrollment_token(self):
+        response = {"device_code": TOKEN, "user_code": "ABCD&1234", "expires_in": 900,
+                    "interval": 5, "verification_uri": mail.HUB + "/link"}
+        with patch.object(mail, "request", return_value=response):
+            with self.assertRaises(mail.Error):
+                self.client.start()
+        self.assertNotIn("pairing", self.client.state)
 
     def test_completed_enrollment_is_a_noop_when_firstboot_repeats_token(self):
         with patch.object(mail, "request", return_value=CONFIG):
@@ -313,18 +363,18 @@ class MailTest(unittest.TestCase):
 
     def test_pairing_only_returns_public_fields_and_pending_keeps_current_relay(self):
         original = self.main.read_bytes()
-        response = {"device_code": TOKEN, "user_code": "ABCD&1234", "expires_in": 900, "interval": 5,
+        response = {"device_code": DEVICE_CODE, "user_code": "ABCD&1234", "expires_in": 900, "interval": 5,
                     "verification_uri": mail.HUB + "/link"}
         with patch.object(mail, "request", return_value=response):
             public = self.client.start()
-        self.assertNotIn(TOKEN, json.dumps(public))
+        self.assertNotIn(DEVICE_CODE, json.dumps(public))
         with patch.object(mail, "request", return_value={"status": "pending"}):
             self.assertEqual(self.client.poll()["status"], "pending")
         self.assertEqual(self.main.read_bytes(), original)
 
     def test_pairing_enforces_poll_interval_without_network(self):
         self.client.state["pairing"] = {"expires": mail.time.time() + 900, "next_poll": mail.time.time() + 30,
-                                       "interval": 5, "device_code": TOKEN}
+                                       "interval": 5, "device_code": DEVICE_CODE}
         with patch.object(mail, "request") as request:
             self.assertEqual(self.client.poll()["status"], "pending")
         request.assert_not_called()
