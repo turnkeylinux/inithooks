@@ -1,0 +1,9 @@
+[Unit]
+Description=Retry queued TurnKey setup observations
+
+[Timer]
+OnBootSec=30s
+OnUnitInactiveSec=5min
+
+[Install]
+WantedBy=timers.target

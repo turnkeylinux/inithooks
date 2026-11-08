@@ -11,6 +11,9 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] \
     # its console here can kill dpkg before configuration has completed.
     # Existing services use the updated scripts on their next invocation.
     rm -f /run/inithooks-was-active /run/turnkey-init-fence-was-active
+    if [ "$1" = "configure" ]; then
+        systemctl enable turnkey-onboarding.timer
+    fi
     if [ -z "$2" ]; then
         # fresh install ($2 is empty) - enable services
         systemctl enable inithooks.service

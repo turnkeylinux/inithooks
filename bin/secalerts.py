@@ -16,18 +16,13 @@ import subprocess
 from typing import NoReturn
 
 from libinithooks.dialog_wrapper import Dialog, EMAIL_RE
+from libinithooks import onboarding
 
 TITLE = "System Notifications and Critical Security Alerts"
 
 TEXT = (
-    "Enable local system notifications (root@localhost) to be forwarded to"
-    " your regular inbox. Notifications include security updates and system"
-    " messages.\n\n"
-    "You will also be subscribed to receive critical security and bug alerts"
-    " through a low-traffic Security and News announcements newsletter. You"
-    " can unsubscribe at any time.\n\n"
-    "https://www.turnkeylinux.org/security-alerts\n\n"
-    "Email:"
+    "Forward local system notifications (root@localhost) to your inbox. "
+    "These include security update reports and system messages.\n\nEmail:"
 )
 
 
@@ -70,14 +65,14 @@ def main():
         fatal("email is not valid")
 
     if not email:
+        email = onboarding.email_default()
+
+    if not email:
         d = Dialog("TurnKey Linux - First boot configuration")
-        email = email_placeholder
+        email = onboarding.email_default(email_placeholder)
         while 1:
             retcode, email = d.inputbox(TITLE, TEXT, email, "Enable", "Skip")
 
-            logging.debug(
-                f"secalerts.main():\n\tretcode:`{retcode}'\n\temail:`{email}'"
-            )
             if retcode == "cancel":
                 email = ""
                 break
@@ -90,9 +85,25 @@ def main():
                 break
 
     if email:
+        onboarding.observe("email_provided", email=email)
         cmd = os.path.join(os.path.dirname(__file__), "secalerts.sh")
         logging.debug(f"\tcmd:`{cmd}'")
         subprocess.run([cmd, email], check=True)
+
+    # Hub-linked users manage announcements in their account. Only a deliberate
+    # firstboot Skip offers the separate newsletter, with affirmative consent.
+    if onboarding.skipped_unlinked():
+        d = Dialog("TurnKey Linux - First boot configuration")
+        consent = d.yesno("Security announcements",
+                          "Receive TurnKey security announcements and news by email? "
+                          "This is a low-traffic newsletter. You can unsubscribe at any time.",
+                          "Subscribe", "No thanks")
+        onboarding.observe("newsletter_choice", newsletter_consent=consent)
+        if consent:
+            newsletter_email = email or d.get_email("Security announcements", "Email:", email_placeholder)
+            onboarding.observe("email_provided", email=newsletter_email)
+            subprocess.run([os.path.join(os.path.dirname(__file__), "secalerts.sh"),
+                            newsletter_email, "--newsletter-only"], check=True)
 
 
 if __name__ == "__main__":

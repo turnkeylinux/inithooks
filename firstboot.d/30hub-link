@@ -1,0 +1,14 @@
+#!/bin/bash -e
+# Link before root, application and recovery email prompts.
+set +x
+. /etc/default/inithooks
+[ ! -e "$INITHOOKS_CONF" ] || . "$INITHOOKS_CONF"
+[ -z "${HUB_APIKEY:-}" ] || [ -n "${HUB_EMAIL_TOKEN:-}" ] || exit 0
+args=(--early)
+# Explicit legacy/API preseeds stay unattended and run at 80hub-services.
+[ -z "${HUB_APIKEY:-}" ] || args+=(--unattended)
+if [ -n "${HUB_EMAIL_TOKEN:-}" ]; then
+    printf '%s' "$HUB_EMAIL_TOKEN" | "$INITHOOKS_PATH/bin/hubservices.py" "${args[@]}"
+else
+    "$INITHOOKS_PATH/bin/hubservices.py" "${args[@]}"
+fi

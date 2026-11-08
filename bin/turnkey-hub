@@ -26,6 +26,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+ONBOARDING_STATE = Path("/var/lib/turnkey-onboarding/state.json")
+HUB_EMAIL_CACHE = Path("/var/lib/inithooks/cache/HUB_ACCOUNT_EMAIL")
 HUB = "https://hub.turnkeylinux.org"
 STATE_DIR = Path("/var/lib/turnkey-mail")
 POSTFIX_DIR = Path("/etc/postfix")
@@ -380,6 +382,7 @@ class Mail:
             if result.get("version") != 2 or not re.fullmatch(r"[a-f0-9]{32}", result.get("device_id", "")):
                 raise Error("The Hub returned an invalid connection.")
             if self.linked().get("device_id") != result["device_id"]:
+                HUB_EMAIL_CACHE.unlink(missing_ok=True)
                 for key in ("smtp_secret", "backup_secret", "services"):
                     self.state.pop(key, None)
             self.state["link"] = dict(mode="hub", device_id=result["device_id"],
@@ -432,6 +435,10 @@ class Mail:
             registration["backup_secret"] = self.state["backup_secret"]
         if registration:
             value = request("configure", dict(proof, **registration))
+        account_email = value.get("account_email")
+        if isinstance(account_email, str) and len(account_email) <= 254 and ADDRESS.fullmatch(account_email):
+            HUB_EMAIL_CACHE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            atomic(HUB_EMAIL_CACHE, account_email + "\n")
         self.state["services"] = value
         dns = value["dns"]
         link["dyndns"] = {"hostname": dns["hostname"], "update_uri": dns["update_uri"]} if dns["enabled"] else None
@@ -458,6 +465,10 @@ class Mail:
             except Error as error:
                 value["backup"]["error"] = str(error)
                 value["backup"]["status"] = "setup_required"
+        account_email = value.get("account_email")
+        if isinstance(account_email, str) and len(account_email) <= 254 and ADDRESS.fullmatch(account_email):
+            HUB_EMAIL_CACHE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            atomic(HUB_EMAIL_CACHE, account_email + "\n")
         self.state["services"] = value
         self.save()
         return self.status(refresh=False)
@@ -507,7 +518,15 @@ class Mail:
         self.state.pop("legacy_dns", None)
 
     def start(self):
-        result = request("device/start", {})
+        correlation = {}
+        try:
+            state = json.loads(ONBOARDING_STATE.read_text())
+            if (all(re.fullmatch(r"[a-f0-9]{32}", state.get(key, "")) for key in ("installation_id", "flow_id"))
+                    and state.get("flow_kind") in ("firstboot", "confconsole")):
+                correlation = {key: state[key] for key in ("installation_id", "flow_id", "flow_kind")}
+        except (OSError, ValueError, TypeError, AttributeError):
+            pass
+        result = request("device/start", correlation)
         try:
             uri = urllib.parse.urlsplit(result["verification_uri"])
             if uri.scheme != "https" or uri.netloc != urllib.parse.urlsplit(HUB).netloc:
@@ -616,6 +635,8 @@ class Mail:
             retained["mail_preference"] = "manual"
         if retained and "enrolled_token_hash" in self.state:
             retained["enrolled_token_hash"] = self.state["enrolled_token_hash"]
+        if not mail_only:
+            HUB_EMAIL_CACHE.unlink(missing_ok=True)
         self.state = retained
         self.save()
         return {"status": "disconnected"}

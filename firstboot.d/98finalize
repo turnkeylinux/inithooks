@@ -3,6 +3,8 @@
 INITHOOKS_DEFAULT=/etc/default/inithooks
 . $INITHOOKS_DEFAULT
 
+"$INITHOOKS_PATH/bin/turnkey-onboarding" event --name setup_completed
+
 # blank out configuration file (usually contains passwords)
 [ -e $INITHOOKS_CONF ] && echo > $INITHOOKS_CONF
 

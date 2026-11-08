@@ -7,6 +7,7 @@ import dialog
 from os import environ
 from urllib.parse import urlparse
 import logging
+from libinithooks import onboarding
 
 EMAIL_RE = re.compile(r"(?:^|\s).*\S@\S+(?:\s|$)", re.IGNORECASE)
 
@@ -124,7 +125,7 @@ class Dialog:
         Returns 'Ok' or "Cancel'"""
         logging.debug(
             f"inputbox(title={title!r}, text=<redacted>,"
-            + f" init={init!r}, ok_label={ok_label!r},"
+            + f" init=<redacted>, ok_label={ok_label!r},"
             + f" cancel_label={cancel_label!r})"
         )
 
@@ -287,11 +288,11 @@ class Dialog:
         button
         Returns email"""
         logging.debug(
-            f"get_email(title={title!r}, text=<redacted>, init={init!r})"
+            f"get_email(title={title!r}, text=<redacted>, init=<redacted>)"
         )
+        init = onboarding.email_default(init)
         while 1:
             email = self.inputbox(title, text, init, "Apply", "")[1]
-            logging.debug(f"get_email(...) email={email!r}")
             if not email:
                 self.error("Email is required.")
                 continue
@@ -300,6 +301,7 @@ class Dialog:
                 self.error("Email is not valid")
                 continue
 
+            onboarding.observe("email_provided", email=email)
             return email
 
     def get_domain(self, title: str, text: str, init: str = "") -> tuple[str, str] | None:

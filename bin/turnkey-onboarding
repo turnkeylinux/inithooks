@@ -1,0 +1,3 @@
+#!/usr/bin/python3
+from libinithooks.onboarding import main
+main()

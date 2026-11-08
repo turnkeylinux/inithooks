@@ -19,12 +19,8 @@ fi
 INITFENCE_INDEX="$HTDOCS/index.html"
 sed -i "s|@APP_NAME@|$APP_NAME|" $INITFENCE_INDEX
 
-if ! grep -q ajax.turnkeylinux.org $INITFENCE_INDEX; then
-    cat>>$INITFENCE_INDEX<<EOF
-<script src="https://ajax.turnkeylinux.org/initfence/$BUILD/$VERSION/$APP_NAME.js" async></script>
-<script src="https://ajax.turnkeylinux.org/initfence/$BUILD/$VERSION/$APP_NAME.direct" async></script>
-EOF
-fi
+# Setup observations are queued by 00setup-observation, independent of a browser.
+sed -i '/<script src="https:\/\/ajax.turnkeylinux.org\/initfence\//d' "$INITFENCE_INDEX"
 
 # reload init-fence to pick up the updated index
 systemctl reload turnkey-init-fence

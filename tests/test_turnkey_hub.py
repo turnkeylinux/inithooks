@@ -36,7 +36,9 @@ class MailTest(unittest.TestCase):
         self.root = Path(self.temp.name)
         for name in ("state", "postfix", "systemd"):
             (self.root / name).mkdir()
-        self.patches = [patch.object(mail, "STATE_DIR", self.root / "state"),
+        self.patches = [patch.object(mail, "HUB_EMAIL_CACHE", self.root / "cache/HUB_ACCOUNT_EMAIL"),
+                        patch.object(mail, "ONBOARDING_STATE", self.root / "onboarding.json"),
+                        patch.object(mail, "STATE_DIR", self.root / "state"),
                         patch.object(mail, "POSTFIX_DIR", self.root / "postfix"),
                         patch.object(mail, "SYSTEMD_DIR", self.root / "systemd")]
         for item in self.patches:
@@ -81,6 +83,34 @@ class MailTest(unittest.TestCase):
         config["dns_password"] = DNS_PASSWORD
         self.client.apply(config)
         return config
+
+    def test_authenticated_email_cache_is_private_optional_and_reset_scoped(self):
+        def response(route, payload):
+            value = self.hub(route, payload)
+            if route == "configure":
+                value["account_email"] = "owner@example.net"
+            return value
+        with patch.object(mail, "request", side_effect=response):
+            self.client.enroll(TOKEN)
+        self.assertEqual(mail.HUB_EMAIL_CACHE.read_text().strip(), "owner@example.net")
+        self.assertEqual(mail.HUB_EMAIL_CACHE.stat().st_mode & 0o777, 0o600)
+        self.client.reset_mail()
+        self.assertTrue(mail.HUB_EMAIL_CACHE.exists())
+        self.client.reset()
+        self.assertFalse(mail.HUB_EMAIL_CACHE.exists())
+
+    def test_pairing_uses_only_valid_anonymous_correlation_ids(self):
+        response = {"verification_uri": mail.HUB + "/link", "user_code": "D34C&F5A9",
+                    "device_code": DEVICE_CODE, "expires_in": 600, "interval": 5}
+        for state, expected in (({"installation_id": "1" * 32, "flow_id": "2" * 32,
+                                 "email": "private@example.net", "pending": [], "flow_kind": "firstboot"},
+                                {"installation_id": "1" * 32, "flow_id": "2" * 32, "flow_kind": "firstboot"}),
+                               ({"installation_id": "invalid", "flow_id": "private@example.net"}, {}),
+                               ([], {})):
+            mail.ONBOARDING_STATE.write_text(json.dumps(state))
+            with patch.object(mail, "request", return_value=response.copy()) as request:
+                self.client.start()
+            request.assert_called_once_with("device/start", expected)
 
     def test_sync_persists_exact_grant_secret_before_registration_and_retries(self):
         self.client.state["link"] = {"mode": "hub", "device_id": CONFIG["device_id"],

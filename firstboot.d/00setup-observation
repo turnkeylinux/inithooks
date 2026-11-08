@@ -1,0 +1,4 @@
+#!/bin/bash
+. /etc/default/inithooks
+# Local durable denominator only. No network is needed before configuration.
+"$INITHOOKS_PATH/bin/turnkey-onboarding" begin

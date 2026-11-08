@@ -1,0 +1,9 @@
+[Unit]
+Description=Send queued TurnKey setup observations
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/inithooks/bin/turnkey-onboarding flush
+TimeoutStartSec=30
+UMask=0077

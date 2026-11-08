@@ -3,6 +3,7 @@
 import importlib.util
 from pathlib import Path
 import sys
+import tempfile
 import types
 import unittest
 from unittest.mock import Mock, patch
@@ -92,6 +93,18 @@ class DialogWrapperTest(unittest.TestCase):
         self.console.passwordbox.assert_called_once()
         self.console.yesno.assert_called_once()
         self.dialog.msgbox.assert_not_called()
+
+    def test_authenticated_account_email_is_editable_in_generic_app_prompt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(self.module.onboarding, 'CACHE_DIR', Path(directory)), \
+                    patch.object(self.module.onboarding, 'observe'):
+                self.module.onboarding.remember_email('owner@example.net')
+                self.dialog.inputbox = Mock(return_value=('ok', 'app-admin@example.net'))
+                self.assertEqual(self.dialog.get_email('App email', 'Email:', 'admin@example.com'),
+                                 'app-admin@example.net')
+                self.assertEqual(self.dialog.inputbox.call_args.args[2], 'owner@example.net')
+                self.dialog.get_email('App email', 'Email:', 'existing@example.net')
+                self.assertEqual(self.dialog.inputbox.call_args.args[2], 'existing@example.net')
 
     def test_debug_log_excludes_answers_and_widget_arguments(self):
         secret = "DoNotLogThisAnswer42!"

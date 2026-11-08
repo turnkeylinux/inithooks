@@ -12,4 +12,8 @@ if [ -n "${HUB_EMAIL_TOKEN:-}" ]; then
     [ -n "${HUB_APIKEY:-}" ] || exit 0
 fi
 [ "${HUB_APIKEY:-}" != "SKIP" ] || exit 0
+if [ -z "${HUB_APIKEY:-}" ]; then
+    decision=$("$INITHOOKS_PATH/bin/turnkey-onboarding" decision)
+    [ "$decision" != "linked" ] && [ "$decision" != "skipped" ] || exit 0
+fi
 "$INITHOOKS_PATH/bin/hubservices.py" --apikey="${HUB_APIKEY:-}" --fqdn="${FQDN:-}"

@@ -12,7 +12,7 @@ exit 1
 }
 
 configure_alias() {
-    info $FUNCNAME $@
+    info "$FUNCNAME"
     user=$1
     email=$2
     cfg=/etc/aliases
@@ -23,7 +23,7 @@ configure_alias() {
 }
 
 configure_cronapt() {
-    info $FUNCNAME $@
+    info "$FUNCNAME"
     key=$1
     val=$2
     cfg="/etc/cron-apt/config"
@@ -33,7 +33,7 @@ configure_cronapt() {
 }
 
 send_enabled_notification() {
-    info $FUNCNAME $@
+    info "$FUNCNAME"
     recipient=$1
     subject="[$(hostname)] system alerts and notifications enabled"
     mail -s "$subject" $recipient <<EOF
@@ -47,7 +47,7 @@ EOF
 }
 
 enable_security_alerts() {
-    info $FUNCNAME $@
+    info "$FUNCNAME"
     email=$1
 
     f=/etc/apt/apt.conf.d/01turnkey
@@ -55,30 +55,29 @@ enable_security_alerts() {
     [ -n "$turnkey_version" ] || turnkey_version=$(turnkey-version)
 
     script=/etc/cron.hourly/enable_secalerts
-    cat>$script<<EOF
-#!/bin/bash -e
-# created by: $(readlink -f $0)
-curl https://hub.turnkeylinux.org/api/server/secalerts/ \\
-    -d email="$email" \\
-    -d turnkey_version="$turnkey_version" \\
-    --silent --fail --output /dev/null || exit 0
-
-rm -f \$0
-EOF
-
-    chmod +x $script
+    umask 077
+    {
+        printf '#!/bin/bash -e\n'
+        printf 'curl https://hub.turnkeylinux.org/api/server/secalerts/ --connect-timeout 5 --max-time 15 --data-urlencode %q --data-urlencode %q --silent --fail --output /dev/null || exit 0\n' "email=$email" "turnkey_version=$turnkey_version"
+        printf 'rm -f -- "$0"\n'
+    } > "$script"
+    chmod 700 "$script"
     $script
 }
 
-if [[ "$#" != "1" ]]; then
+if [[ "$#" != "1" && !( "$#" == "2" && "$2" == "--newsletter-only" ) ]]; then
     usage
 fi
 
 email=$1
 
+if [[ "${2:-}" == "--newsletter-only" ]]; then
+    enable_security_alerts "$email"
+    exit 0
+fi
+
 configure_alias "root" "$email"
 configure_cronapt "MAILON" "output"
 configure_cronapt "MAILTO" "root"
 send_enabled_notification "root"
-enable_security_alerts "$email"
 
