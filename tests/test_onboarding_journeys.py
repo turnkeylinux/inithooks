@@ -37,6 +37,7 @@ class JourneysTest(unittest.TestCase):
         patch.object(onboarding, 'CACHE_DIR', root / 'cache').start()
         patch.object(onboarding, 'HUB_STATE', root / 'hub.json').start()
         self.hub = load('hubservices')
+        self.confirm = patch.object(self.hub.hub_push, 'confirm', return_value='check').start()
         self.alerts = load('secalerts')
 
     def names(self):
@@ -84,6 +85,7 @@ class JourneysTest(unittest.TestCase):
         self.assertIn('usr/lib/inithooks/bin/turnkey usr/bin/turnkey', (ROOT / 'debian/rules').read_text())
         dialog = Mock()
         dialog.yesno.return_value = False
+        self.confirm.return_value = 'skip'
         with patch.object(sys, 'argv', ['hubservices.py', '--relink']), \
                 patch.object(self.hub, 'Dialog', return_value=dialog), \
                 patch.object(self.hub, 'mail_call', return_value={
@@ -101,12 +103,13 @@ class JourneysTest(unittest.TestCase):
     def test_explicit_skip_is_recorded_and_does_not_poll(self):
         d = Mock()
         d.yesno.return_value = False
+        self.confirm.return_value = 'skip'
         with patch.object(self.hub, 'mail_call', return_value={
                 'verification_uri': 'https://hub.turnkeylinux.org/link', 'user_code': 'D34C-F5A9'}) as call:
             self.hub.connect_mail(d)
         call.assert_called_once_with('connect', '--start')
         self.assertEqual(onboarding.decision(), 'skipped')
-        self.assertEqual(d.yesno.call_args.args[-2:], ("I've entered the code", 'Skip'))
+        self.assertIn('D34C-F5A9', self.confirm.call_args.args[1])
 
     def test_failed_link_check_stops_setup_without_recording_skip(self):
         d = Mock()
@@ -118,6 +121,38 @@ class JourneysTest(unittest.TestCase):
         self.assertEqual(error.exception.code, 1)
         self.assertIsNone(onboarding.decision())
         self.assertEqual(self.names()[-2:], ['approval_checked', 'error'])
+
+    def test_push_reconciles_once_then_approval_without_manual_check_or_periodic_poll(self):
+        watcher = Mock()
+        with patch.object(self.hub.hub_push.Notifications, 'open', return_value=watcher), \
+                patch.object(self.hub.hub_push, 'confirm', side_effect=['subscribed', 'code_submitted', 'approved']), \
+                patch.object(self.hub, 'mail_call', side_effect=[
+                    {'verification_uri': 'https://hub.turnkeylinux.org/link', 'user_code': 'D34C-F5A9'},
+                    {'status': 'pending'}, {'connection_status': 'linked'}]) as call:
+            self.hub.connect_mail(Mock())
+        self.assertEqual([c.args for c in call.call_args_list], [
+            ('connect', '--start'), ('connect', '--poll'), ('connect', '--poll', '--notified')])
+        self.assertNotIn('approval_checked', self.names())
+        self.assertEqual(self.names()[-1], 'link_completed')
+        watcher.close.assert_called_once_with()
+
+    def test_push_skip_and_escape_close_watcher_without_exchange(self):
+        for action in ('skip', 'escape'):
+            with self.subTest(action=action), \
+                    patch.object(self.hub.hub_push.Notifications, 'open') as open_watcher, \
+                    patch.object(self.hub.hub_push, 'confirm', return_value=action), \
+                    patch.object(self.hub, 'mail_call', return_value={
+                        'verification_uri': 'https://hub.turnkeylinux.org/link', 'user_code': 'D34C-F5A9'}) as call:
+                if action == 'escape':
+                    with self.assertRaises(SystemExit) as result:
+                        self.hub.connect_mail(Mock())
+                    self.assertEqual(result.exception.code, 130)
+                    self.assertNotEqual(self.names()[-1], 'skipped')
+                else:
+                    self.hub.connect_mail(Mock())
+                    self.assertEqual(self.names()[-1], 'skipped')
+                call.assert_called_once_with('connect', '--start')
+                open_watcher.return_value.close.assert_called_once_with()
 
     def test_linked_user_gets_local_notifications_without_newsletter_prompt(self):
         onboarding.record('link_completed')

@@ -17,7 +17,7 @@ import subprocess
 from typing import NoReturn
 
 from libinithooks.dialog_wrapper import Dialog
-from libinithooks import onboarding
+from libinithooks import hub_push, onboarding
 
 def usage(msg: str | getopt.GetoptError = "") -> NoReturn:
     if msg:
@@ -61,25 +61,43 @@ def connect_mail(d, flow_kind="firstboot"):
     pairing = result
     pending = False
     onboarding.observe("prompt_shown")
-    while True:
-        if not d.yesno("Link to TurnKey Hub", onboarding.link_instructions(pairing, pending),
-                       "I've entered the code", "Skip"):
-            onboarding.observe("skipped")
-            return
-        onboarding.observe("approval_checked")
-        result = mail_call("connect", "--poll")
-        if result.get("connection_status") == "linked" or result.get("domain"):
-            onboarding.observe("link_completed")
-            d.msgbox("Hub linked", "Your appliance is linked to your Hub account.\n\n"
-                     "Manage app email, dynamic DNS, backups and migration in the Hub.")
-            return
-        status = result.get("status")
-        if status == "pending":
-            pending = True
-        else:
-            onboarding.observe("error", error_code=status if status in ("denied", "expired") else "link_check_failed")
-            d.error(result.get("message") or "This connection request %s. Run setup again to reconnect." % status)
-            raise SystemExit(1)
+    notifications = hub_push.Notifications.open(pairing['user_code'])
+    try:
+        while True:
+            action = hub_push.confirm(d, onboarding.link_instructions(pairing, pending),
+                                      notifications, relink=flow_kind == 'confconsole')
+            if action == 'skip':
+                onboarding.observe('skipped')
+                return
+            if action == 'escape':
+                if d.yesno('Quit setup', 'Do you really want to quit?'):
+                    raise SystemExit(130)
+                continue
+            if action == 'error':
+                d.error('The connection dialog could not continue. Run turnkey connect to try again.')
+                raise SystemExit(1)
+            if action == 'code_submitted':
+                pending = True
+                continue
+            if action == 'check':
+                onboarding.observe('approval_checked')
+            arguments = ('connect', '--poll', '--notified') if action in hub_push.TERMINAL else ('connect', '--poll')
+            result = mail_call(*arguments)
+            if result.get('connection_status') == 'linked' or result.get('domain'):
+                onboarding.observe('link_completed')
+                d.msgbox('Hub linked', 'Your appliance is linked to your Hub account.\n\n'
+                         'Manage app email delivery, dynamic DNS, backups and migration in the Hub.')
+                return
+            status = result.get('status')
+            if status == 'pending':
+                pending = pending or action != 'subscribed'
+            else:
+                onboarding.observe('error', error_code=status if status in ('denied', 'expired') else 'link_check_failed')
+                d.error(result.get('message') or 'This connection request %s. Run setup again to reconnect.' % status)
+                raise SystemExit(1)
+    finally:
+        if notifications:
+            notifications.close()
 
 
 def early(unattended=False):

@@ -95,6 +95,7 @@ class OnboardingTest(unittest.TestCase):
         for request in requests:
             self.assertEqual(request.full_url, flow.ENDPOINT)
             self.assertEqual(request.method, 'POST')
+            self.assertEqual(request.get_header('User-agent'), 'TurnKey-Onboarding/1')
             self.assertLess(len(request.data), 16384)
         self.assertEqual(json.loads(requests[-1].data)['email'], 'private@example.net')
 

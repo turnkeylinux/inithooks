@@ -648,6 +648,55 @@ class MailTest(unittest.TestCase):
             self.assertEqual(self.client.poll()["status"], "pending")
         request.assert_not_called()
 
+    def test_notified_poll_bypasses_only_local_delay_and_still_enrolls_signed_approval(self):
+        self.client.state['pairing'] = {'expires': mail.time.time() + 600, 'next_poll': 0,
+                                        'interval': 5, 'device_code': DEVICE_CODE}
+        with patch.object(mail, 'request', side_effect=[{'status': 'pending'},
+                {'status': 'approved', 'enrollment_token': TOKEN}]) as request, \
+                patch.object(self.client, 'enroll', return_value={'connection_status': 'linked'}) as enroll:
+            self.assertEqual(self.client.poll()['status'], 'pending')
+            self.assertEqual(self.client.poll()['status'], 'pending')
+            self.assertEqual(request.call_count, 1)
+            self.assertEqual(self.client.poll(notified=True)['connection_status'], 'linked')
+        enroll.assert_called_once_with(TOKEN)
+        self.assertEqual(request.call_args.args, ('device/poll', {'device_code': DEVICE_CODE}))
+
+    def test_notified_denial_and_local_expiry_cannot_enroll(self):
+        self.client.state['pairing'] = {'expires': mail.time.time() + 600,
+                'next_poll': mail.time.time() + 30, 'interval': 5, 'device_code': DEVICE_CODE}
+        with patch.object(mail, 'request', return_value={'status': 'denied'}) as request, \
+                patch.object(self.client, 'enroll') as enroll:
+            self.assertEqual(self.client.poll(notified=True)['status'], 'denied')
+            self.client.state['pairing']['expires'] = 0
+            self.assertEqual(self.client.poll(notified=True)['status'], 'expired')
+        request.assert_called_once()
+        enroll.assert_not_called()
+
+    def test_notified_cli_flag_requires_poll(self):
+        for arguments in (['connect', '--notified'], ['connect', '--start', '--notified']):
+            with patch.object(mail.sys, 'argv', ['turnkey-hub', *arguments]), \
+                    patch.object(mail.sys, 'stderr'), self.assertRaises(SystemExit) as result:
+                mail.main()
+            self.assertEqual(result.exception.code, 2)
+
+    def test_optional_notification_is_private_and_invalid_metadata_is_ignored(self):
+        expiry = int(mail.time.time()) + 600
+        notification = {'url': 'wss://ajax.turnkeylinux.org/initfence/v2/pairing',
+                        'token': 'v1.' + 'a' * 32 + '.' + str(expiry) + '.' + 'b' * 64,
+                        'expires_at': expiry}
+        response = {'device_code': DEVICE_CODE, 'user_code': 'ABCD&1234', 'expires_in': 600,
+                    'interval': 5, 'verification_uri': mail.HUB + '/link', 'notification': notification}
+        with patch.object(mail, 'request', return_value=response):
+            public = self.client.start()
+        self.assertNotIn('notification', public)
+        self.assertNotIn(notification['token'], json.dumps(public))
+        self.assertEqual(self.client.state['pairing']['notification'], notification)
+        self.assertEqual((mail.STATE_DIR / 'state.json').stat().st_mode & 0o777, 0o600)
+        response['notification'] = {**notification, 'url': 'wss://foreign.example/'}
+        with patch.object(mail, 'request', return_value=response):
+            self.client.start()
+        self.assertNotIn('notification', self.client.state['pairing'])
+
     def test_pairing_rejects_foreign_verification_origin(self):
         with patch.object(mail, "request", return_value={"verification_uri": "https://attacker.example/"}):
             with self.assertRaises(mail.Error):

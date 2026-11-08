@@ -554,14 +554,21 @@ class Mail:
         self.state["pairing"] = {"device_code": result["device_code"], "expires": time.time() + ttl,
                                  "interval": interval, "next_poll": 0,
                                  "verification_uri": result["verification_uri"], "user_code": result["user_code"]}
+        try:
+            from libinithooks.hub_push import validated_notification
+            notification = validated_notification(result.get("notification"))
+            if notification:
+                self.state["pairing"]["notification"] = notification
+        except ImportError:
+            pass
         self.save()
         return {key: result[key] for key in ("verification_uri", "user_code", "expires_in", "interval")}
 
-    def poll(self):
+    def poll(self, notified=False):
         pairing = self.state.get("pairing", {})
         if pairing.get("expires", 0) <= time.time():
             return {"status": "expired"}
-        if pairing.get("next_poll", 0) > time.time():
+        if not notified and pairing.get("next_poll", 0) > time.time():
             return {"status": "pending", "interval": pairing["interval"]}
         pairing["next_poll"] = time.time() + pairing["interval"]
         self.save()
@@ -691,6 +698,7 @@ def main():
     mode = connect.add_mutually_exclusive_group()
     mode.add_argument("--start", action="store_true")
     mode.add_argument("--poll", action="store_true")
+    connect.add_argument("--notified", action="store_true")
     custom = commands.add_parser("configure")
     custom.add_argument("--stdin", action="store_true", required=True)
     status = commands.add_parser("status")
@@ -702,6 +710,8 @@ def main():
     for command in commands.choices.values():
         command.add_argument("--json", action="store_true")
     args = parser.parse_args()
+    if args.command == "connect" and args.notified and not args.poll:
+        parser.error("--notified requires --poll")
     try:
         if os.geteuid() != 0:
             raise Error("Run this command as root.")
@@ -729,7 +739,7 @@ def main():
                 except (ValueError, KeyError, TypeError):
                     raise Error("The custom SMTP settings are invalid.")
             elif args.command == "connect":
-                result = mail.poll() if args.poll else mail.start()
+                result = mail.poll(notified=args.notified) if args.poll else mail.start()
             elif args.command == "dns-update":
                 result = mail.dns_update()
             elif args.command == "test":

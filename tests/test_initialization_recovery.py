@@ -137,6 +137,7 @@ class HubRetryTest(unittest.TestCase):
                      {"status": "ready", "domain": "sample.tklapp.com"}]
         with patch.object(sys, "argv", ["hubservices.py"]), patch.object(self.module.signal, "signal"), \
                 patch.object(self.module, "Dialog", return_value=dialog), \
+                patch.object(self.module.hub_push, "confirm", return_value="check"), \
                 patch.object(self.module, "mail_call", side_effect=responses), \
                 patch.object(self.module.subprocess, "run") as run:
             self.module.main()

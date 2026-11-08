@@ -278,7 +278,7 @@ def flush():
                 return
             event = state['pending'][0]
         request = urllib.request.Request(ENDPOINT, json.dumps(event).encode(),
-                    headers={'Content-Type': 'application/json'}, method='POST')
+                    headers={'Content-Type': 'application/json', 'User-Agent': 'TurnKey-Onboarding/1'}, method='POST')
         try:
             with opener.open(request, timeout=3) as response:
                 acknowledged = 200 <= response.status < 300
