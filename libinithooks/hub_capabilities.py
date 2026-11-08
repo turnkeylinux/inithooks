@@ -8,9 +8,11 @@ import logging
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 
 PROTOCOL = 'hub-services-v1'
+TKLBAM_MIN_VERSION = '1.5.3+6'
 HELPER = Path('/usr/lib/inithooks/bin/turnkey-hub')
 MODULES = {
     'libinithooks.hub_launch': ('register', 'registration_nonce'),
@@ -51,6 +53,30 @@ def has_functions(module, names):
     return True
 
 
+def supported_tklbam():
+    """Commands alone cannot prove destination identity survives a restore."""
+    try:
+        result = subprocess.run(
+            ['dpkg-query', '-W', '-f=${db:Status-Status}\t${db:Status-Eflag}\t${Version}\n', 'tklbam'],
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True, timeout=2)
+        if result.returncode:
+            return False
+        status, error, version = result.stdout.strip().split('\t')
+        if (status, error) != ('installed', 'ok') or not version or '\n' in version:
+            return False
+        # Use dpkg's own syntax and ordering, including epochs and revisions.
+        # compare-versions alone tolerates some malformed versions with a warning.
+        for arguments in (['--validate-version', version],
+                          ['--compare-versions', version, 'ge', TKLBAM_MIN_VERSION]):
+            if subprocess.run(['dpkg'] + arguments, stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2).returncode:
+                return False
+        return True
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return False
+
+
 def probe():
     # Imported on a clean filesystem during firstboot: imports must not create
     # __pycache__ even when no packaged bytecode has been generated yet.
@@ -89,6 +115,10 @@ def probe():
         if not (list(Path('/usr/lib').glob('*/sasl2/libplain.so*'))
                 or list(Path('/usr/lib/sasl2').glob('libplain.so*'))):
             missing.append('libsasl2-modules')
+        # Incomplete components already select the legacy/install path. Query
+        # package metadata only when it can change the readiness decision.
+        if not missing and not supported_tklbam():
+            missing.append('tklbam>=' + TKLBAM_MIN_VERSION)
     finally:
         logger.removeHandler(handler)
         handler.close()
