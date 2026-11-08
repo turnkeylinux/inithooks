@@ -550,6 +550,60 @@ class MailTest(unittest.TestCase):
             self.assertEqual(self.client.poll()["status"], "pending")
         self.assertEqual(self.main.read_bytes(), original)
 
+    def test_pairing_accepts_legacy_and_new_wire_codes_with_one_display_format(self):
+        for code in ("D34C&F5A9", "D34C-F5A9"):
+            with self.subTest(code=code):
+                response = {"device_code": DEVICE_CODE, "user_code": code,
+                            "expires_in": 900, "interval": 5,
+                            "verification_uri": mail.HUB + "/link"}
+                with patch.object(mail, "request", return_value=response) as request:
+                    public = self.client.start()
+                request.assert_called_once_with("device/start", {})
+                self.assertEqual(public["user_code"], "D34C-F5A9")
+                saved = json.loads((mail.STATE_DIR / "state.json").read_text())["pairing"]
+                self.assertEqual(saved["user_code"], "D34C-F5A9")
+                self.assertEqual(saved["device_code"], DEVICE_CODE)
+                self.assertEqual(set(public), {"verification_uri", "user_code", "expires_in", "interval"})
+
+    def test_invalid_wire_code_preserves_saved_pairing(self):
+        self.client.state["pairing"] = {"device_code": DEVICE_CODE, "user_code": "D34C-F5A9"}
+        self.client.save()
+        before = (mail.STATE_DIR / "state.json").read_bytes()
+        for code in ("D34CF5A9", "d34c-f5a9", "D34C--F5A9", "D34C&F5A9\n",
+                     "D34C/F5A9", "D34C-F5A", "D34C-F5A99", "Ｄ34C-F5A9", None, 12345678):
+            with self.subTest(code=code):
+                response = {"device_code": DEVICE_CODE, "user_code": code,
+                            "expires_in": 900, "interval": 5,
+                            "verification_uri": mail.HUB + "/link"}
+                with patch.object(mail, "request", return_value=response):
+                    with self.assertRaises(mail.Error):
+                        self.client.start()
+                self.assertEqual((mail.STATE_DIR / "state.json").read_bytes(), before)
+
+    def test_resumed_legacy_pairing_polls_by_device_secret_without_redisplaying_code(self):
+        self.client.state["pairing"] = {"device_code": DEVICE_CODE, "user_code": "D34C&F5A9",
+                                       "expires": mail.time.time() + 900, "interval": 5, "next_poll": 0}
+        self.client.save()
+        with patch.object(mail, "request", return_value={"status": "pending"}) as request:
+            result = mail.Mail().poll()
+        request.assert_called_once_with("device/poll", {"device_code": DEVICE_CODE})
+        self.assertEqual(result, {"status": "pending", "interval": 5})
+
+    def test_connect_cli_displays_dash_for_unchanged_legacy_api_response(self):
+        response = {"device_code": DEVICE_CODE, "user_code": "D34C&F5A9",
+                    "expires_in": 900, "interval": 5, "verification_uri": mail.HUB + "/link"}
+        output = io.StringIO()
+        with patch.object(mail.sys, "argv", ["turnkey-mail", "connect"]), \
+                patch.object(mail.os, "geteuid", return_value=0), \
+                patch.object(mail.os, "umask"), \
+                patch.object(mail.time, "sleep"), \
+                patch.object(mail, "request", side_effect=[response, {"status": "denied"}]), \
+                patch.object(mail.sys, "stdout", output), patch.object(mail.sys, "stderr"):
+            self.assertEqual(mail.main(), 1)
+        self.assertIn("Connection code: D34C-F5A9", output.getvalue())
+        self.assertNotIn("D34C&F5A9", output.getvalue())
+        self.assertNotIn(DEVICE_CODE, output.getvalue())
+
     def test_pairing_enforces_poll_interval_without_network(self):
         self.client.state["pairing"] = {"expires": mail.time.time() + 900, "next_poll": mail.time.time() + 30,
                                        "interval": 5, "device_code": DEVICE_CODE}

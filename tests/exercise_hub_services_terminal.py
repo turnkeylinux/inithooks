@@ -34,7 +34,7 @@ for cols in (60, 80, 120):
     assert "Free app email" in text and "Skip" in text
     child.send("\r")
     text = capture(child, screen, stream, f"{cols}-firstboot-approval")
-    assert "ABCD&1234" in text and "Check connection" in text
+    assert "D34C-F5A9" in text and "Check connection" in text
     child.send("\r")
     text = capture(child, screen, stream, f"{cols}-firstboot-connected")
     assert "sample.tklapp.com" in text and "Hub linked" in text

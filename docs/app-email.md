@@ -1,6 +1,6 @@
 # Link an appliance to TurnKey Hub
 
-Hub-launched v19 appliances connect automatically. On an appliance installed elsewhere, choose **Link** during firstboot or **Advanced → Mail relaying → Mail relay → Link to TurnKey Hub** in Confconsole. Open https://hub.turnkeylinux.org/link on another device, sign in or create a free Hub account, and enter the displayed code, such as `ABCD&1234`.
+Hub-launched v19 appliances connect automatically. On an appliance installed elsewhere, choose **Link** during firstboot or **Advanced → Mail relaying → Mail relay → Link to TurnKey Hub** in Confconsole. Open https://hub.turnkeylinux.org/link on another device, sign in or create a free Hub account, and enter the displayed code, such as `D34C-F5A9`.
 
 A free account includes a tklapp.com hostname, dynamic DNS and app email delivery. Paid accounts can use a custom sending domain after DNS verification. Backup setup is independent of these services.
 

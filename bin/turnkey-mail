@@ -514,12 +514,14 @@ class Mail:
                 raise ValueError()
             if not DEVICE_CODE.fullmatch(result["device_code"]):
                 raise ValueError()
-            if not re.fullmatch(r"[A-Z0-9]{4}&[A-Z0-9]{4}", result["user_code"]):
+            if not re.fullmatch(r"[A-Z0-9]{4}[&-][A-Z0-9]{4}", result["user_code"]):
                 raise ValueError()
             ttl = min(900, max(1, int(result["expires_in"])))
             interval = min(30, max(5, int(result["interval"])))
         except (KeyError, TypeError, ValueError):
             raise Error("The Hub returned an invalid connection request.")
+        # Older helpers require an ampersand on the wire; display a dash locally.
+        result["user_code"] = result["user_code"].replace("&", "-")
         self.state["pairing"] = {"device_code": result["device_code"], "expires": time.time() + ttl,
                                  "interval": interval, "next_poll": 0,
                                  "verification_uri": result["verification_uri"], "user_code": result["user_code"]}

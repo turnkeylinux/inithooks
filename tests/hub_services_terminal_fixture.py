@@ -21,7 +21,7 @@ def dialog(*args, **kwargs):
 
 module.Dialog = dialog
 responses = iter([
-    {"verification_uri": "https://hub.turnkeylinux.org/link", "user_code": "ABCD&1234"},
+    {"verification_uri": "https://hub.turnkeylinux.org/link", "user_code": "D34C-F5A9"},
     {"status": "ready", "domain": "sample.tklapp.com"},
 ])
 module.mail_call = lambda *args: next(responses)
