@@ -101,6 +101,9 @@ class HubRetryTest(unittest.TestCase):
         patcher = patch.object(self.module.onboarding, "STATE_DIR", Path(self.temp.name))
         patcher.start()
         self.addCleanup(patcher.stop)
+        launcher = patch('libinithooks.hub_runtime.start_observations')
+        launcher.start()
+        self.addCleanup(launcher.stop)
 
     def run_main(self, init_status=0, stderr="", fqdn=False, failed_command="tklbam-init"):
         calls = []

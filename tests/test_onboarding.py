@@ -1,5 +1,6 @@
 """Firstboot observation durability, privacy and generic email boundaries."""
 import io
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -9,7 +10,7 @@ from unittest.mock import Mock, patch
 from urllib.error import HTTPError, URLError
 import urllib.request
 
-from libinithooks import onboarding as flow
+from libinithooks import onboarding as flow, hub_runtime
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -19,6 +20,9 @@ class OnboardingTest(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        launcher = patch.object(hub_runtime, 'start_observations', create=True)
+        self.launcher = launcher.start()
+        self.addCleanup(launcher.stop)
         for name, value in (("STATE_DIR", self.root / "state"), ("CACHE_DIR", self.root / "cache"), ("HUB_STATE", self.root / "hub.json")):
             patcher = patch.object(flow, name, value)
             patcher.start()
@@ -32,6 +36,19 @@ class OnboardingTest(unittest.TestCase):
             self.assertRegex(first[key], r'^[a-f0-9]{32}$')
         self.assertEqual((flow.STATE_DIR / 'state.json').stat().st_mode & 0o777, 0o600)
         self.assertEqual(flow.STATE_DIR.stat().st_mode & 0o777, 0o700)
+
+    def test_fresh_start_launches_after_durable_save_and_unlock_before_return(self):
+        def launched():
+            self.assertEqual(flow.load()['pending'][0]['event_name'], 'setup_started')
+            with (flow.STATE_DIR / 'lock').open('a') as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        self.launcher.side_effect = launched
+        first = flow.begin()
+        self.launcher.assert_called_once_with()
+        flow.record('link_completed')
+        for unused in range(5):
+            self.assertEqual(flow.begin()['installation_id'], first['installation_id'])
+        self.launcher.assert_called_once_with()
 
     def test_relink_changes_flow_without_counting_another_installation(self):
         first = flow.begin()

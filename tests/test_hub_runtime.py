@@ -5,7 +5,7 @@ import subprocess
 import sys
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from libinithooks import hub_restore, hub_runtime, onboarding
 import test_turnkey_hub as fixture
@@ -27,6 +27,45 @@ class SchedulerTest(unittest.TestCase):
         self.assertFalse(hub_runtime.enabled())
         hub_runtime.RUNTIME.write_text('docker\n')
         self.assertTrue(hub_runtime.enabled())
+
+    def test_fresh_vm_uses_existing_nonblocking_bounded_service(self):
+        with patch.object(hub_runtime.subprocess, 'run') as run:
+            hub_runtime.start_observations()
+        self.assertEqual(run.call_args.args[0],
+                         ['systemctl', 'start', '--no-block', 'turnkey-onboarding.service'])
+        self.assertEqual(run.call_args.kwargs['timeout'], 1)
+        service = Path(__file__).resolve().parents[1] / 'debian/inithooks.turnkey-onboarding.service'
+        self.assertIn('TimeoutStartSec=30', service.read_text())
+
+    def test_docker_detaches_bounded_existing_sender_without_matching_all_python_or_timeout(self):
+        hub_runtime.RUNTIME.write_text('docker\n')
+        with patch.object(hub_runtime.subprocess, 'run') as run:
+            hub_runtime.start_observations()
+        self.assertEqual(run.call_args.args[0], [
+            '/usr/sbin/start-stop-daemon', '--start', '--background',
+            '--exec', '/usr/lib/inithooks/bin/turnkey-onboarding',
+            '--startas', '/usr/bin/timeout', '--', '--kill-after=5', '30',
+            '/usr/lib/inithooks/bin/turnkey-onboarding', 'flush'])
+        self.assertEqual(run.call_args.kwargs, dict(stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1))
+
+    def test_launch_failure_is_nonfatal_and_retries_preserve_event_identity(self):
+        with patch.object(onboarding, 'STATE_DIR', self.root / 'state'):
+            for error in (OSError('missing launcher'), subprocess.TimeoutExpired('launcher', 1)):
+                with self.subTest(error=type(error).__name__):
+                    (onboarding.STATE_DIR / 'state.json').unlink(missing_ok=True)
+                    with patch.object(hub_runtime.subprocess, 'run', side_effect=error) as launch:
+                        state = onboarding.begin()
+                        self.assertEqual(onboarding.begin(), state)
+                        launch.assert_called_once()
+                    opener = Mock()
+                    opener.open.side_effect = OSError('offline')
+                    with patch('urllib.request.build_opener', return_value=opener):
+                        onboarding.flush()
+                        onboarding.flush()
+                    self.assertEqual(onboarding.load(), state)
+                    self.assertEqual(opener.open.call_args_list[0].args[0].data,
+                                     opener.open.call_args_list[1].args[0].data)
 
     def test_jobs_are_real_private_idempotent_and_removed_on_disable(self):
         for command, (name, schedule, executable) in hub_runtime.JOBS.items():

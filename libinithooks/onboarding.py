@@ -139,7 +139,9 @@ def begin():
         state['firstboot_flow_id'] = state['flow_id']
         append(state, 'setup_started')
         save(state)
-        return state
+    from . import hub_runtime
+    hub_runtime.start_observations()
+    return state
 
 
 def decision():

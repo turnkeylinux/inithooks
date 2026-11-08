@@ -1,5 +1,6 @@
 """Schedule Hub maintenance on the ordinary TurnKey Docker runtime."""
 from pathlib import Path
+import subprocess
 from .onboarding import atomic
 
 RUNTIME = Path('/etc/turnkey-runtime')
@@ -28,3 +29,20 @@ def schedule(command, active=True):
     text += interval + ' root ' + executable + ' >/dev/null 2>&1\n'
     if not path.exists() or path.read_text() != text:
         atomic(path, text)
+
+
+def start_observations():
+    """Kick the existing sender once without waiting for its network work."""
+    try:
+        if enabled():
+            command = ['/usr/sbin/start-stop-daemon', '--start', '--background',
+                       '--exec', '/usr/lib/inithooks/bin/turnkey-onboarding',
+                       '--startas', '/usr/bin/timeout', '--', '--kill-after=5', '30',
+                       '/usr/lib/inithooks/bin/turnkey-onboarding', 'flush']
+        else:
+            command = ['systemctl', 'start', '--no-block', 'turnkey-onboarding.service']
+        subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, timeout=1)
+    except (OSError, subprocess.TimeoutExpired):
+        # The durable spool and ordinary timer/cron retries remain authoritative.
+        pass
