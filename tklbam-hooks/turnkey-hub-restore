@@ -1,0 +1,10 @@
+#!/usr/bin/python3
+"""Reconcile destination Hub mail settings after a real filesystem restore."""
+import os
+import sys
+
+if (sys.argv[1:] == ['restore', 'post']
+        and os.environ.get('TKLBAM_RESTORE_SIMULATE') == 'no'
+        and os.environ.get('TKLBAM_RESTORE_SKIP_FILES') != 'yes'):
+    from libinithooks.hub_restore import restore_mail
+    restore_mail()

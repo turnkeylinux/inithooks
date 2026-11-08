@@ -43,6 +43,17 @@ def usage(msg: str | getopt.GetoptError = "") -> NoReturn:
     sys.exit(1)
 
 
+def configure(command):
+    try:
+        subprocess.run(command, check=True, capture_output=True, timeout=45)
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        message = "Notification setup could not finish. Check the local mail service, then run setup again."
+        if sys.stdin.isatty():
+            Dialog("TurnKey Linux - First boot configuration").error(message)
+            raise SystemExit(1)
+        fatal(message)
+
+
 def main():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     try:
@@ -88,22 +99,30 @@ def main():
         onboarding.observe("email_provided", email=email)
         cmd = os.path.join(os.path.dirname(__file__), "secalerts.sh")
         logging.debug(f"\tcmd:`{cmd}'")
-        subprocess.run([cmd, email], check=True)
+        configure([cmd, email])
 
     # Hub-linked users manage announcements in their account. Only a deliberate
     # firstboot Skip offers the separate newsletter, with affirmative consent.
     if onboarding.skipped_unlinked():
         d = Dialog("TurnKey Linux - First boot configuration")
-        consent = d.yesno("Security announcements",
-                          "Receive TurnKey security announcements and news by email? "
-                          "This is a low-traffic newsletter. You can unsubscribe at any time.",
-                          "Subscribe", "No thanks")
-        onboarding.observe("newsletter_choice", newsletter_consent=consent)
-        if consent:
-            newsletter_email = email or d.get_email("Security announcements", "Email:", email_placeholder)
+        newsletter_email = email or email_placeholder
+        while True:
+            status, newsletter_email = d.inputbox("Security announcements",
+                "Optional: receive TurnKey security announcements and news. "
+                "This is a low-traffic newsletter; unsubscribe at any time.\n\nEmail:",
+                newsletter_email, "Subscribe", "No thanks")
+            if status == "cancel":
+                onboarding.observe("newsletter_choice", newsletter_consent=False)
+                break
+            newsletter_email = newsletter_email.strip()
+            if not onboarding.valid_email(newsletter_email):
+                d.error("Enter a valid email address, or choose No thanks.")
+                continue
+            onboarding.observe("newsletter_choice", newsletter_consent=True)
             onboarding.observe("email_provided", email=newsletter_email)
-            subprocess.run([os.path.join(os.path.dirname(__file__), "secalerts.sh"),
-                            newsletter_email, "--newsletter-only"], check=True)
+            configure([os.path.join(os.path.dirname(__file__), "secalerts.sh"),
+                       newsletter_email, "--newsletter-only"])
+            break
 
 
 if __name__ == "__main__":

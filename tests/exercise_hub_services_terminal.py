@@ -36,7 +36,7 @@ for cols in (60, 80, 120):
             assert 'Retry' in text and 'Skip' in text
         else:
             assert 'D34C-F5A9' in text and "I've entered the code" in text
-            assert 'security announcements' in text and 'migration' in text
+            assert 'App email delivery' in text and 'security' in text and 'announcements' in text and 'migration' in text
         if mode in ('skip', 'start-error'):
             child.send('\t\r')
             child.expect('EVENTS ([^\r\n]+)')

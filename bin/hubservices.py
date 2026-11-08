@@ -51,7 +51,7 @@ def connect_mail(d, flow_kind="firstboot"):
     while result.get("status") == "error":
         onboarding.observe("error", error_code="link_start_failed")
         if not d.yesno("Link to TurnKey Hub",
-                "App email, dynamic DNS, linked backups and migration, and "
+                "App email delivery, dynamic DNS, linked backups and migration, and "
                 "security announcements are available through the Hub.\n\n"
                 + result["message"] + "\n\nSkip leaves these Hub services unconfigured.",
                 "Retry", "Skip"):

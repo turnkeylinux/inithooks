@@ -48,7 +48,7 @@ the packaged `libinithooks.onboarding` module and hooks.
 
 `00setup-observation` queues the installation start before networking or input.
 `30hub-link` runs before account and application prompts. Automatic enrollment
-and explicit legacy preseeds remain unattended. `sudo turnkey init` opens the
+and explicit legacy preseeds remain unattended. `sudo turnkey connect` opens the
 shared Hub registration screen without rerunning application setup.
 
 The Hub account email supplies empty or template email defaults. Users can edit

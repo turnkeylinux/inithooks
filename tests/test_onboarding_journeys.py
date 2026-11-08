@@ -131,7 +131,7 @@ class JourneysTest(unittest.TestCase):
 
     def test_skipped_user_can_decline_newsletter_without_affecting_local_notifications(self):
         onboarding.record('skipped')
-        self.alerts.Dialog.return_value.yesno.return_value = False
+        self.alerts.Dialog.return_value.inputbox.return_value = ('cancel', 'chosen@example.net')
         with patch.object(sys, 'argv', ['secalerts.py', '--email=chosen@example.net']), \
                 patch.object(self.alerts.subprocess, 'run') as run:
             self.alerts.main()
@@ -152,12 +152,25 @@ class JourneysTest(unittest.TestCase):
 
     def test_skipped_user_affirmatively_subscribes_separately(self):
         onboarding.record('skipped')
-        self.alerts.Dialog.return_value.yesno.return_value = True
+        self.alerts.Dialog.return_value.inputbox.return_value = ('ok', 'chosen@example.net')
         with patch.object(sys, 'argv', ['secalerts.py', '--email=chosen@example.net']), \
                 patch.object(self.alerts.subprocess, 'run') as run:
             self.alerts.main()
         self.assertEqual(run.call_count, 2)
         self.assertEqual(run.call_args.args[0][-2:], ['chosen@example.net', '--newsletter-only'])
+
+    def test_newsletter_shows_editable_email_and_recovers_from_empty_or_invalid_input(self):
+        onboarding.record('skipped')
+        dialog = self.alerts.Dialog.return_value
+        dialog.inputbox.side_effect = [('ok', ''), ('ok', 'invalid'), ('ok', 'different@example.net')]
+        with patch.object(sys, 'argv', ['secalerts.py', '--email=local@example.net']), \
+                patch.object(self.alerts.subprocess, 'run') as run:
+            self.alerts.main()
+        self.assertEqual(dialog.inputbox.call_args_list[0].args[-3:], ('local@example.net', 'Subscribe', 'No thanks'))
+        self.assertEqual(dialog.error.call_count, 2)
+        self.assertEqual(run.call_args.args[0][-2:], ['different@example.net', '--newsletter-only'])
+        self.assertTrue(run.call_args.kwargs['capture_output'])
+        self.assertEqual(sum(event['event_name'] == 'newsletter_choice' for event in onboarding.load()['pending']), 1)
 
     def test_linked_account_email_configures_local_notifications_without_reasking(self):
         onboarding.record('link_completed')

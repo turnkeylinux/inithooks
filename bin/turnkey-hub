@@ -26,6 +26,12 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+try:
+    from libinithooks import hub_runtime
+    RUNTIME = hub_runtime if hub_runtime.enabled() else None
+except ImportError:
+    RUNTIME = None
+
 ONBOARDING_STATE = Path("/var/lib/turnkey-onboarding/state.json")
 HUB_EMAIL_CACHE = Path("/var/lib/inithooks/cache/HUB_ACCOUNT_EMAIL")
 HUB = "https://hub.turnkeylinux.org"
@@ -245,6 +251,8 @@ class Mail:
         self.save()
 
     def timers(self, dns=False):
+        if RUNTIME:
+            return RUNTIME.schedule("dns-update" if dns else "retry")
         changed = False
         name = "turnkey-mail-dns" if dns else "turnkey-mail-retry"
         command = "dns-update" if dns else "retry"
@@ -285,8 +293,9 @@ class Mail:
         config = self.state.get("link", self.state.get("active", {}))
         return config if config.get("mode") == "hub" else {}
 
-    def apply(self, config):
-        smtp_check(config)
+    def apply(self, config, verify=True, restore_sender_policy=None):
+        if verify:
+            smtp_check(config)
         linked = self.linked()
         original = (POSTFIX_DIR / "main.cf").read_text()
         values = cf_entries(original)
@@ -315,6 +324,7 @@ class Mail:
             # Switching to custom SMTP restores the prior sender policy.
             for key in ("sender_canonical_classes", "sender_canonical_maps", "smtp_header_checks"):
                 options[key] = self.state.get("baseline", {}).get(key)
+        options.update(restore_sender_policy or {})
         if self.state.get("guard"):
             options["defer_transports"] = self.state["guard"]["before"]
         baseline = dict(self.state.get("baseline", {}))
@@ -619,12 +629,16 @@ class Mail:
         self.remove_files(self.state.get("owned_files", []))
         names = () if mail_only else ("turnkey-mail-retry", "turnkey-mail-dns")
         for name in names:
+            if RUNTIME:
+                RUNTIME.schedule("dns-update" if name.endswith("dns") else "retry", False)
+                continue
             timer = SYSTEMD_DIR / (name + ".timer")
             if timer.exists():
                 run(["systemctl", "disable", "--now", name + ".timer"])
             for extension in ("timer", "service"):
                 (SYSTEMD_DIR / (name + "." + extension)).unlink(missing_ok=True)
-        run(["systemctl", "daemon-reload"])
+        if not RUNTIME:
+            run(["systemctl", "daemon-reload"])
         credential = BACKUP_DIR / "sub_apikey"
         if not mail_only and credential.exists() and self.linked().get("device_id"):
             if credential.read_text().startswith("tklbam2." + self.linked()["device_id"] + "."):

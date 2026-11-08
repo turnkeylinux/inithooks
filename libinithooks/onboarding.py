@@ -76,7 +76,9 @@ def context():
         words = build[1].split()[1:]
         value['build_target'] = ' '.join(words)[:200] or None
     container = read_text('/run/systemd/container')
-    if Path('/.dockerenv').exists():
+    if Path('/run/.containerenv').exists():
+        value['platform'] = 'podman'
+    elif Path('/.dockerenv').exists():
         value['platform'] = 'docker'
     elif container:
         value['platform'] = container[:200]
@@ -97,6 +99,14 @@ def context():
     if len(quota) == 2 and all(item.isdigit() for item in quota) and int(quota[1]):
         cpus = min(cpus or 65536, max(1, (int(quota[0]) + int(quota[1]) - 1) // int(quota[1])))
     value['cpu_count'] = min(cpus, 65536) if cpus else None
+    try:
+        metadata = json.loads(read_text('/etc/turnkey-build.json') or '{}')
+        for key in ('app', 'release', 'app_version', 'image_name', 'build_target'):
+            field = metadata.get(key)
+            if isinstance(field, str) and 0 < len(field) <= 200 and not any(ord(c) < 32 for c in field):
+                value[key] = field
+    except (ValueError, TypeError, AttributeError):
+        pass
     return value
 
 
@@ -237,7 +247,7 @@ def observe(name, **fields):
 
 def link_instructions(result, pending=False):
     return (
-        'App email, dynamic DNS and security announcements.\n'
+        'App email delivery, dynamic DNS and security announcements.\n'
         'Manage linked backups and migration in the Hub.\n\n'
         + ('Waiting for approval in your browser:' if pending else 'On your phone or computer, open:')
         + '\n%s\n\nEnter this code:\n\n%s\n\n'
