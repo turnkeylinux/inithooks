@@ -11,6 +11,11 @@ export PYTHONDONTWRITEBYTECODE=1
 %:
 	dh $@ --with=python3 --buildsystem=pybuild
 
+override_dh_auto_install:
+	# The metapackage has no payload. Keep the Python library and its metadata
+	# in inithooks when debhelper sees more than one binary package.
+	dh_auto_install --destdir=debian/inithooks
+
 override_dh_fixperms:
 	dh_fixperms
 	# This Python module is also the executable target of the cache command.

@@ -498,6 +498,15 @@ class MailTest(unittest.TestCase):
         self.assertFalse(list(mail.POSTFIX_DIR.glob("turnkey-mail-*")))
         self.assertNotIn("active", self.client.state)
 
+    def test_reset_preserves_private_registration_retry_receipt(self):
+        receipt = mail.STATE_DIR / "registration.json"
+        payload = json.dumps({"server_id": "snapshot-destination", "nonce": "a" * 64})
+        receipt.write_text(payload)
+        receipt.chmod(0o600)
+        self.client.reset()
+        self.assertEqual(payload, receipt.read_text())
+        self.assertEqual(0o600, receipt.stat().st_mode & 0o777)
+
     def test_reset_restores_only_unchanged_owned_parameters(self):
         original = self.main.read_text()
         self.configured()

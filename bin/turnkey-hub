@@ -1,9 +1,30 @@
 #!/usr/bin/python3
 """Link an appliance to TurnKey Hub services.
 
-This file deliberately uses only the standard library: Hub bootstrap installs
-this exact helper on already-published appliances as well as new images.
+Launch registration and readiness use the installed integration package.
+Mail and DNS configuration share this helper across all appliance apps.
 """
+import sys
+
+# A partial package must remain probeable without opening saved credentials,
+# repairing mail configuration, creating locks or writing Python bytecode.
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] in ("capabilities", "register"):
+    sys.dont_write_bytecode = True
+    try:
+        if sys.argv[1] == "capabilities":
+            from libinithooks.hub_capabilities import main
+        else:
+            from libinithooks.hub_launch import main
+        sys.exit(main(sys.argv[2:]))
+    except Exception:
+        if sys.argv[1] == "capabilities":
+            import json
+            print(json.dumps({"protocol": "hub-services-v1", "ready": False,
+                              "missing": ["libinithooks.hub_capabilities"]}))
+        else:
+            print("Hub registration could not finish. Check the installed Hub packages and retry.", file=sys.stderr)
+        sys.exit(1)
+
 import argparse
 import contextlib
 import email.message
@@ -19,7 +40,6 @@ import smtplib
 import socket
 import ssl
 import subprocess
-import sys
 import tempfile
 import time
 import urllib.error

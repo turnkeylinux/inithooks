@@ -28,3 +28,18 @@ Description: Executes firstboot and everyboot scripts
  firstboot.d (or everboot.d) are run in alphanumeric order. TurnKey
  default firstboot script helpers (generally interactive python scripts)
  are contained in a separate bin/ directory.
+
+Package: turnkey-hub
+Architecture: all
+Depends:
+ ${misc:Depends},
+ inithooks (>= 2.3.6+23),
+ confconsole (>= 2.2.3+16),
+ tklbam (>= 1.5.3+6),
+ hubclient (>= 0.3.0),
+ postfix,
+ libsasl2-modules,
+ ca-certificates,
+Description: Complete TurnKey Hub appliance integration
+ Installs Hub account linking, app email delivery, dynamic DNS and native
+ backup support, including the console and launch registration interfaces.
