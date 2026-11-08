@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-loader = importlib.machinery.SourceFileLoader("turnkey_mail", str(ROOT / "bin/turnkey-mail"))
+loader = importlib.machinery.SourceFileLoader("turnkey_hub", str(ROOT / "bin/turnkey-hub"))
 spec = importlib.util.spec_from_loader(loader.name, loader)
 mail = importlib.util.module_from_spec(spec)
 loader.exec_module(mail)

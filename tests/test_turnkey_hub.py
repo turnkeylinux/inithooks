@@ -12,7 +12,7 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-loader = importlib.machinery.SourceFileLoader("turnkey_mail", str(ROOT / "bin/turnkey-mail"))
+loader = importlib.machinery.SourceFileLoader("turnkey_hub", str(ROOT / "bin/turnkey-hub"))
 spec = importlib.util.spec_from_loader(loader.name, loader)
 mail = importlib.util.module_from_spec(spec)
 loader.exec_module(mail)
@@ -239,6 +239,13 @@ class MailTest(unittest.TestCase):
 
     def test_sync_timer_noop_does_not_reload_systemd(self):
         self.client.timers()
+        service = (mail.SYSTEMD_DIR / "turnkey-mail-retry.service").read_text()
+        self.assertIn("ExecStart=/usr/lib/inithooks/bin/turnkey-hub retry\n", service)
+        self.assertFalse((ROOT / "bin/turnkey-mail").exists())
+        self.assertTrue(os.access(ROOT / "bin/turnkey-hub", os.X_OK))
+        self.client.timers(dns=True)
+        self.assertIn("ExecStart=/usr/lib/inithooks/bin/turnkey-hub dns-update\n",
+                      (mail.SYSTEMD_DIR / "turnkey-mail-dns.service").read_text())
         before = len(self.calls)
         self.client.timers()
         self.assertEqual(before, len(self.calls))
@@ -389,7 +396,7 @@ class MailTest(unittest.TestCase):
                   "password": "custom-secret"}
         original_umask = os.umask(0o077)
         try:
-            with patch.object(mail.sys, "argv", ["turnkey-mail", "configure", "--stdin", "--json"]), \
+            with patch.object(mail.sys, "argv", ["turnkey-hub", "configure", "--stdin", "--json"]), \
                     patch.object(mail.sys, "stdin", io.StringIO(json.dumps(custom))), \
                     patch.object(mail.sys, "stdout", io.StringIO()), \
                     patch.object(mail.os, "geteuid", return_value=0):
@@ -593,7 +600,7 @@ class MailTest(unittest.TestCase):
         response = {"device_code": DEVICE_CODE, "user_code": "D34C&F5A9",
                     "expires_in": 900, "interval": 5, "verification_uri": mail.HUB + "/link"}
         output = io.StringIO()
-        with patch.object(mail.sys, "argv", ["turnkey-mail", "connect"]), \
+        with patch.object(mail.sys, "argv", ["turnkey-hub", "connect"]), \
                 patch.object(mail.os, "geteuid", return_value=0), \
                 patch.object(mail.os, "umask"), \
                 patch.object(mail.time, "sleep"), \

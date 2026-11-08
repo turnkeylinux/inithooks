@@ -5,8 +5,8 @@ set +x
 [ ! -e "$INITHOOKS_CONF" ] || . "$INITHOOKS_CONF"
 
 if [ -n "${HUB_EMAIL_TOKEN:-}" ]; then
-    if ! printf '%s' "$HUB_EMAIL_TOKEN" | "$INITHOOKS_PATH/bin/turnkey-mail" enroll --token-stdin; then
-        echo 'App email setup did not finish. Check turnkey-mail status; temporary failures retry automatically.' >&2
+    if ! printf '%s' "$HUB_EMAIL_TOKEN" | "$INITHOOKS_PATH/bin/turnkey-hub" enroll --token-stdin; then
+        echo 'Hub setup did not finish. Check turnkey-hub status; temporary failures retry automatically.' >&2
     fi
     # Explicit legacy keys remain supported; new Hub launches use only a token.
     [ -n "${HUB_APIKEY:-}" ] || exit 0

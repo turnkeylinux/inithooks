@@ -32,7 +32,7 @@ independent custom sender/DNS state, backup authentication conversion and failed
 initialization retries. The helper retains existing backup encryption/history
 and explicit legacy initialization paths.
 
-`turnkey-mail sync` updates approved services. `use-hub` resumes Hub mail without
+`turnkey-hub sync` updates approved services. `use-hub` resumes Hub mail without
 pairing, while `reset-mail` selects manual mail and preserves DNS and backup.
 Actual installed-client backup and filesystem restore proof is coordinated with
 the Hub fixtures; keep registry/config/profile data in dedicated QA directories.

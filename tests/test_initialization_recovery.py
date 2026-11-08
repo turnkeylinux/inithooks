@@ -198,7 +198,7 @@ class ExplicitLegacyPreseedTests(unittest.TestCase):
             defaults = root / 'defaults'
             defaults.write_text('INITHOOKS_CONF=' + str(config) + '\nINITHOOKS_PATH=' + str(root) + '\n')
             log = root / 'calls'
-            helper = root / 'bin/turnkey-mail'
+            helper = root / 'bin/turnkey-hub'
             helper.write_text('#!/bin/sh\nread token\n[ "$token" = fixture-token ] || exit 1\necho enroll >> "' + str(log) + '"\n')
             legacy = root / 'bin/hubservices.py'
             legacy.write_text('#!/bin/sh\n[ "$1" = --apikey=legacy-fixture-key ] || exit 1\n[ "$2" = --fqdn=fixture.tklapp.com ] || exit 1\necho legacy >> "' + str(log) + '"\n')

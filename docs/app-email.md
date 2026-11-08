@@ -9,9 +9,9 @@ Apps that use the system mail service share this connection. Their sender addres
 From a root shell:
 
 ```sh
-/usr/lib/inithooks/bin/turnkey-mail connect
-/usr/lib/inithooks/bin/turnkey-mail status
-/usr/lib/inithooks/bin/turnkey-mail test --recipient you@example.com
+/usr/lib/inithooks/bin/turnkey-hub connect
+/usr/lib/inithooks/bin/turnkey-hub status
+/usr/lib/inithooks/bin/turnkey-hub test --recipient you@example.com
 ```
 
 A successful test command means the local queue accepted the message. Check the recipient inbox to confirm delivery. While domain verification or the provider is temporarily unavailable, messages remain queued.
@@ -22,12 +22,12 @@ Confconsole also supports another SMTP provider through **Custom SMTP**. Enter t
 
 ## Operations and integration
 
-The standalone `bin/turnkey-mail` file is packaged by inithooks. The Hub installs the same reviewed file on supported existing images and passes enrollment through standard input. It is independent of application code.
+The standalone `bin/turnkey-hub` file is packaged by inithooks. The Hub installs the same reviewed file on supported existing images and passes enrollment through standard input. It is independent of application code.
 
 Enrollment saves a short-lived token and independently generated SMTP/DNS secrets under `/var/lib/turnkey-mail/`, accessible only to root. The retry timer resumes an incomplete connection after firstboot clears its preseed file. A new connection with no existing relay holds direct SMTP delivery until enrollment succeeds. Repeating a completed token preserves the existing device identity.
 
-The DNS updater uses a separate hostname-scoped capability and leaves an enabled existing HubDNS hourly updater in control. The mail credential cannot update DNS. Connection state and credentials must be reset when cloning a server; the Hub snapshot path invokes `turnkey-mail reset` before enrollment with a new token. The full `reset` command clears local mail and DNS credentials without revoking the source server's credential. Use `reset-mail` for the mail-only action. Switching to Custom SMTP also preserves dynamic DNS.
+The DNS updater uses a separate hostname-scoped capability and leaves an enabled existing HubDNS hourly updater in control. The mail credential cannot update DNS. Connection state and credentials must be reset when cloning a server; the Hub snapshot path invokes `turnkey-hub reset` before enrollment with a new token. The full `reset` command clears local mail and DNS credentials without revoking the source server's credential. Use `reset-mail` for the mail-only action. Switching to Custom SMTP also preserves dynamic DNS.
 
-Custom automation can pipe a JSON object to `turnkey-mail configure --stdin`. Its shape is `{"smtp":{"host":"smtp.example.com","port":587,"username":"user"},"password":"..."}`. Obtain the password from protected input rather than placing it in command arguments or shell history.
+Custom automation can pipe a JSON object to `turnkey-hub configure --stdin`. Its shape is `{"smtp":{"host":"smtp.example.com","port":587,"username":"user"},"password":"..."}`. Obtain the password from protected input rather than placing it in command arguments or shell history.
 
 Validation uses the full `python3 -m unittest discover -s tests -v` suite and the isolated real-Postfix fixture. No application-specific SMTP plugin is required.

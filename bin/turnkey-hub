@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Connect an appliance's system mail service to TurnKey Hub.
+"""Link an appliance to TurnKey Hub services.
 
 This file deliberately uses only the standard library: Hub bootstrap installs
 this exact helper on already-published appliances as well as new images.
@@ -32,7 +32,7 @@ POSTFIX_DIR = Path("/etc/postfix")
 SYSTEMD_DIR = Path("/etc/systemd/system")
 BACKUP_DIR = Path("/var/lib/tklbam")
 HUBDNS_DIR = Path("/var/lib/hubdns")
-HELPER = "/usr/lib/inithooks/bin/turnkey-mail"
+HELPER = "/usr/lib/inithooks/bin/turnkey-hub"
 MAX_JSON = 65536
 DEVICE_CODE = re.compile(r"^[A-Za-z0-9_-]{32,256}$")
 ENROLLMENT_TOKEN = re.compile(r"^[a-f0-9]{32}\.[a-f0-9]{64}$")
@@ -226,7 +226,7 @@ class Mail:
         except FileNotFoundError:
             return {}
         except (ValueError, OSError):
-            raise Error("Saved mail settings could not be read. Restore the state file before changing the connection.")
+            raise Error("Saved Hub settings could not be read. Restore the state file before changing the connection.")
 
     def save(self):
         atomic(STATE_DIR / "state.json", json.dumps(self.state, sort_keys=True) + "\n")
@@ -719,7 +719,7 @@ def main():
         elif result.get("message"):
             print(result["message"])
         else:
-            print("Mail connection: %s%s" % (result.get("status", "waiting"),
+            print("%s connection: %s%s" % ("Mail" if args.command == "configure" else "Hub", result.get("status", "waiting"),
                   (" (" + result["domain"] + ")") if result.get("domain") else ""))
         return 0
     except Error as error:
@@ -729,11 +729,12 @@ def main():
             print(str(error), file=sys.stderr)
         return 1
     except KeyboardInterrupt:
-        print("Connection cancelled. Existing mail settings were kept.", file=sys.stderr)
+        print("Linking cancelled. Existing service settings were kept.", file=sys.stderr)
         return 130
     except (OSError, ValueError, KeyError, TypeError):
         # Never emit tracebacks that could contain tokens or configuration.
-        print("Mail setup could not finish. Check the system services and try again.", file=sys.stderr)
+        label = "Mail setup" if args.command in ("configure", "test", "reset-mail") else "Hub services setup"
+        print(label + " could not finish. Check the system services and try again.", file=sys.stderr)
         return 1
 
 

@@ -26,7 +26,7 @@ def usage(msg: str | getopt.GetoptError = "") -> NoReturn:
     sys.exit(1)
 
 
-MAIL_HELPER = os.path.join(os.path.dirname(__file__), "turnkey-mail")
+MAIL_HELPER = os.path.join(os.path.dirname(__file__), "turnkey-hub")
 
 
 def mail_call(*arguments):

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Destructive integration check, only for the isolated disposable mail client.
 
-Usage: python3 mail_postfix_integration.py /qa/turnkey-mail /root/client.json
+Usage: python3 mail_postfix_integration.py /qa/turnkey-hub /root/client.json
 The fixture needs Postfix, SMTP SASL modules and the relay CA in system trust.
 The credential file is root-only and never printed. Uses real Postfix config,
 maps, reload and queue; systemd scheduling is covered by the ordinary suite.
