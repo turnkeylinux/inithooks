@@ -219,6 +219,18 @@ def sender_maps(domain, sender):
     return envelope, header
 
 
+def journey():
+    correlation = {}
+    try:
+        state = json.loads(ONBOARDING_STATE.read_text())
+        if (all(re.fullmatch(r"[a-f0-9]{32}", state.get(key, "")) for key in ("installation_id", "flow_id"))
+                and state.get("flow_kind") in ("firstboot", "confconsole")):
+            correlation = {key: state[key] for key in ("installation_id", "flow_id", "flow_kind")}
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+    return correlation
+
+
 class Mail:
     def __init__(self):
         self.state = self.load()
@@ -371,7 +383,7 @@ class Mail:
             if path.parent == POSTFIX_DIR and path.name.startswith("turnkey-mail-"):
                 path.unlink(missing_ok=True)
 
-    def enroll(self, token=None):
+    def enroll(self, token=None, flow=None):
         if token:
             if not ENROLLMENT_TOKEN.fullmatch(token):
                 raise Error("The connection code is invalid. Start a new connection.")
@@ -379,7 +391,8 @@ class Mail:
                 return self.status(refresh=False)
             if self.state.get("pending", {}).get("token") != token:
                 self.state["pending"] = {"token": token, "control_secret": secrets.token_urlsafe(32),
-                                         "dns_password": secrets.token_urlsafe(32)}
+                                         "dns_password": secrets.token_urlsafe(32),
+                                         "flow": journey() if flow is None else flow}
             self.save()
         pending = self.state.get("pending")
         if not pending:
@@ -396,7 +409,8 @@ class Mail:
                 for key in ("smtp_secret", "backup_secret", "services"):
                     self.state.pop(key, None)
             self.state["link"] = dict(mode="hub", device_id=result["device_id"],
-                                      control_secret=pending["control_secret"], dns_password=pending["dns_password"])
+                                      control_secret=pending["control_secret"], dns_password=pending["dns_password"],
+                                      flow=pending.get("flow", {}))
             self.state["enrolled_token_hash"] = hashlib.sha256(pending["token"].encode()).hexdigest()
             for key in ("pending", "pairing", "error"):
                 self.state.pop(key, None)
@@ -480,6 +494,7 @@ class Mail:
             HUB_EMAIL_CACHE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             atomic(HUB_EMAIL_CACHE, account_email + "\n")
         self.state["services"] = value
+        self.state.pop("error", None)
         self.save()
         return self.status(refresh=False)
 
@@ -528,14 +543,7 @@ class Mail:
         self.state.pop("legacy_dns", None)
 
     def start(self):
-        correlation = {}
-        try:
-            state = json.loads(ONBOARDING_STATE.read_text())
-            if (all(re.fullmatch(r"[a-f0-9]{32}", state.get(key, "")) for key in ("installation_id", "flow_id"))
-                    and state.get("flow_kind") in ("firstboot", "confconsole")):
-                correlation = {key: state[key] for key in ("installation_id", "flow_id", "flow_kind")}
-        except (OSError, ValueError, TypeError, AttributeError):
-            pass
+        correlation = journey()
         result = request("device/start", correlation)
         try:
             uri = urllib.parse.urlsplit(result["verification_uri"])
@@ -552,7 +560,7 @@ class Mail:
         # Older helpers require an ampersand on the wire; display a dash locally.
         result["user_code"] = result["user_code"].replace("&", "-")
         self.state["pairing"] = {"device_code": result["device_code"], "expires": time.time() + ttl,
-                                 "interval": interval, "next_poll": 0,
+                                 "interval": interval, "next_poll": 0, "flow": correlation,
                                  "verification_uri": result["verification_uri"], "user_code": result["user_code"]}
         try:
             from libinithooks.hub_push import validated_notification
@@ -577,7 +585,7 @@ class Mail:
             token = result.get("enrollment_token", "")
             if not isinstance(token, str) or not ENROLLMENT_TOKEN.fullmatch(token):
                 raise Error("The Hub returned an invalid connection approval.")
-            return self.enroll(token)
+            return self.enroll(token, pairing.get("flow", {}))
         if result.get("status") not in ("pending", "expired", "denied"):
             raise Error("The Hub returned an invalid connection status.")
         return {"status": result["status"], "interval": pairing["interval"]}

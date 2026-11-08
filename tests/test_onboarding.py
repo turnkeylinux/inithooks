@@ -50,6 +50,220 @@ class OnboardingTest(unittest.TestCase):
             self.assertEqual(flow.begin()['installation_id'], first['installation_id'])
         self.launcher.assert_called_once_with()
 
+    def linked_native(self):
+        smtp = {'host': 'smtp.example.net', 'port': 587, 'username': 'test'}
+        device = 'a' * 32
+        return {'link': {'mode': 'hub', 'device_id': device, 'control_secret': 'private-test',
+                         'flow': {key: flow.load()[key] for key in ('installation_id', 'flow_id', 'flow_kind')}},
+                'active': {'mode': 'hub', 'device_id': device, 'smtp': smtp,
+                           'sender': 'sender@example.net', 'domain': 'example.net'},
+                'services': {'device_id': device, 'connection_status': 'linked',
+                    'account_email': 'owner@example.net',
+                    'mail': {'enabled': True, 'status': 'active', 'smtp': smtp,
+                             'sender': 'sender@example.net', 'domain': 'example.net'},
+                    'backup': {'status': 'disabled'}}}
+
+    def recovered_setup(self):
+        first = flow.begin()
+        flow.record('setup_completed')
+        self.native = self.linked_native()
+        flow.HUB_STATE.write_text(json.dumps(self.native))
+        flow.remember_email('owner@example.net')
+        self.aliases = self.root / 'aliases'
+        self.aliases.write_text('postmaster: root\nroot:  \n')
+        patcher = patch.object(flow, 'ALIASES', self.aliases)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return first
+
+    def test_recovered_link_reconciles_once_after_setup_with_original_ids_and_default(self):
+        first = self.recovered_setup()
+        def configure(command, **kwargs):
+            self.assertEqual(command, [flow.ALERTS, 'owner@example.net'])
+            self.aliases.write_text('root: owner@example.net\n')
+            flow.notification_choice('owner@example.net')
+        with patch.object(flow.subprocess, 'run', side_effect=configure) as run:
+            flow.reconcile()
+            flow.reconcile()
+        run.assert_called_once()
+        state = flow.load()
+        self.assertEqual(state['decision'], 'linked')
+        linked = [event for event in state['pending'] if event['event_name'] == 'link_completed']
+        self.assertEqual(len(linked), 1)
+        self.assertEqual(linked[0]['flow_id'], first['flow_id'])
+        self.assertEqual(linked[0]['installation_id'], first['installation_id'])
+        self.assertEqual(state['notification_choice'], 'owner@example.net')
+
+    def test_incomplete_native_configuration_cannot_complete_observations_or_notifications(self):
+        self.recovered_setup()
+        for marker in ('pending', 'applying', 'guard', 'error', 'mail_error', 'active_missing', 'wrong_smtp'):
+            native = self.linked_native()
+            if marker == 'mail_error':
+                native['services']['mail']['error'] = 'Apply failed'
+            elif marker == 'active_missing':
+                del native['active']
+            elif marker == 'wrong_smtp':
+                native['active']['smtp'] = {'host': 'old.example.net'}
+            else:
+                native[marker] = {'code': 'revoked'}
+            flow.HUB_STATE.write_text(json.dumps(native))
+            with self.subTest(marker=marker), patch.object(flow.subprocess, 'run') as run:
+                flow.reconcile()
+                run.assert_not_called()
+                self.assertIsNone(flow.decision())
+                self.assertNotIn('link_completed', [event['event_name'] for event in flow.load()['pending']])
+
+    def test_backup_setup_required_and_manual_or_disabled_mail_do_not_block_account_link(self):
+        self.recovered_setup()
+        for manual in (True, False):
+            native = self.linked_native()
+            native['services']['backup'] = {'status': 'setup_required', 'error': 'Retry backup setup'}
+            native.pop('active')
+            if manual:
+                native['mail_preference'] = 'manual'
+            else:
+                native['services']['mail'] = {'enabled': False, 'status': 'disabled'}
+            flow.HUB_STATE.write_text(json.dumps(native))
+            with patch.object(flow.subprocess, 'run'):
+                flow.reconcile()
+            self.assertEqual(flow.decision(), 'linked')
+
+    def test_explicit_notification_skip_preseed_and_existing_alias_are_preserved(self):
+        self.recovered_setup()
+        for choice in ('SKIP', 'chosen@example.net'):
+            flow.notification_choice(choice)
+            with patch.object(flow.subprocess, 'run') as run:
+                flow.reconcile()
+            run.assert_not_called()
+            self.assertEqual(flow.load()['notification_choice'], choice)
+        state = flow.load()
+        state.pop('notification_choice')
+        flow.save(state)
+        self.aliases.write_text('root: custom@example.net\n')
+        with patch.object(flow.subprocess, 'run') as run:
+            flow.reconcile()
+        run.assert_not_called()
+        self.assertEqual(self.aliases.read_text(), 'root: custom@example.net\n')
+
+    def test_explicit_link_skip_is_not_reclassified_from_an_existing_native_connection(self):
+        self.recovered_setup()
+        flow.record('skipped')
+        with patch.object(flow.subprocess, 'run') as run:
+            flow.reconcile()
+        run.assert_not_called()
+        self.assertEqual(flow.decision(), 'skipped')
+        self.assertNotIn('link_completed', [event['event_name'] for event in flow.load()['pending']])
+
+    def test_skipped_firstboot_then_later_link_keeps_confconsole_flow_and_firstboot_skip(self):
+        first = self.recovered_setup()
+        flow.record('skipped')
+        later = flow.start_flow('confconsole')
+        with patch.object(flow.subprocess, 'run') as run:
+            flow.reconcile()
+        run.assert_not_called()
+        self.assertIsNone(flow.decision())
+        # A new approved native enrollment belongs to this later journey.
+        self.native['link']['flow'] = {key: flow.load()[key]
+                                      for key in ('installation_id', 'flow_id', 'flow_kind')}
+        flow.HUB_STATE.write_text(json.dumps(self.native))
+        with patch.object(flow.subprocess, 'run'):
+            flow.reconcile()
+            flow.reconcile()
+        state = flow.load()
+        linked = [event for event in state['pending'] if event['event_name'] == 'link_completed']
+        self.assertEqual(len(linked), 1)
+        self.assertEqual(linked[0]['flow_id'], later['flow_id'])
+        self.assertNotEqual(linked[0]['flow_id'], first['flow_id'])
+        self.assertEqual(linked[0]['flow_kind'], 'confconsole')
+        self.assertEqual(state['firstboot_decision'], 'skipped')
+        self.assertEqual(sum(event['event_name'] == 'setup_started' for event in state['pending']), 1)
+
+    def test_old_or_missing_native_journey_cannot_complete_new_flow_before_or_during_pairing(self):
+        self.recovered_setup()
+        later = flow.start_flow('confconsole')
+        for pairing in (None, {'device_code': 'pending'}):
+            for proof in ('old', 'missing'):
+                native = json.loads(json.dumps(self.native))
+                if proof == 'missing':
+                    native['link'].pop('flow')
+                if pairing:
+                    native['pairing'] = pairing
+                flow.HUB_STATE.write_text(json.dumps(native))
+                with patch.object(flow.subprocess, 'run') as run:
+                    flow.reconcile()
+                run.assert_not_called()
+                self.assertIsNone(flow.decision())
+                self.assertFalse(any(event['event_name'] == 'link_completed' and
+                                     event['flow_id'] == later['flow_id'] for event in flow.load()['pending']))
+
+    def test_flow_change_between_validation_and_record_cannot_complete_new_journey(self):
+        self.recovered_setup()
+        record = flow.record
+        def changed(*args, **kwargs):
+            flow.start_flow('confconsole')
+            return record(*args, **kwargs)
+        with patch.object(flow, 'record', side_effect=changed), patch.object(flow.subprocess, 'run') as run:
+            flow.reconcile()
+        run.assert_not_called()
+        self.assertIsNone(flow.decision())
+        self.assertNotIn('link_completed', [event['event_name'] for event in flow.load()['pending']])
+
+    def skip_wins_at_commit(self, kind):
+        self.recovered_setup()
+        if kind == 'confconsole':
+            flow.record('skipped')
+            flow.start_flow(kind)
+            self.native['link']['flow'] = {key: flow.load()[key]
+                for key in ('installation_id', 'flow_id', 'flow_kind')}
+            flow.HUB_STATE.write_text(json.dumps(self.native))
+        record = flow.record
+        def skipped(*args, **kwargs):
+            record('skipped')
+            result = record(*args, **kwargs)
+            self.assertIsNone(result)
+            return result
+        original_aliases = self.aliases.read_text()
+        with patch.object(flow, 'record', side_effect=skipped) as commit, \
+                patch.object(flow.subprocess, 'run') as run:
+            flow.reconcile()
+        commit.assert_called_once_with('link_completed', expected_flow=self.native['link']['flow'])
+        run.assert_not_called()
+        state = flow.load()
+        self.assertEqual(state['decision'], 'skipped')
+        self.assertEqual(state['firstboot_decision'], 'skipped')
+        self.assertEqual(self.aliases.read_text(), original_aliases)
+        self.assertNotIn('link_completed', [event['event_name'] for event in state['pending']])
+
+    def test_firstboot_skip_committed_after_validation_wins_over_link_completion(self):
+        self.skip_wins_at_commit('firstboot')
+
+    def test_confconsole_skip_committed_after_validation_wins_over_link_completion(self):
+        self.skip_wins_at_commit('confconsole')
+
+    def test_link_completion_committed_after_validation_remains_idempotent(self):
+        self.recovered_setup()
+        record = flow.record
+        def linked(*args, **kwargs):
+            record('link_completed')
+            return record(*args, **kwargs)
+        with patch.object(flow, 'record', side_effect=linked), patch.object(flow.subprocess, 'run'):
+            flow.reconcile()
+        state = flow.load()
+        self.assertEqual(state['decision'], 'linked')
+        self.assertEqual(sum(event['event_name'] == 'link_completed' for event in state['pending']), 1)
+
+    def test_notification_skip_committed_after_validation_prevents_default(self):
+        self.recovered_setup()
+        record = flow.record
+        def opted_out(*args, **kwargs):
+            flow.notification_choice('SKIP')
+            return record(*args, **kwargs)
+        with patch.object(flow, 'record', side_effect=opted_out), patch.object(flow.subprocess, 'run') as run:
+            flow.reconcile()
+        run.assert_not_called()
+        self.assertEqual(flow.decision(), 'linked')
+        self.assertEqual(flow.load()['notification_choice'], 'SKIP')
+
     def test_relink_changes_flow_without_counting_another_installation(self):
         first = flow.begin()
         relink = flow.start_flow('confconsole')

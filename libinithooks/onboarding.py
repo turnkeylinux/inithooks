@@ -8,11 +8,14 @@ from pathlib import Path
 import platform
 import re
 import secrets
+import subprocess
 import tempfile
 
 STATE_DIR = Path('/var/lib/turnkey-onboarding')
 CACHE_DIR = Path('/var/lib/inithooks/cache')
 HUB_STATE = Path('/var/lib/turnkey-mail/state.json')
+ALIASES = Path('/etc/aliases')
+ALERTS = '/usr/lib/inithooks/bin/secalerts.sh'
 ENDPOINT = 'https://ajax.turnkeylinux.org/initfence/v2/events'
 EVENTS = {'setup_started', 'setup_completed', 'prompt_shown', 'link_started', 'approval_checked',
           'link_completed', 'skipped', 'error', 'email_provided', 'newsletter_choice'}
@@ -173,10 +176,14 @@ def _start_flow(kind):
         return {key: state[key] for key in ('installation_id', 'flow_id')}
 
 
-def record(name, error_code=None, newsletter_consent=None, email=None):
+def record(name, error_code=None, newsletter_consent=None, email=None, expected_flow=None):
     begin()
     with locked():
         state = load()
+        if expected_flow is not None and (state.get('decision') == 'skipped' or
+                any(state.get(key) != expected_flow.get(key)
+                    for key in ('installation_id', 'flow_id', 'flow_kind'))):
+            return
         fields = {}
         if name == 'email_provided':
             if not skipped_unlinked(state) or not valid_email(email):
@@ -198,7 +205,7 @@ def record(name, error_code=None, newsletter_consent=None, email=None):
                 state['firstboot_decision'] = 'skipped'
         if name == 'link_completed':
             if state.get('linked_flow_id') == state['flow_id']:
-                return
+                return state
             state['linked_flow_id'] = state['flow_id']
             state['decision'] = 'linked'
             if state['flow_kind'] == 'firstboot':
@@ -209,6 +216,7 @@ def record(name, error_code=None, newsletter_consent=None, email=None):
             state.update(completed=True, flow_id=state['firstboot_flow_id'], flow_kind='firstboot')
         append(state, name, **fields)
         save(state)
+        return state
 
 
 def skipped_unlinked(state=None):
@@ -263,7 +271,57 @@ def remember_email(value):
         atomic(CACHE_DIR / 'HUB_ACCOUNT_EMAIL', value)
 
 
+def notification_choice(value):
+    """Keep the selected local notification policy after firstboot answers clear."""
+    if value != 'SKIP' and not valid_email(value):
+        return
+    begin()
+    with locked():
+        state = load()
+        state['notification_choice'] = value
+        save(state)
+
+
+def reconcile():
+    """Converge firstboot observations and defaults after a native Hub retry."""
+    try:
+        state = load()
+        if not state.get('installation_id') or state.get('decision') == 'skipped':
+            return
+        if state.get('decision') == 'linked' and (not state.get('completed') or state.get('notification_choice')):
+            return
+        native = json.loads(HUB_STATE.read_text())
+        link = native.get('link', native.get('active', {}))
+        services = native.get('services', {})
+        mail = services.get('mail', {})
+        if (link.get('flow') != {key: state[key] for key in ('installation_id', 'flow_id', 'flow_kind')} or
+                link.get('mode') != 'hub' or not link.get('control_secret') or
+                not link.get('device_id') or services.get('device_id') != link['device_id'] or
+                services.get('connection_status') != 'linked' or
+                any(native.get(key) for key in ('pending', 'applying', 'guard', 'error')) or mail.get('error')):
+            return
+        if native.get('mail_preference', 'hub') == 'hub' and mail.get('enabled'):
+            active = native.get('active', {})
+            if (mail.get('status') not in ('active', 'pending_verification') or
+                    active.get('mode') != 'hub' or active.get('device_id') != link['device_id'] or
+                    any(active.get(key) != mail.get(key) for key in ('smtp', 'sender', 'domain'))):
+                return
+        state = record('link_completed', expected_flow=link['flow'])
+        if not state or not state.get('completed') or state.get('notification_choice'):
+            return
+        if re.search(r'^root:[ \t]*[^ \t\r\n#]', read_text(ALIASES), re.M):
+            return
+        email = email_default()
+        if valid_email(email) and email == services.get('account_email'):
+            subprocess.run([ALERTS, email], check=True, capture_output=True, timeout=45)
+    except (OSError, ValueError, TypeError, KeyError, AttributeError,
+            subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        # Optional local convergence retries on the existing maintenance schedule.
+        return
+
+
 def flush():
+    reconcile()
     import urllib.error
     import urllib.request
 
@@ -308,10 +366,11 @@ def main():
 def command_line():
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['begin', 'flow', 'event', 'flush', 'reset-installation', 'decision'])
+    parser.add_argument('command', choices=['begin', 'flow', 'event', 'flush', 'reset-installation', 'decision', 'notifications'])
     parser.add_argument('--kind', choices=['firstboot', 'confconsole'], default='firstboot')
     parser.add_argument('--name', choices=sorted(EVENTS))
     parser.add_argument('--error-code')
+    parser.add_argument('--email')
     args = parser.parse_args()
     if os.geteuid() != 0:
         parser.error('Run this command as root')
@@ -327,5 +386,7 @@ def command_line():
         with locked():
             (STATE_DIR / 'state.json').unlink(missing_ok=True)
         (CACHE_DIR / 'HUB_ACCOUNT_EMAIL').unlink(missing_ok=True)
+    elif args.command == 'notifications':
+        notification_choice(args.email)
     elif args.command == 'decision':
         print(decision() or '')

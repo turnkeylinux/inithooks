@@ -167,6 +167,14 @@ class JourneysTest(unittest.TestCase):
         self.assertNotIn('newsletter_choice', self.names())
         self.assertNotIn('email_provided', self.names())
 
+    def test_interactive_notification_skip_is_durable_without_newsletter_for_linked_user(self):
+        onboarding.record('link_completed')
+        self.alerts.Dialog.return_value.inputbox.return_value = ('cancel', '')
+        with patch.object(sys, 'argv', ['secalerts.py']), patch.object(self.alerts.subprocess, 'run') as run:
+            self.alerts.main()
+        self.assertEqual(onboarding.load()['notification_choice'], 'SKIP')
+        run.assert_not_called()
+
     def test_skipped_user_can_decline_newsletter_without_affecting_local_notifications(self):
         onboarding.record('skipped')
         self.alerts.Dialog.return_value.inputbox.return_value = ('cancel', 'chosen@example.net')

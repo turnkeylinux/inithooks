@@ -79,5 +79,6 @@ fi
 configure_alias "root" "$email"
 configure_cronapt "MAILON" "output"
 configure_cronapt "MAILTO" "root"
+"$(dirname "$0")/turnkey-onboarding" notifications --email "$email"
 send_enabled_notification "root"
 

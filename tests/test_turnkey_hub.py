@@ -658,7 +658,7 @@ class MailTest(unittest.TestCase):
             self.assertEqual(self.client.poll()['status'], 'pending')
             self.assertEqual(request.call_count, 1)
             self.assertEqual(self.client.poll(notified=True)['connection_status'], 'linked')
-        enroll.assert_called_once_with(TOKEN)
+        enroll.assert_called_once_with(TOKEN, {})
         self.assertEqual(request.call_args.args, ('device/poll', {'device_code': DEVICE_CODE}))
 
     def test_notified_denial_and_local_expiry_cannot_enroll(self):

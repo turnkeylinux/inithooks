@@ -86,6 +86,7 @@ def main():
 
             if retcode == "cancel":
                 email = ""
+                onboarding.notification_choice("SKIP")
                 break
 
             if not EMAIL_RE.match(email):
@@ -96,6 +97,7 @@ def main():
                 break
 
     if email:
+        onboarding.notification_choice(email)
         onboarding.observe("email_provided", email=email)
         cmd = os.path.join(os.path.dirname(__file__), "secalerts.sh")
         logging.debug(f"\tcmd:`{cmd}'")
