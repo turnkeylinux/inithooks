@@ -16,6 +16,11 @@ map permissions, authentication, rollback, queue submission and local reset.
 Its queue assertions need a reachable fixture relay that accepts the messages;
 inspect that relay's provider fixture output to verify sender and recipients.
 
+`tests/mail_guard_queue.py /path/to/turnkey-hub` runs a separate offline check
+in a disposable Postfix container with `TURNKEY_MAIL_DISPOSABLE_FIXTURE=yes`.
+It submits system and WordPress mail before the first Hub sender policy is
+active, then checks the reprocessed envelopes, recipients, Reply-To and body.
+
 The firstboot terminal audit uses the real dialog implementation with fixture
 responses. Install pexpect and pyte in the test environment, then run:
 

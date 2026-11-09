@@ -498,6 +498,96 @@ class MailTest(unittest.TestCase):
         self.assertFalse(list(mail.POSTFIX_DIR.glob("turnkey-mail-*")))
         self.assertNotIn("active", self.client.state)
 
+    def test_initial_guard_requeues_with_sender_policy_and_smtp_still_held(self):
+        self.main.write_text("myhostname = original.example\ndefer_transports = lmtp\n")
+        self.client.guard()
+        original_run = mail.run.side_effect
+        observed = []
+        def run(command, *args, **kwargs):
+            if command == ["postsuper", "-r", "ALL"]:
+                values = mail.cf_entries(self.main.read_text())
+                self.assertEqual(values["defer_transports"], "lmtp smtp")
+                self.assertTrue(values["sender_canonical_maps"].startswith("regexp:"))
+                observed.append(command)
+            return original_run(command, *args, **kwargs)
+        with patch.object(mail, "run", side_effect=run):
+            self.configured()
+        self.assertEqual(observed, [["postsuper", "-r", "ALL"]])
+        self.assertEqual(mail.cf_entries(self.main.read_text())["defer_transports"], "lmtp")
+        self.assertNotIn("guard", self.client.state)
+
+    def test_requeue_failure_keeps_guard_and_retries_activation(self):
+        self.main.write_text("myhostname = original.example\n")
+        self.client.guard()
+        held = self.main.read_bytes()
+        self.fail_command = ["postsuper", "-r", "ALL"]
+        with self.assertRaises(mail.Error):
+            self.configured()
+        self.assertEqual(self.main.read_bytes(), held)
+        self.assertIn("guard", self.client.state)
+        self.assertNotIn("active", self.client.state)
+        self.assertFalse(list(mail.POSTFIX_DIR.glob("turnkey-mail-*")))
+        self.fail_command = None
+        self.configured()
+        self.assertNotIn("guard", self.client.state)
+
+    def test_guard_release_reload_failure_retains_retryable_guard(self):
+        self.main.write_text("myhostname = original.example\n")
+        self.client.guard()
+        held = self.main.read_bytes()
+        original_run = mail.run.side_effect
+        reloads = []
+        def run(command, *args, **kwargs):
+            if command == ["postfix", "reload"]:
+                reloads.append(command)
+                if len(reloads) == 2:
+                    raise mail.Error("release failed", retryable=True)
+            return original_run(command, *args, **kwargs)
+        with patch.object(mail, "run", side_effect=run):
+            with self.assertRaises(mail.Error):
+                self.configured()
+        self.assertEqual(self.main.read_bytes(), held)
+        self.assertIn("guard", self.client.load())
+        self.assertNotIn("active", self.client.state)
+        self.configured()
+        self.assertNotIn("guard", self.client.state)
+
+    def test_existing_hub_and_custom_smtp_leave_queue_untouched(self):
+        self.configured()
+        self.configured()
+        custom = mail.checked_config({"smtp": CONFIG["smtp"]}, PASSWORD, custom=True)
+        self.client.apply(custom)
+        self.assertFalse(any(call[0][0] == "postsuper" for call in self.calls))
+        self.client.reset_mail()
+        self.main.write_text("myhostname = original.example\n")
+        self.client.guard()
+        self.client.apply(custom)
+        self.assertFalse(any(call[0][0] == "postsuper" for call in self.calls))
+
+    def test_interrupted_guard_release_recovers_and_retries(self):
+        self.main.write_text("myhostname = original.example\n")
+        self.client.guard()
+        held = self.main.read_bytes()
+        original_run = mail.run.side_effect
+        reloads = []
+        def run(command, *args, **kwargs):
+            if command == ["postfix", "reload"]:
+                reloads.append(command)
+                if len(reloads) == 2:
+                    raise KeyboardInterrupt()
+            return original_run(command, *args, **kwargs)
+        with patch.object(mail, "run", side_effect=run):
+            with self.assertRaises(KeyboardInterrupt):
+                self.configured()
+        self.client = mail.Mail()
+        self.assertEqual(self.main.read_bytes(), held)
+        self.assertIn("guard", self.client.state)
+        self.assertNotIn("applying", self.client.state)
+        self.assertFalse(list(mail.POSTFIX_DIR.glob("turnkey-mail-*")))
+        self.configured()
+        self.assertNotIn("guard", self.client.state)
+        self.assertEqual(2, sum(call[0][0] == "postsuper" for call in self.calls))
+
     def test_reset_preserves_private_registration_retry_receipt(self):
         receipt = mail.STATE_DIR / "registration.json"
         payload = json.dumps({"server_id": "snapshot-destination", "nonce": "a" * 64})

@@ -359,6 +359,10 @@ class Mail:
         options.update(restore_sender_policy or {})
         if self.state.get("guard"):
             options["defer_transports"] = self.state["guard"]["before"]
+        guarded_queue = config["mode"] == "hub" and self.state.get("guard")
+        initial_options = dict(options)
+        if guarded_queue:
+            initial_options["defer_transports"] = guarded_queue["value"]
         baseline = dict(self.state.get("baseline", {}))
         for key in options:
             if key not in baseline:
@@ -372,9 +376,16 @@ class Mail:
             atomic(sasl, "%s %s:%s\n" % (target, config["smtp"]["username"], config["password"]))
             run(["postmap", "hash:" + str(sasl)])
             os.chmod(str(sasl) + ".db", 0o600)
-            atomic(POSTFIX_DIR / "main.cf", change_cf(original, options), 0o644)
+            atomic(POSTFIX_DIR / "main.cf", change_cf(original, initial_options), 0o644)
             run(["postfix", "check"])
             run(["postfix", "reload"])
+            if guarded_queue:
+                # Canonical maps run at queue intake. Reprocess mail accepted
+                # before these maps existed, keeping SMTP held until it is
+                # queued for cleanup with the new sender policy installed.
+                run(["postsuper", "-r", "ALL"])
+                atomic(POSTFIX_DIR / "main.cf", change_cf(original, options), 0o644)
+                run(["postfix", "reload"])
             self.state.update(active=config, baseline=baseline, owned_options=options,
                               owned_files=[str(path) for path in created])
             if config["mode"] == "hub" and not linked.get("control_secret"):
