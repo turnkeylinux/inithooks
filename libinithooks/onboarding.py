@@ -77,7 +77,7 @@ def context():
     build = re.search(r'\(([^)]+)\)', tags)
     if build:
         words = build[1].split()[1:]
-        value['build_target'] = ' '.join(words)[:200] or None
+        value['build_target'] = ' '.join(words)[:200] or 'iso'
     container = read_text('/run/systemd/container')
     if Path('/run/.containerenv').exists():
         value['platform'] = 'podman'

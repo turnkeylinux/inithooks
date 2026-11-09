@@ -38,6 +38,8 @@ class MailTest(unittest.TestCase):
             (self.root / name).mkdir()
         self.patches = [patch.object(mail, "HUB_EMAIL_CACHE", self.root / "cache/HUB_ACCOUNT_EMAIL"),
                         patch.object(mail, "ONBOARDING_STATE", self.root / "onboarding.json"),
+                        patch.object(mail, "TURNKEY_VERSION", self.root / "turnkey_version"),
+                        patch.object(mail, "BUILD_TAGS", self.root / "01turnkey"),
                         patch.object(mail, "STATE_DIR", self.root / "state"),
                         patch.object(mail, "POSTFIX_DIR", self.root / "postfix"),
                         patch.object(mail, "SYSTEMD_DIR", self.root / "systemd")]
@@ -111,6 +113,30 @@ class MailTest(unittest.TestCase):
             with patch.object(mail, "request", return_value=response.copy()) as request:
                 self.client.start()
             request.assert_called_once_with("device/start", expected)
+
+    def test_pairing_describes_the_appliance_when_its_build_metadata_is_known(self):
+        response = {"verification_uri": mail.HUB + "/link", "user_code": "D34C&F5A9",
+                    "device_code": DEVICE_CODE, "expires_in": 600, "interval": 5}
+        version = "turnkey-wordpress-18.0-bookworm-amd64"
+        tagged = 'Acquire::http::User-Agent "TurnKey APT-HTTP/1.3 (%s %s)";'
+        for files, expected in (
+                ({"turnkey_version": version, "01turnkey": tagged % (version, "proxmox")},
+                 {"app": "wordpress", "release": "18.0", "build_target": "proxmox"}),
+                ({"turnkey_version": version, "01turnkey": tagged % (version, "ec2 hub")},
+                 {"app": "wordpress", "release": "18.0", "build_target": "ec2 hub"}),
+                ({"turnkey_version": version, "01turnkey": 'Acquire::http::User-Agent "TurnKey APT-HTTP/1.3 (%s)";' % version},
+                 {"app": "wordpress", "release": "18.0", "build_target": "iso"}),
+                ({"turnkey_version": version}, {"app": "wordpress", "release": "18.0"}),
+                ({"turnkey_version": "not a turnkey version"}, {}),
+                ({}, {})):
+            with self.subTest(files=files):
+                for name in ("turnkey_version", "01turnkey"):
+                    (self.root / name).unlink(missing_ok=True)
+                for name, text in files.items():
+                    (self.root / name).write_text(text + "\n")
+                with patch.object(mail, "request", return_value=response.copy()) as request:
+                    self.client.start()
+                request.assert_called_once_with("device/start", expected)
 
     def test_sync_persists_exact_grant_secret_before_registration_and_retries(self):
         self.client.state["link"] = {"mode": "hub", "device_id": CONFIG["device_id"],

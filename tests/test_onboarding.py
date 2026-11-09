@@ -365,6 +365,21 @@ class OnboardingTest(unittest.TestCase):
         self.assertIsNone(context['image_name'])
         self.assertIsNone(context['app_version'])
 
+    def test_context_reports_build_target_and_platform_for_proxmox_and_untagged_builds(self):
+        version = 'turnkey-wordpress-18.0-bookworm-amd64'
+        tag = 'Acquire::http::User-Agent "TurnKey APT-HTTP/1.3 (%s)";'
+        for files, target, platform in (
+                ({'/etc/apt/apt.conf.d/01turnkey': tag % (version + ' proxmox'), '/run/systemd/container': 'lxc'}, 'proxmox', 'lxc'),
+                ({'/etc/apt/apt.conf.d/01turnkey': tag % version, '/sys/class/dmi/id/product_name': 'KVM'}, 'iso', 'KVM'),
+                ({'/sys/class/dmi/id/product_name': 'KVM'}, None, 'KVM')):
+            files = dict(files, **{'/etc/turnkey_version': version})
+            with self.subTest(target=target), \
+                    patch.object(flow, 'read_text', side_effect=lambda p, f=files: f.get(str(p), '')), \
+                    patch.object(flow.Path, 'exists', return_value=False):
+                context = flow.context()
+            self.assertEqual(context['build_target'], target)
+            self.assertEqual(context['platform'], platform)
+
     def test_explicit_clone_reset_creates_new_installation_and_clears_email(self):
         first = flow.begin()
         flow.remember_email('previous@example.net')
