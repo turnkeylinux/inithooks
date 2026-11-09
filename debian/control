@@ -33,7 +33,7 @@ Package: turnkey-hub
 Architecture: all
 Depends:
  ${misc:Depends},
- inithooks (>= 2.3.6+24),
+ inithooks (>= 2.3.6+25),
  confconsole (>= 2.2.3+16),
  tklbam (>= 1.5.3+6),
  hubclient (>= 0.3.0),

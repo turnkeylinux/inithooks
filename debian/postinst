@@ -6,6 +6,20 @@ chmod 755 /usr/lib/python3/dist-packages/libinithooks/inithooks_cache.py
 
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] \
         || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+    if [ "$1" = "configure" ]; then
+        # Existing links keep their schedules and credentials when the helper
+        # is renamed. Leave locally replaced units and commands alone.
+        for job in retry dns; do
+            unit="/etc/systemd/system/turnkey-mail-$job.service"
+            command=retry
+            [ "$job" != dns ] || command=dns-update
+            old="ExecStart=/usr/lib/inithooks/bin/turnkey-mail $command"
+            new="ExecStart=/usr/lib/inithooks/bin/turnkey-hub $command"
+            if [ -f "$unit" ] && [ ! -L "$unit" ] && grep -Fqx "$old" "$unit"; then
+                sed -i "s|^$old\$|$new|" "$unit"
+            fi
+        done
+    fi
     systemctl daemon-reload >/dev/null || true
     # Firstboot runs package upgrades itself. Restarting initialization or
     # its console here can kill dpkg before configuration has completed.
