@@ -148,16 +148,17 @@ class JourneysTest(unittest.TestCase):
         self.assertIsNone(onboarding.decision())
         self.assertEqual(self.names()[-2:], ['approval_checked', 'error'])
 
-    def test_push_reconciles_once_then_approval_without_manual_check_or_periodic_poll(self):
+    def test_push_reconciles_then_approves_without_manual_check(self):
         watcher = Mock()
         with patch.object(self.hub.hub_push.Notifications, 'open', return_value=watcher), \
-                patch.object(self.hub.hub_push, 'confirm', side_effect=['subscribed', 'code_submitted', 'approved']), \
+                patch.object(self.hub.hub_push, 'confirm', side_effect=['subscribed', 'poll', 'code_submitted', 'approved']) as confirm, \
                 patch.object(self.hub, 'mail_call', side_effect=[
                     {'verification_uri': 'https://hub.turnkeylinux.org/link', 'user_code': 'D34C-F5A9'},
-                    {'status': 'pending'}, {'connection_status': 'linked'}]) as call:
+                    {'status': 'pending'}, {'status': 'pending'}, {'connection_status': 'linked'}]) as call:
             self.hub.connect_mail(Mock())
         self.assertEqual([c.args for c in call.call_args_list], [
-            ('connect', '--start'), ('connect', '--poll'), ('connect', '--poll', '--notified')])
+            ('connect', '--start'), ('connect', '--poll'), ('connect', '--poll'), ('connect', '--poll', '--notified')])
+        self.assertEqual([c.kwargs['pending'] for c in confirm.call_args_list], [False, False, False, True])
         self.assertNotIn('approval_checked', self.names())
         self.assertEqual(self.names()[-1], 'link_completed')
         watcher.close.assert_called_once_with()

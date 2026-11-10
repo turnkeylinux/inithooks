@@ -64,7 +64,8 @@ def connect_mail(d, flow_kind="firstboot"):
         while True:
             width = min(60, shutil.get_terminal_size((80, 24)).columns - 4)
             action = hub_push.confirm(d, onboarding.link_instructions(pairing, pending, width),
-                                      notifications, relink=flow_kind == 'confconsole')
+                                      notifications, relink=flow_kind == 'confconsole',
+                                      pending=pending, interval=pairing.get('interval', 5))
             if action == 'skip':
                 onboarding.observe('skipped')
                 return
@@ -80,6 +81,8 @@ def connect_mail(d, flow_kind="firstboot"):
                 continue
             if action == 'check':
                 onboarding.observe('approval_checked')
+            if action == 'approved':
+                d.infobox('Approved. Connecting to Hub...')
             arguments = ('connect', '--poll', '--notified') if action in hub_push.TERMINAL else ('connect', '--poll')
             result = mail_call(*arguments)
             if result.get('connection_status') == 'linked' or result.get('domain'):
@@ -88,7 +91,7 @@ def connect_mail(d, flow_kind="firstboot"):
                 return
             status = result.get('status')
             if status == 'pending':
-                pending = pending or action != 'subscribed'
+                pending = pending or action == 'check'
             else:
                 onboarding.observe('error', error_code=status if status in ('denied', 'expired') else 'link_check_failed')
                 d.error(result.get('message') or 'This connection request %s. Run setup again to reconnect.' % status)

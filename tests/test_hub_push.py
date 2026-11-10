@@ -131,9 +131,26 @@ class DialogLifecycleTest(unittest.TestCase):
             self.assertEqual(result, expected)
             child.terminate.assert_not_called()
 
+    def test_periodic_check_keeps_working_without_notifications(self):
+        for notifications in (None, Mock(reader=99)):
+            child = Mock(pid=12345)
+            child.poll.return_value = None
+            with patch.object(push.subprocess, 'Popen', return_value=child) as spawn, \
+                    patch.object(push.os, 'pidfd_open', side_effect=OSError), \
+                    patch.object(push.sys, 'stdin') as stdin, \
+                    patch.object(push.termios, 'tcgetattr', return_value=['saved']), \
+                    patch.object(push.termios, 'tcsetattr'), \
+                    patch.object(push.time, 'monotonic', side_effect=[0, 5]):
+                stdin.fileno.return_value = 0
+                result = push.confirm(Mock(width=60), 'Instructions', notifications, pending=True)
+            self.assertEqual(result, 'poll')
+            command = spawn.call_args.args[0]
+            self.assertEqual(command[command.index('--yes-label') + 1], "I've approved")
+            child.terminate.assert_called_once_with()
+
     def test_manual_fallback_preserves_three_way_result_and_backend_error(self):
         for code, expected in ((255, 'escape'), (1, 'skip'), (2, 'error'), (0, 'check')):
-            child = Mock()
+            child = Mock(pid=12345)
             child.wait.return_value = child.poll.return_value = code
             with patch.object(push.subprocess, 'Popen', return_value=child), \
                     patch.object(push.sys, 'stdin') as stdin, \
@@ -142,7 +159,7 @@ class DialogLifecycleTest(unittest.TestCase):
                 stdin.fileno.return_value = 0
                 self.assertEqual(push.confirm(Mock(width=60), 'Instructions'), expected)
             restore.assert_called_once_with(0, push.termios.TCSANOW, ['saved'])
-            child.wait.assert_called_once_with()
+            child.wait.assert_not_called()
 
 
 if __name__ == '__main__':

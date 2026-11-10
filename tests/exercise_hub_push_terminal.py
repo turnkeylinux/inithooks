@@ -108,8 +108,12 @@ def exercise(mode, columns):
             signal('subscribed')
             wait('D34C-F5A9', 'reconciled')
             signal('code_submitted')
-            wait('Approve in your browser.', 'browser')
+            browser = wait("I've approved", 'browser')
+            assert 'Approve in your browser.' in browser
             signal('approved')
+            wait('Hub linked', 'success')
+            os.write(master, b'\r')
+        elif mode == 'fallback-auto':
             wait('Hub linked', 'success')
             os.write(master, b'\r')
         elif mode == 'manual':
@@ -134,6 +138,9 @@ def exercise(mode, columns):
         if mode == 'auto':
             assert result['calls'] == [['connect', '--start'], ['connect', '--poll'], ['connect', '--poll', '--notified']], result
             assert 'approval_checked' not in result['events'] and 'link_completed' in result['events']
+        if mode == 'fallback-auto':
+            assert result['calls'] == [['connect', '--start'], ['connect', '--poll']], result
+            assert 'approval_checked' not in result['events'] and 'link_completed' in result['events']
         if mode in ('skip', 'escape', 'fallback-skip', 'fallback-escape', 'fallback-error'):
             assert result['calls'] == [['connect', '--start']], result
             assert ('skipped' in result['events']) == mode.endswith('skip'), result
@@ -148,5 +155,5 @@ def exercise(mode, columns):
 
 for columns in (60, 80, 120):
     exercise('auto', columns)
-for mode in ('manual', 'skip', 'escape', 'fallback-skip', 'fallback-escape', 'fallback-error'):
+for mode in ('manual', 'skip', 'escape', 'fallback-auto', 'fallback-skip', 'fallback-escape', 'fallback-error'):
     exercise(mode, 80)

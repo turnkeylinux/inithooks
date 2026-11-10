@@ -153,13 +153,15 @@ def _action(returncode):
     return {0: 'check', 1: 'skip', 255: 'escape'}.get(returncode, 'error')
 
 
-def confirm(dialog, instructions, notifications=None, *, relink=False):
+def confirm(dialog, instructions, notifications=None, *, relink=False, pending=False, interval=5):
     terminal = shutil.get_terminal_size((80, 24))
     width = min(dialog.width, terminal.columns - 4)
     lines = sum(max(1, len(textwrap.wrap(line, max(20, width - 6)))) for line in instructions.splitlines())
+    label = "I've approved" if pending else "I've entered the code"
+    deadline = time.monotonic() + interval
     command = ['dialog', '--no-collapse', '--no-mouse', '--backtitle',
                'TurnKey GNU/Linux - Hub services' if relink else 'TurnKey GNU/Linux - First boot configuration',
-               '--title', 'Connect to TurnKey Hub', '--yes-label', "I've entered the code", '--no-label', 'Skip',
+               '--title', 'Connect to TurnKey Hub', '--yes-label', label, '--no-label', 'Skip',
                '--yesno', '\n' + instructions, str(min(terminal.lines - 2, lines + 6)), str(width)]
     try:
         descriptor = sys.stdin.fileno()
@@ -170,8 +172,6 @@ def confirm(dialog, instructions, notifications=None, *, relink=False):
     process_fd = None
     try:
         child = subprocess.Popen(command, stderr=subprocess.DEVNULL)
-        if notifications is None:
-            return _action(child.wait())
         if hasattr(os, 'pidfd_open'):
             with suppress(OSError):
                 process_fd = os.pidfd_open(child.pid)
@@ -179,13 +179,16 @@ def confirm(dialog, instructions, notifications=None, *, relink=False):
             code = child.poll()
             if code is not None:
                 return _action(code)
-            readers = [notifications.reader] + ([process_fd] if process_fd is not None else [])
-            readable, unused, unused2 = select.select(readers, [], [], None if process_fd is not None else .1)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return 'poll'
+            readers = ([notifications.reader] if notifications else []) + ([process_fd] if process_fd is not None else [])
+            readable, unused, unused2 = select.select(readers, [], [], remaining if process_fd is not None else min(.1, remaining))
             # A user exit already observed wins over a concurrent notification.
             code = child.poll()
             if code is not None:
                 return _action(code)
-            if notifications.reader in readable:
+            if notifications and notifications.reader in readable:
                 event = notifications.take()
                 if event:
                     return event
