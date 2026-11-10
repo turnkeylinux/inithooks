@@ -257,12 +257,9 @@ def observe(name, **fields):
 
 def link_instructions(result, pending=False):
     return (
-        'App email delivery, dynamic DNS and security announcements.\n'
-        'Manage linked backups and migration in the Hub.\n\n'
-        + ('Waiting for approval in your browser:' if pending else 'On your phone or computer, open:')
-        + '\n%s\n\nEnter this code:\n\n%s\n\n'
-        'Sign in or create a free account, then approve.\n'
-        'Skip leaves these Hub services unconfigured.'
+        'Connect email, DNS, backups and migration.\n\n'
+        + ('Approve in your browser:' if pending else 'Open:')
+        + '\n%s\n\nEnter this code:\n\n%s'
     ) % (result['verification_uri'].split('?', 1)[0], result['user_code'])
 
 

@@ -6,6 +6,11 @@ Mail and DNS configuration share this helper across all appliance apps.
 """
 import sys
 
+# The public command opens setup; subcommands remain available to services.
+if __name__ == "__main__" and len(sys.argv) == 1:
+    import os
+    os.execv("/usr/lib/inithooks/bin/hubservices.py", ["hubservices.py", "--setup"])
+
 # A partial package must remain probeable without opening saved credentials,
 # repairing mail configuration, creating locks or writing Python bytecode.
 if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] in ("capabilities", "register"):

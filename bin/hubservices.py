@@ -51,9 +51,7 @@ def connect_mail(d, flow_kind="firstboot"):
     while result.get("status") == "error":
         onboarding.observe("error", error_code="link_start_failed")
         if not d.yesno("Link to TurnKey Hub",
-                "App email delivery, dynamic DNS, linked backups and migration, and "
-                "security announcements are available through the Hub.\n\n"
-                + result["message"] + "\n\nSkip leaves these Hub services unconfigured.",
+                result["message"],
                 "Retry", "Skip"):
             onboarding.observe("skipped")
             return
@@ -74,7 +72,7 @@ def connect_mail(d, flow_kind="firstboot"):
                     raise SystemExit(130)
                 continue
             if action == 'error':
-                d.error('The connection dialog could not continue. Run turnkey connect to try again.')
+                d.error('The connection dialog could not continue. Run turnkey-hub to try again.')
                 raise SystemExit(1)
             if action == 'code_submitted':
                 pending = True
@@ -85,8 +83,7 @@ def connect_mail(d, flow_kind="firstboot"):
             result = mail_call(*arguments)
             if result.get('connection_status') == 'linked' or result.get('domain'):
                 onboarding.observe('link_completed')
-                d.msgbox('Hub linked', 'Your appliance is linked to your Hub account.\n\n'
-                         'Manage app email delivery, dynamic DNS, backups and migration in the Hub.')
+                d.msgbox('Hub linked', 'Connected. Manage email, DNS and backups in the Hub.')
                 return
             status = result.get('status')
             if status == 'pending':
@@ -133,17 +130,19 @@ def main():
         opts, _ = getopt.gnu_getopt(
             sys.argv[1:],
             "h",
-            ["help", "apikey=", "fqdn=", "early", "unattended", "relink"],
+            ["help", "apikey=", "fqdn=", "early", "unattended", "relink", "setup"],
         )
     except getopt.GetoptError as e:
         usage(e)
 
-    early_mode = unattended = relink = False
+    early_mode = unattended = relink = setup = False
     apikey = ""
     fqdn = ""
     for opt, val in opts:
         if opt in ("-h", "--help"):
             usage()
+        elif opt == "--setup":
+            setup = relink = True
         elif opt == "--relink":
             relink = True
         elif opt == "--early":
@@ -185,6 +184,15 @@ def main():
         if errors:
             sys.exit("; ".join(errors) + ". Other Hub services were attempted independently.")
         return
+
+    if setup:
+        if os.geteuid() != 0:
+            sys.exit("Run: sudo turnkey-hub")
+        if not sys.stdin.isatty() or not sys.stdout.isatty():
+            sys.exit("Run turnkey-hub in an interactive terminal to connect.")
+        if mail_call("status", "--local").get("connection_status") == "linked":
+            print("Connected to TurnKey Hub.")
+            return
 
     d = Dialog("TurnKey GNU/Linux - Hub services" if relink else "TurnKey GNU/Linux - First boot configuration",
                width=min(60, shutil.get_terminal_size((80, 24)).columns - 4), height=min(18, shutil.get_terminal_size((80, 24)).lines - 2))

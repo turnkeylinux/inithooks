@@ -145,7 +145,7 @@ class HubRetryTest(unittest.TestCase):
                 patch.object(self.module.subprocess, "run") as run:
             self.module.main()
         run.assert_not_called()
-        self.assertIn("linked to your Hub account", dialog.msgbox.call_args.args[1])
+        self.assertIn("Connected.", dialog.msgbox.call_args.args[1])
 
     def test_retry_accepts_only_tklbam_completed_initialization(self):
         self.assertEqual(self.run_main(1, "error: already initialized\n"),

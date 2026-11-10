@@ -110,7 +110,7 @@ class ScheduledHelperUpgradeTest(unittest.TestCase):
 
     def test_metapackage_requires_migration_version(self):
         control = (ROOT / "debian/control").read_text().split("Package: turnkey-hub\n", 1)[1]
-        self.assertIn("inithooks (>= 2.3.6+26)", control)
+        self.assertIn("inithooks (= ${binary:Version})", control)
 
 
 if __name__ == "__main__":

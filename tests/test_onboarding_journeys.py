@@ -82,10 +82,10 @@ class JourneysTest(unittest.TestCase):
         self.assertEqual(self.names()[-1], 'error')
 
     def test_registration_command_uses_shared_ui_without_full_setup(self):
-        source = (ROOT / 'bin/turnkey').read_text()
-        self.assertIn('hubservices.py --relink', source)
+        source = (ROOT / 'bin/turnkey-hub').read_text()
+        self.assertIn('["hubservices.py", "--setup"]', source)
         self.assertNotIn('turnkey-init', source)
-        self.assertIn('usr/lib/inithooks/bin/turnkey usr/bin/turnkey', (ROOT / 'debian/rules').read_text())
+        self.assertIn('usr/lib/inithooks/bin/turnkey-hub usr/bin/turnkey-hub', (ROOT / 'debian/turnkey-hub.links').read_text())
         dialog = Mock()
         dialog.yesno.return_value = False
         self.confirm.return_value = 'skip'
@@ -95,6 +95,29 @@ class JourneysTest(unittest.TestCase):
                     'verification_uri': 'https://hub.turnkeylinux.org/link', 'user_code': 'D34C-F5A9'}):
             self.hub.main()
         self.assertEqual(onboarding.load()['flow_kind'], 'confconsole')
+
+    def test_setup_skips_an_existing_connection_without_a_network_request(self):
+        with patch.object(sys, 'argv', ['hubservices.py', '--setup']), \
+                patch.object(self.hub.os, 'geteuid', return_value=0), \
+                patch.object(sys.stdin, 'isatty', return_value=True), \
+                patch.object(sys.stdout, 'isatty', return_value=True), \
+                patch.object(self.hub, 'mail_call', return_value={'connection_status': 'linked'}) as call:
+            self.hub.main()
+        call.assert_called_once_with('status', '--local')
+        self.hub.Dialog.assert_not_called()
+
+    def test_setup_reopens_after_a_previous_skip(self):
+        onboarding.observe('skipped')
+        self.confirm.return_value = 'skip'
+        with patch.object(sys, 'argv', ['hubservices.py', '--setup']), \
+                patch.object(self.hub.os, 'geteuid', return_value=0), \
+                patch.object(sys.stdin, 'isatty', return_value=True), \
+                patch.object(sys.stdout, 'isatty', return_value=True), \
+                patch.object(self.hub, 'mail_call', side_effect=[{}, {
+                    'verification_uri': 'https://hub.turnkeylinux.org/link', 'user_code': 'D34C-F5A9'}]) as call:
+            self.hub.main()
+        self.assertEqual(call.call_args_list[-1].args, ('connect', '--start'))
+        self.hub.Dialog.assert_called_once()
 
     def test_existing_link_uses_only_local_status(self):
         with patch.object(self.hub.sys, 'stdin', io.StringIO('')), \
