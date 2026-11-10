@@ -163,6 +163,16 @@ class JourneysTest(unittest.TestCase):
         self.assertEqual(self.names()[-1], 'link_completed')
         watcher.close.assert_called_once_with()
 
+    def test_poll_that_completes_linking_replaces_browser_approval_prompt(self):
+        dialog = Mock()
+        with patch.object(self.hub.hub_push, 'confirm', side_effect=['code_submitted', 'poll']), \
+                patch.object(self.hub, 'mail_call', side_effect=[
+                    {'verification_uri': 'https://hub.turnkeylinux.org/link', 'user_code': 'D34C-F5A9'},
+                    {'connection_status': 'linked'}]):
+            self.hub.connect_mail(dialog)
+        dialog.infobox.assert_called_once_with('Checking Hub connection...')
+        self.assertEqual(self.names()[-1], 'link_completed')
+
     def test_push_skip_and_escape_close_watcher_without_exchange(self):
         for action in ('skip', 'escape'):
             with self.subTest(action=action), \

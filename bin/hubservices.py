@@ -83,6 +83,8 @@ def connect_mail(d, flow_kind="firstboot"):
                 onboarding.observe('approval_checked')
             if action == 'approved':
                 d.infobox('Approved. Connecting to Hub...')
+            elif pending and action in ('check', 'poll'):
+                d.infobox('Checking Hub connection...')
             arguments = ('connect', '--poll', '--notified') if action in hub_push.TERMINAL else ('connect', '--poll')
             result = mail_call(*arguments)
             if result.get('connection_status') == 'linked' or result.get('domain'):
