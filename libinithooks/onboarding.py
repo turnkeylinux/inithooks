@@ -255,12 +255,15 @@ def observe(name, **fields):
         logging.warning('Setup observation could not be saved')
 
 
-def link_instructions(result, pending=False):
+def link_instructions(result, pending=False, width=60):
+    content_width = max(1, width - 4)
+    action = 'Approve in your browser.' if pending else 'Enter this code:'
     return (
-        'Connect email, DNS, backups and migration.\n\n'
-        + ('Approve in your browser:' if pending else 'Open:')
-        + '\n%s\n\nEnter this code:\n\n%s'
-    ) % (result['verification_uri'].split('?', 1)[0], result['user_code'])
+        'Connect email delivery, DNS, backups and migration.\n'
+        'Get security alerts by email.\n\n'
+        'Open %s\n\n%s\n\n%s'
+    ) % (result['verification_uri'].split('?', 1)[0],
+         action.center(content_width), result['user_code'].center(content_width))
 
 
 def remember_email(value):

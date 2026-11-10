@@ -96,12 +96,19 @@ def exercise(mode, columns):
         else:
             initial = wait('D34C-F5A9', 'code')
             assert "I've entered the code" in initial and 'Skip' in initial
-            assert 'hub.turnkeylinux.org/link' in initial and 'App email delivery' in initial
+            assert 'hub.turnkeylinux.org/link' in initial and 'Connect email delivery' in initial
+            assert 'Open https://hub.turnkeylinux.org/link' in initial
+            assert 'Get security alerts by email.' in initial
+            row = next(line for line in initial.splitlines() if 'D34C-F5A9' in line)
+            center = row.index('D34C-F5A9') + len('D34C-F5A9') / 2
+            dialog_center = (row.index('│') + row.rindex('│') + 1) / 2
+            assert abs(center - dialog_center) <= 1, (columns, row)
+
         if mode == 'auto':
             signal('subscribed')
             wait('D34C-F5A9', 'reconciled')
             signal('code_submitted')
-            wait('Waiting for approval', 'browser')
+            wait('Approve in your browser.', 'browser')
             signal('approved')
             wait('Hub linked', 'success')
             os.write(master, b'\r')

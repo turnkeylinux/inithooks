@@ -36,7 +36,7 @@ for cols in (60, 80, 120):
             assert 'Retry' in text and 'Skip' in text
         else:
             assert 'D34C-F5A9' in text and "I've entered the code" in text
-            assert 'App email delivery' in text and 'security' in text and 'announcements' in text and 'migration' in text
+            assert 'Connect email delivery' in text and 'security' in text and 'alerts' in text and 'migration' in text
         if mode in ('skip', 'start-error'):
             child.send('\t\r')
             child.expect('EVENTS ([^\r\n]+)')
@@ -54,7 +54,7 @@ for cols in (60, 80, 120):
             child.send('\r')
             text = capture(child, screen, stream, f'{cols}-firstboot-{mode}-result')
             if mode == 'pending':
-                assert 'Waiting for approval' in text
+                assert 'Approve in your browser.' in text
                 child.send('\r')
                 text = capture(child, screen, stream, f'{cols}-firstboot-{mode}-connected')
             assert ('Hub linked' in text) if mode in ('ready', 'pending') else ('Error' in text)

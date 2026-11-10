@@ -50,7 +50,7 @@ def connect_mail(d, flow_kind="firstboot"):
         onboarding.observe("prompt_shown")
     while result.get("status") == "error":
         onboarding.observe("error", error_code="link_start_failed")
-        if not d.yesno("Link to TurnKey Hub",
+        if not d.yesno("Connect to TurnKey Hub",
                 result["message"],
                 "Retry", "Skip"):
             onboarding.observe("skipped")
@@ -62,7 +62,8 @@ def connect_mail(d, flow_kind="firstboot"):
     notifications = hub_push.Notifications.open(pairing['user_code'])
     try:
         while True:
-            action = hub_push.confirm(d, onboarding.link_instructions(pairing, pending),
+            width = min(60, shutil.get_terminal_size((80, 24)).columns - 4)
+            action = hub_push.confirm(d, onboarding.link_instructions(pairing, pending, width),
                                       notifications, relink=flow_kind == 'confconsole')
             if action == 'skip':
                 onboarding.observe('skipped')

@@ -159,7 +159,7 @@ def confirm(dialog, instructions, notifications=None, *, relink=False):
     lines = sum(max(1, len(textwrap.wrap(line, max(20, width - 6)))) for line in instructions.splitlines())
     command = ['dialog', '--no-collapse', '--no-mouse', '--backtitle',
                'TurnKey GNU/Linux - Hub services' if relink else 'TurnKey GNU/Linux - First boot configuration',
-               '--title', 'Link to TurnKey Hub', '--yes-label', "I've entered the code", '--no-label', 'Skip',
+               '--title', 'Connect to TurnKey Hub', '--yes-label', "I've entered the code", '--no-label', 'Skip',
                '--yesno', '\n' + instructions, str(min(terminal.lines - 2, lines + 6)), str(width)]
     try:
         descriptor = sys.stdin.fileno()
