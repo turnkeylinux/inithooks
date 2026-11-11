@@ -707,6 +707,29 @@ class Mail:
         return {"status": "queued", "message": "Test message accepted by the local mail queue. Check the recipient inbox for delivery."}
 
 
+def initialize_linked_dns(result):
+    """Delegate first-link DNS setup to the optional service package."""
+    if (not result.get("services", {}).get("dns", {}).get("enabled") or
+            (HUBDNS_DIR / "sub_apikey").exists()):
+        return
+    try:
+        version = subprocess.run(["dpkg-query", "-W", "-f=${Version}", "hubdns"],
+                                 capture_output=True, text=True, timeout=5)
+        if version.returncode:
+            return
+        compatible = subprocess.run(["dpkg", "--compare-versions", version.stdout.strip(), "ge", "1.5.0"],
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+        if compatible.returncode:
+            return
+        initialized = subprocess.run(["/usr/bin/hubdns-init"], stdin=subprocess.DEVNULL,
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
+        if not initialized.returncode:
+            return
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    result["dns_setup_error"] = "Automatic DNS setup could not finish. Run hubdns-init to try again."
+
+
 @contextlib.contextmanager
 def locked():
     STATE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -760,6 +783,7 @@ def main():
                 raise Error("Connection was not completed. Run turnkey-hub to try again.")
         with locked():
             mail = Mail()
+            was_linked = bool(mail.linked().get("control_secret"))
             if args.command == "enroll":
                 result = mail.enroll(sys.stdin.read(512).strip())
             elif args.command == "credential":
@@ -787,8 +811,6 @@ def main():
                 result = mail.status(refresh=not args.local)
             else:
                 result = getattr(mail, args.command.replace("-", "_"))()
-        if args.command == "enroll" and args.require_backup:
-            run(["tklbam-init"], timeout=60)
         if args.command == "connect" and not args.start and not args.poll:
             print("Open %s\nConnection code: %s\nSign in or create a free Hub account, then approve this appliance.\nWaiting for approval (Ctrl-C to cancel)..." %
                   (result["verification_uri"], result["user_code"]), flush=True)
@@ -800,6 +822,13 @@ def main():
                     break
             if result.get("status") in ("expired", "denied"):
                 raise Error(ERRORS[result["status"]], code=result["status"])
+        if (args.command in ("enroll", "connect", "retry") and not was_linked and
+                result.get("connection_status") == "linked"):
+            initialize_linked_dns(result)
+        if args.command == "enroll" and args.require_backup:
+            run(["tklbam-init"], timeout=60)
+        if result.get("dns_setup_error") and not args.json:
+            print(result["dns_setup_error"], file=sys.stderr)
         if args.json or args.command == "credential":
             print(json.dumps(result, sort_keys=True))
         elif result.get("message"):
