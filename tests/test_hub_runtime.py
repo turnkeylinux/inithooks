@@ -119,8 +119,8 @@ class DockerMailTest(unittest.TestCase):
 
     def test_docker_schedule_and_reset_avoid_systemd_and_preserve_observations(self):
         with patch.object(mail, 'RUNTIME', hub_runtime), patch.object(hub_runtime, 'CRON', self.root / 'cron'):
-            self.client.timers()
-            self.client.timers(dns=True)
+            hub_runtime.schedule("retry")
+            hub_runtime.schedule("dns-update")
             hub_runtime.schedule('observe')
             self.assertEqual(self.calls, [])
             self.client.reset_mail()

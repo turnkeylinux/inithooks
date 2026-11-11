@@ -1,12 +1,5 @@
 #!/bin/sh
 set -e
-
-# apt can pipe dpkg's input while retaining the caller's terminal.
-if [ "$1" = configure ] && [ "${DEBIAN_FRONTEND:-}" != noninteractive ] &&
-        [ -t 1 ] && ( : </dev/tty ) 2>/dev/null; then
-    /usr/bin/turnkey-hub </dev/tty >/dev/tty 2>/dev/tty ||
-        echo 'Run turnkey-hub to finish connecting.' >&2
-fi
-
+# Linking is an explicit user action; package upgrades must preserve connections.
 #DEBHELPER#
 exit 0

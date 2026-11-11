@@ -60,7 +60,7 @@ class ScheduledHelperUpgradeTest(unittest.TestCase):
         before = {path: (path.read_bytes(), path.stat()) for path, _ in paths}
         protected_before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in protected}
         calls = self.run_postinst("configure", "2.3.6+14")
-        self.assertEqual(calls, ["daemon-reload", "enable turnkey-onboarding.timer"])
+        self.assertEqual(calls, ["disable --now turnkey-mail-retry.timer", "daemon-reload", "enable turnkey-onboarding.timer"])
         for path, command in paths:
             content, stat = before[path]
             self.assertEqual(path.read_bytes(), content.replace(

@@ -313,25 +313,6 @@ class Mail:
         self.state.pop("applying")
         self.save()
 
-    def timers(self, dns=False):
-        if RUNTIME:
-            return RUNTIME.schedule("dns-update" if dns else "retry")
-        changed = False
-        name = "turnkey-mail-dns" if dns else "turnkey-mail-retry"
-        command = "dns-update" if dns else "retry"
-        interval = "1h" if dns else "1min"
-        service = ("[Unit]\nDescription=TurnKey %s\nAfter=network-online.target\n"
-                   "[Service]\nType=oneshot\nExecStart=%s %s\nTimeoutStartSec=90\nUMask=0077\n" % (command, HELPER, command))
-        timer = "[Unit]\nDescription=TurnKey %s schedule\n[Timer]\nOnBootSec=30s\nOnUnitActiveSec=%s\n[Install]\nWantedBy=timers.target\n" % (command, interval)
-        for suffix, text in (("service", service), ("timer", timer)):
-            path = SYSTEMD_DIR / (name + "." + suffix)
-            if not path.exists() or path.read_text() != text:
-                atomic(path, text, 0o644)
-                changed = True
-        if changed:
-            run(["systemctl", "daemon-reload"])
-            run(["systemctl", "enable", "--now", name + ".timer"])
-
     def guard(self):
         """A fresh automatic enrollment queues SMTP while Hub is unavailable."""
         text = (POSTFIX_DIR / "main.cf").read_text()
@@ -459,7 +440,6 @@ class Mail:
         pending = self.state.get("pending")
         if not pending:
             return self.status(refresh=False)
-        self.timers()
         if self.state.get('mail_preference', 'hub') == 'hub':
             self.guard()
         try:
@@ -492,7 +472,9 @@ class Mail:
         pending = self.state.get("pending")
         if pending and not pending.get("stopped"):
             return self.enroll()
-        return self.sync() if self.linked().get("control_secret") else self.status(refresh=False)
+        if self.state.get("error") and self.linked().get("control_secret"):
+            return self.sync()
+        return self.status(refresh=False)
 
     def sync(self):
         link = self.linked()
@@ -514,11 +496,6 @@ class Mail:
                 self.save()
             if mail["status"] == "secret_required":
                 registration.update(smtp_grant_id=grant, smtp_password=self.state["smtp_secret"]["password"])
-        if value["backup"]["status"] == "secret_required":
-            if not self.state.get("backup_secret"):
-                self.state["backup_secret"] = secrets.token_urlsafe(32)
-                self.save()
-            registration["backup_secret"] = self.state["backup_secret"]
         if registration:
             value = request("configure", dict(proof, **registration))
         account_email = value.get("account_email")
@@ -529,10 +506,6 @@ class Mail:
         dns = value["dns"]
         link["dyndns"] = {"hostname": dns["hostname"], "update_uri": dns["update_uri"]} if dns["enabled"] else None
         self.save()
-        if dns["enabled"]:
-            self.timers(dns=True)
-            with contextlib.suppress(Error):
-                self.migrate_dns()
         mail = value["mail"]
         if (self.state.get("mail_preference", "hub") == "hub" and mail.get("enabled") and
                 mail["status"] in ("active", "pending_verification") and mail.get("smtp")):
@@ -545,12 +518,6 @@ class Mail:
                     self.apply(config)
                 except Error as error:
                     mail["error"] = str(error)
-        if value["backup"]["status"] == "active":
-            try:
-                self.backup_init()
-            except Error as error:
-                value["backup"]["error"] = str(error)
-                value["backup"]["status"] = "setup_required"
         account_email = value.get("account_email")
         if isinstance(account_email, str) and len(account_email) <= 254 and ADDRESS.fullmatch(account_email):
             HUB_EMAIL_CACHE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -560,49 +527,51 @@ class Mail:
         self.save()
         return self.status(refresh=False)
 
-    def backup_init(self):
-        secret = self.state.get("backup_secret")
-        if not secret:
-            raise Error("Backup credentials are missing. Check this connection in the Hub.")
-        BACKUP_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
-        token = "tklbam2.%s.%s\n" % (self.linked()["device_id"], secret)
-        path = BACKUP_DIR / "sub_apikey"
-        if not path.exists() or path.read_text() != token:
-            atomic(path, token)
-            (BACKUP_DIR / "credentials").unlink(missing_ok=True)
-        if not (BACKUP_DIR / "profile/profile_id").exists():
-            try:
-                run(["tklbam-init"], timeout=60)
-            except Error:
-                raise Error("Backup initialization did not finish. Check backup setup in the Hub; it will retry.", retryable=True)
+    def credential(self, service):
+        """Return service-scoped authorization; consumers own initialization."""
+        link = self.linked()
+        if service == "dns" and link.get("dns_password") and link.get("dyndns"):
+            return {"credential": "hubdns2.%s.%s" % (link["device_id"], link["dns_password"]),
+                    "hostname": link["dyndns"]["hostname"]}
+        if not link.get("control_secret"):
+            raise Error("Connect this server by running turnkey-hub, then try again.")
+        proof = {key: link[key] for key in ("device_id", "control_secret")}
+        value = request("configure", proof)
+        if value.get("device_id") != link["device_id"] or value.get("connection_status") != "linked":
+            raise Error("The Hub returned an invalid connection.")
+        if service == "dns":
+            dns = value["dns"]
+            if not dns.get("enabled"):
+                raise Error("Enable DNS for this server in the Hub, then run hubdns-init again.")
+            secret = link.get("dns_password")
+            if not secret:
+                raise Error("The DNS credential is missing. Reconnect this server with turnkey-hub.")
+            return {"credential": "hubdns2.%s.%s" % (link["device_id"], secret),
+                    "hostname": dns["hostname"]}
+        backup = value["backup"]
+        status = backup.get("status")
+        if status == "disabled":
+            raise Error("Enable backups for this server in the Hub, then run tklbam-backup again.")
+        if status not in ("active", "secret_required"):
+            action = urllib.parse.urljoin(HUB, backup.get("action_url", "/backup/"))
+            if urllib.parse.urlsplit(action).netloc != urllib.parse.urlsplit(HUB).netloc:
+                action = HUB + "/backup/"
+            message = ("Finish migrating your backup account" if status == "migration_required" else
+                       "Finish backup setup and connect your AWS account")
+            raise Error(message + " in the Hub: " + action + ". Then run tklbam-backup again.")
+        if not self.state.get("backup_secret"):
+            self.state["backup_secret"] = secrets.token_urlsafe(32)
+            self.save()
+        secret = self.state["backup_secret"]
+        result = request("configure", dict(proof, backup_secret=secret))
+        if result.get("backup", {}).get("status") != "active":
+            raise Error("Backup setup could not finish. Check backup settings in the Hub and try again.")
+        return {"credential": "tklbam2.%s.%s" % (link["device_id"], secret)}
 
     def use_hub(self):
         self.state["mail_preference"] = "hub"
         self.save()
         return self.sync()
-
-    def migrate_dns(self):
-        if not self.legacy_dns():
-            return
-        # A custom-zone legacy writer remains independently configured.
-        fqdn = HUBDNS_DIR / "fqdn"
-        if not fqdn.exists() or fqdn.read_text().strip().rstrip(".") != self.linked()["dyndns"]["hostname"]:
-            self.state["legacy_dns"] = "Existing DNS remains separately managed."
-            return
-        self.dns_update(scoped=True)
-        run(["systemctl", "disable", "--now", "hubdns.service"])
-        try:
-            self.dns_update(scoped=True)
-        except Error:
-            self.state["legacy_dns"] = "DNS migration paused. Legacy DNS settings were retained; check its service if updates remain unavailable."
-            run(["systemctl", "enable", "--now", "hubdns.service"])
-            self.state["legacy_dns"] = "DNS migration paused. Your existing DNS updater was restored."
-            raise
-        (HUBDNS_DIR / "sub_apikey").unlink(missing_ok=True)
-        cron = Path("/etc/cron.hourly/hubdns-update")
-        if cron.exists():
-            cron.chmod(cron.stat().st_mode & ~0o111)
-        self.state.pop("legacy_dns", None)
 
     def start(self):
         correlation = journey()
@@ -669,18 +638,8 @@ class Mail:
         return (Path("/var/lib/hubdns/sub_apikey").exists()
                 and os.access("/etc/cron.hourly/hubdns-update", os.X_OK))
 
-    def dns_update(self, scoped=False):
-        config = self.linked()
-        if not config.get("dyndns") or (self.legacy_dns() and not scoped):
-            return {"status": "unchanged"}
-        try:
-            opener = urllib.request.build_opener(NoRedirect(), urllib.request.HTTPSHandler(context=ssl.create_default_context()))
-            with opener.open("https://checkip.amazonaws.com/", timeout=10) as response:
-                address = str(ipaddress.IPv4Address(response.read(64).decode().strip()))
-        except (OSError, ValueError, urllib.error.URLError):
-            raise Error("The public IP address could not be checked. The existing DNS record was kept.", retryable=True)
-        request("dns/update", {"username": "tkl-" + config["device_id"], "dns_password": config["dns_password"], "ipv4": address})
-        return {"status": "updated", "hostname": config["dyndns"]["hostname"], "ipv4": address}
+    def dns_update(self):
+        raise Error("Run hubdns-update to update DNS.")
 
     def reset_mail(self):
         return self.reset(mail_only=True)
@@ -764,6 +723,9 @@ def main():
     enroll = commands.add_parser("enroll")
     enroll.add_argument("--token-stdin", action="store_true", required=True)
     enroll.add_argument("--require-backup", action="store_true")
+    credential = commands.add_parser("credential")
+    credential.add_argument("service", choices=("dns", "backup"))
+    credential.add_argument("--connect", action="store_true")
     connect = commands.add_parser("connect")
     mode = connect.add_mutually_exclusive_group()
     mode.add_argument("--start", action="store_true")
@@ -786,15 +748,22 @@ def main():
         if os.geteuid() != 0:
             raise Error("Run this command as root.")
         os.umask(0o077)
+        if args.command == "dns-update":
+            os.execv("/usr/bin/hubdns-update", ["hubdns-update"])
+        if args.command == "credential" and args.connect and not Mail().linked().get("control_secret"):
+            if not sys.stdin.isatty():
+                raise Error("Connect this server by running turnkey-hub, then try again.")
+            # Linking owns its own lock and interactive output. Keep the exported
+            # credential on stdout for the calling service to consume privately.
+            result = subprocess.call([HELPER], stdout=sys.stderr)
+            if result:
+                raise Error("Connection was not completed. Run turnkey-hub to try again.")
         with locked():
             mail = Mail()
             if args.command == "enroll":
                 result = mail.enroll(sys.stdin.read(512).strip())
-                if args.require_backup:
-                    result = mail.retry()
-                    backup = result.get("services", {}).get("backup", {})
-                    if backup.get("status") != "active" or backup.get("error"):
-                        raise Error("Backup setup must finish before automatic restore. Check Hub services.", retryable=True)
+            elif args.command == "credential":
+                result = mail.credential(args.service)
             elif args.command == "configure":
                 try:
                     raw = sys.stdin.read(MAX_JSON + 1)
@@ -818,6 +787,8 @@ def main():
                 result = mail.status(refresh=not args.local)
             else:
                 result = getattr(mail, args.command.replace("-", "_"))()
+        if args.command == "enroll" and args.require_backup:
+            run(["tklbam-init"], timeout=60)
         if args.command == "connect" and not args.start and not args.poll:
             print("Open %s\nConnection code: %s\nSign in or create a free Hub account, then approve this appliance.\nWaiting for approval (Ctrl-C to cancel)..." %
                   (result["verification_uri"], result["user_code"]), flush=True)
@@ -829,7 +800,7 @@ def main():
                     break
             if result.get("status") in ("expired", "denied"):
                 raise Error(ERRORS[result["status"]], code=result["status"])
-        if args.json:
+        if args.json or args.command == "credential":
             print(json.dumps(result, sort_keys=True))
         elif result.get("message"):
             print(result["message"])

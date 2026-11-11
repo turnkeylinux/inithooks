@@ -35,11 +35,10 @@ Depends:
  ${misc:Depends},
  inithooks (= ${binary:Version}),
  confconsole (>= 2.2.3+16),
- tklbam (>= 1.5.3+6),
  hubclient (>= 0.3.0),
  postfix,
  libsasl2-modules,
  ca-certificates,
 Description: TurnKey Hub connection and services
- Installs Hub account linking, app email delivery, dynamic DNS and native
- backup support, including the console and launch registration interfaces.
+ Provides Hub account linking, app email delivery and service credentials,
+ including the console and launch registration interfaces.

@@ -20,6 +20,18 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] \
             fi
         done
     fi
+    if [ "$1" = configure ]; then
+        unit=/etc/systemd/system/turnkey-mail-retry.service
+        if [ -f "$unit" ] && [ ! -L "$unit" ] &&
+            grep -Fqx 'ExecStart=/usr/lib/inithooks/bin/turnkey-hub retry' "$unit"; then
+            systemctl disable --now turnkey-mail-retry.timer >/dev/null 2>&1 || true
+        fi
+        cron=/etc/cron.d/turnkey-mail-retry
+        if [ -f "$cron" ] && [ ! -L "$cron" ] &&
+            grep -Fqx '* * * * * root /usr/lib/inithooks/bin/turnkey-hub retry >/dev/null 2>&1' "$cron"; then
+            rm -f "$cron"
+        fi
+    fi
     systemctl daemon-reload >/dev/null || true
     # Firstboot runs package upgrades itself. Restarting initialization or
     # its console here can kill dpkg before configuration has completed.
