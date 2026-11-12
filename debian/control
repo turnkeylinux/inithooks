@@ -39,6 +39,9 @@ Depends:
  postfix,
  libsasl2-modules,
  ca-certificates,
+Breaks:
+ hubdns (<< 1.5.0),
+ tklbam (<< 1.5.4),
 Description: TurnKey Hub connection and services
  Provides Hub account linking, app email delivery and service credentials,
  including the console and launch registration interfaces.
