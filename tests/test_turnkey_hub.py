@@ -223,8 +223,12 @@ class MailTest(unittest.TestCase):
                 result["backup"] = {"status": status}
                 return result
             with patch.object(mail, "request", side_effect=unavailable) as request:
-                with self.assertRaises(mail.Error):
+                with self.assertRaises(mail.Error) as error:
                     self.client.credential("backup")
+            if status != "disabled":
+                message = str(error.exception)
+                self.assertIn("in the Hub:\n\n  https://", message)
+                self.assertIn("\n\nThen retry your command.", message)
             self.assertEqual(request.call_count, 1)
         self.assertNotIn("backup_secret", self.client.state)
 

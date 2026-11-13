@@ -558,7 +558,7 @@ class Mail:
                 action = HUB + "/backup/"
             message = ("Finish migrating your backup account" if status == "migration_required" else
                        "Finish backup setup and connect your AWS account")
-            raise Error(message + " in the Hub: " + action + ". Then run tklbam-backup again.")
+            raise Error(message + " in the Hub:\n\n  " + action + "\n\nThen retry your command.")
         if not self.state.get("backup_secret"):
             self.state["backup_secret"] = secrets.token_urlsafe(32)
             self.save()
