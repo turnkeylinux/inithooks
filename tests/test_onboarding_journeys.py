@@ -46,6 +46,14 @@ class JourneysTest(unittest.TestCase):
     def names(self):
         return [e['event_name'] for e in onboarding.load()['pending']]
 
+    def test_interrupted_or_failed_dialog_exits_without_traceback(self):
+        for error, code in ((KeyboardInterrupt(), 130), (self.hub.DialogError("backend failed"), 1)):
+            with self.subTest(code=code), patch.object(self.hub, '_connect_mail', side_effect=error), patch('sys.stderr', new_callable=io.StringIO) as stderr:
+                with self.assertRaises(SystemExit) as result:
+                    self.hub.connect_mail(Mock())
+                self.assertEqual(result.exception.code, code)
+                self.assertIn('turnkey-init', stderr.getvalue())
+
     def test_unattended_path_does_not_invoke_helper_or_dialog(self):
         with patch.object(self.hub.sys, 'stdin', io.StringIO('')), patch.object(self.hub, 'mail_call') as call:
             self.assertTrue(self.hub.early(unattended=True))

@@ -16,6 +16,7 @@ import shutil
 import subprocess
 from typing import NoReturn
 
+from dialog import DialogError
 from libinithooks.dialog_wrapper import Dialog
 from libinithooks import hub_push, onboarding
 
@@ -43,6 +44,17 @@ def mail_call(*arguments):
 
 
 def connect_mail(d, flow_kind="firstboot"):
+    try:
+        return _connect_mail(d, flow_kind)
+    except KeyboardInterrupt:
+        print("Hub setup interrupted. Run turnkey-init to continue setup.", file=sys.stderr)
+        raise SystemExit(130)
+    except DialogError:
+        print("Hub setup could not display a dialog. Check the terminal size and run turnkey-init to continue setup.", file=sys.stderr)
+        raise SystemExit(1)
+
+
+def _connect_mail(d, flow_kind="firstboot"):
     onboarding.start_flow(flow_kind)
     onboarding.observe("link_started")
     result = mail_call("connect", "--start")
