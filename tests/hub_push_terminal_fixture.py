@@ -50,7 +50,7 @@ class Wake:
 def exchange(*arguments):
     calls.append(arguments)
     if arguments == ('connect', '--start'):
-        return {'verification_uri': 'https://hub.turnkeylinux.org/link', 'user_code': 'D34C-F5A9', 'interval': 1 if mode == 'fallback-auto' else 5}
+        return {'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'D34C-F5A9', 'interval': 1 if mode == 'fallback-auto' else 5}
     if '--notified' in arguments or mode in ('manual', 'fallback-auto'):
         return {'connection_status': 'linked'}
     return {'status': 'pending'}

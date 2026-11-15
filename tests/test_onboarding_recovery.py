@@ -102,7 +102,7 @@ class RecoveryTest(unittest.TestCase):
         onboarding.record('setup_completed')
         onboarding.notification_choice('SKIP')
         second = onboarding.start_flow('confconsole')
-        pairing = {'verification_uri': mail.HUB + '/link', 'user_code': 'ABCD-EFGH',
+        pairing = {'verification_uri': mail.HUB + '/connect', 'user_code': 'ABCD-EFGH',
                    'device_code': fixture.DEVICE_CODE, 'expires_in': 600, 'interval': 5}
         token = 'c'*32 + '.' + 'd'*64
         before_pairing_saved = []

@@ -136,7 +136,7 @@ class HubRetryTest(unittest.TestCase):
         dialog = unittest.mock.Mock()
         dialog.menu.return_value = "Link"
         dialog.yesno.return_value = True
-        responses = [{"verification_uri": "https://hub.turnkeylinux.org/link", "user_code": "ABCD&1234"},
+        responses = [{"verification_uri": "https://hub.turnkeylinux.org/connect", "user_code": "ABCD&1234"},
                      {"status": "ready", "domain": "sample.tklapp.com"}]
         with patch.object(sys, "argv", ["hubservices.py"]), patch.object(self.module.signal, "signal"), \
                 patch.object(self.module, "Dialog", return_value=dialog), \

@@ -96,8 +96,8 @@ def exercise(mode, columns):
         else:
             initial = wait('D34C-F5A9', 'code')
             assert "I've entered the code" in initial and 'Skip' in initial
-            assert 'hub.turnkeylinux.org/link' in initial and 'Connect email delivery' in initial
-            assert 'Open https://hub.turnkeylinux.org/link' in initial
+            assert 'hub.turnkeylinux.org/connect' in initial and 'Connect email delivery' in initial
+            assert 'Open https://hub.turnkeylinux.org/connect' in initial
             assert 'Get security alerts by email.' in initial
             row = next(line for line in initial.splitlines() if 'D34C-F5A9' in line)
             center = row.index('D34C-F5A9') + len('D34C-F5A9') / 2

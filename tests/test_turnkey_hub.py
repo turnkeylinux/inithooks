@@ -102,7 +102,7 @@ class MailTest(unittest.TestCase):
         self.assertFalse(mail.HUB_EMAIL_CACHE.exists())
 
     def test_pairing_uses_only_valid_anonymous_correlation_ids(self):
-        response = {"verification_uri": mail.HUB + "/link", "user_code": "D34C&F5A9",
+        response = {"verification_uri": mail.HUB + "/connect", "user_code": "D34C&F5A9",
                     "device_code": DEVICE_CODE, "expires_in": 600, "interval": 5}
         for state, expected in (({"installation_id": "1" * 32, "flow_id": "2" * 32,
                                  "email": "private@example.net", "pending": [], "flow_kind": "firstboot"},
@@ -115,7 +115,7 @@ class MailTest(unittest.TestCase):
             request.assert_called_once_with("device/start", expected)
 
     def test_pairing_describes_the_appliance_when_its_build_metadata_is_known(self):
-        response = {"verification_uri": mail.HUB + "/link", "user_code": "D34C&F5A9",
+        response = {"verification_uri": mail.HUB + "/connect", "user_code": "D34C&F5A9",
                     "device_code": DEVICE_CODE, "expires_in": 600, "interval": 5}
         version = "turnkey-wordpress-18.0-bookworm-amd64"
         tagged = 'Acquire::http::User-Agent "TurnKey APT-HTTP/1.3 (%s %s)";'
@@ -357,7 +357,7 @@ class MailTest(unittest.TestCase):
 
     def test_pairing_device_code_does_not_accept_enrollment_token(self):
         response = {"device_code": TOKEN, "user_code": "ABCD&1234", "expires_in": 900,
-                    "interval": 5, "verification_uri": mail.HUB + "/link"}
+                    "interval": 5, "verification_uri": mail.HUB + "/connect"}
         with patch.object(mail, "request", return_value=response):
             with self.assertRaises(mail.Error):
                 self.client.start()
@@ -666,7 +666,7 @@ class MailTest(unittest.TestCase):
     def test_pairing_only_returns_public_fields_and_pending_keeps_current_relay(self):
         original = self.main.read_bytes()
         response = {"device_code": DEVICE_CODE, "user_code": "ABCD&1234", "expires_in": 900, "interval": 5,
-                    "verification_uri": mail.HUB + "/link"}
+                    "verification_uri": mail.HUB + "/connect"}
         with patch.object(mail, "request", return_value=response):
             public = self.client.start()
         self.assertNotIn(DEVICE_CODE, json.dumps(public))
@@ -679,7 +679,7 @@ class MailTest(unittest.TestCase):
             with self.subTest(code=code):
                 response = {"device_code": DEVICE_CODE, "user_code": code,
                             "expires_in": 900, "interval": 5,
-                            "verification_uri": mail.HUB + "/link"}
+                            "verification_uri": mail.HUB + "/connect"}
                 with patch.object(mail, "request", return_value=response) as request:
                     public = self.client.start()
                 request.assert_called_once_with("device/start", {})
@@ -698,7 +698,7 @@ class MailTest(unittest.TestCase):
             with self.subTest(code=code):
                 response = {"device_code": DEVICE_CODE, "user_code": code,
                             "expires_in": 900, "interval": 5,
-                            "verification_uri": mail.HUB + "/link"}
+                            "verification_uri": mail.HUB + "/connect"}
                 with patch.object(mail, "request", return_value=response):
                     with self.assertRaises(mail.Error):
                         self.client.start()
@@ -715,7 +715,7 @@ class MailTest(unittest.TestCase):
 
     def test_connect_cli_displays_dash_for_unchanged_legacy_api_response(self):
         response = {"device_code": DEVICE_CODE, "user_code": "D34C&F5A9",
-                    "expires_in": 900, "interval": 5, "verification_uri": mail.HUB + "/link"}
+                    "expires_in": 900, "interval": 5, "verification_uri": mail.HUB + "/connect"}
         output = io.StringIO()
         with patch.object(mail.sys, "argv", ["turnkey-hub", "connect"]), \
                 patch.object(mail.os, "geteuid", return_value=0), \
@@ -772,7 +772,7 @@ class MailTest(unittest.TestCase):
                         'token': 'v1.' + 'a' * 32 + '.' + str(expiry) + '.' + 'b' * 64,
                         'expires_at': expiry}
         response = {'device_code': DEVICE_CODE, 'user_code': 'ABCD&1234', 'expires_in': 600,
-                    'interval': 5, 'verification_uri': mail.HUB + '/link', 'notification': notification}
+                    'interval': 5, 'verification_uri': mail.HUB + '/connect', 'notification': notification}
         with patch.object(mail, 'request', return_value=response):
             public = self.client.start()
         self.assertNotIn('notification', public)

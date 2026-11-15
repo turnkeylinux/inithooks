@@ -100,7 +100,7 @@ class JourneysTest(unittest.TestCase):
         with patch.object(sys, 'argv', ['hubservices.py', '--relink']), \
                 patch.object(self.hub, 'Dialog', return_value=dialog), \
                 patch.object(self.hub, 'mail_call', return_value={
-                    'verification_uri': 'https://hub.turnkeylinux.org/link', 'user_code': 'D34C-F5A9'}):
+                    'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'D34C-F5A9'}):
             self.hub.main()
         self.assertEqual(onboarding.load()['flow_kind'], 'confconsole')
 
@@ -122,7 +122,7 @@ class JourneysTest(unittest.TestCase):
                 patch.object(sys.stdin, 'isatty', return_value=True), \
                 patch.object(sys.stdout, 'isatty', return_value=True), \
                 patch.object(self.hub, 'mail_call', side_effect=[{}, {
-                    'verification_uri': 'https://hub.turnkeylinux.org/link', 'user_code': 'D34C-F5A9'}]) as call:
+                    'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'D34C-F5A9'}]) as call:
             self.hub.main()
         self.assertEqual(call.call_args_list[-1].args, ('connect', '--start'))
         self.hub.Dialog.assert_called_once()
@@ -139,7 +139,7 @@ class JourneysTest(unittest.TestCase):
         d.yesno.return_value = False
         self.confirm.return_value = 'skip'
         with patch.object(self.hub, 'mail_call', return_value={
-                'verification_uri': 'https://hub.turnkeylinux.org/link', 'user_code': 'D34C-F5A9'}) as call:
+                'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'D34C-F5A9'}) as call:
             self.hub.connect_mail(d)
         call.assert_called_once_with('connect', '--start')
         self.assertEqual(onboarding.decision(), 'skipped')
@@ -149,7 +149,7 @@ class JourneysTest(unittest.TestCase):
         d = Mock()
         d.yesno.return_value = True
         with patch.object(self.hub, 'mail_call', side_effect=[
-                {'verification_uri': 'https://hub.turnkeylinux.org/link', 'user_code': 'D34C-F5A9'},
+                {'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'D34C-F5A9'},
                 {'status': 'error', 'message': 'Unavailable'}]), self.assertRaises(SystemExit) as error:
             self.hub.connect_mail(d)
         self.assertEqual(error.exception.code, 1)
@@ -161,7 +161,7 @@ class JourneysTest(unittest.TestCase):
         with patch.object(self.hub.hub_push.Notifications, 'open', return_value=watcher), \
                 patch.object(self.hub.hub_push, 'confirm', side_effect=['subscribed', 'poll', 'code_submitted', 'approved']) as confirm, \
                 patch.object(self.hub, 'mail_call', side_effect=[
-                    {'verification_uri': 'https://hub.turnkeylinux.org/link', 'user_code': 'D34C-F5A9'},
+                    {'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'D34C-F5A9'},
                     {'status': 'pending'}, {'status': 'pending'}, {'connection_status': 'linked'}]) as call:
             self.hub.connect_mail(Mock())
         self.assertEqual([c.args for c in call.call_args_list], [
@@ -175,7 +175,7 @@ class JourneysTest(unittest.TestCase):
         dialog = Mock()
         with patch.object(self.hub.hub_push, 'confirm', side_effect=['code_submitted', 'poll']), \
                 patch.object(self.hub, 'mail_call', side_effect=[
-                    {'verification_uri': 'https://hub.turnkeylinux.org/link', 'user_code': 'D34C-F5A9'},
+                    {'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'D34C-F5A9'},
                     {'connection_status': 'linked'}]):
             self.hub.connect_mail(dialog)
         dialog.infobox.assert_called_once_with('Checking Hub connection...')
@@ -187,7 +187,7 @@ class JourneysTest(unittest.TestCase):
                     patch.object(self.hub.hub_push.Notifications, 'open') as open_watcher, \
                     patch.object(self.hub.hub_push, 'confirm', return_value=action), \
                     patch.object(self.hub, 'mail_call', return_value={
-                        'verification_uri': 'https://hub.turnkeylinux.org/link', 'user_code': 'D34C-F5A9'}) as call:
+                        'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'D34C-F5A9'}) as call:
                 if action == 'escape':
                     with self.assertRaises(SystemExit) as result:
                         self.hub.connect_mail(Mock())
