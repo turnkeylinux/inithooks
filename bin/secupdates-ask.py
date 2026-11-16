@@ -52,6 +52,9 @@ def main():
     if not install:
         sys.exit(99)
 
+    if sys.stdout.isatty():
+        subprocess.run(["clear", "-x"], check=False)
+
     try:
         subprocess.run(
             ["host", "-W", "2", "archive.turnkeylinux.org"],
