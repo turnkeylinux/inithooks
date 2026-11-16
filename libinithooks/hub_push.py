@@ -1,5 +1,6 @@
 """Optional pairing notifications and an owned, interruptible connection dialog."""
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 import json
 import os
@@ -153,7 +154,7 @@ def _action(returncode):
     return {0: 'check', 1: 'skip', 255: 'escape'}.get(returncode, 'error')
 
 
-def confirm(dialog, instructions, notifications=None, *, relink=False, pending=False, interval=5):
+def confirm(dialog, instructions, notifications=None, *, relink=False, pending=False, interval=5, poll=None):
     terminal = shutil.get_terminal_size((80, 24))
     width = min(dialog.width, terminal.columns - 4)
     lines = sum(max(1, len(textwrap.wrap(line, max(20, width - 6)))) for line in instructions.splitlines())
@@ -170,6 +171,8 @@ def confirm(dialog, instructions, notifications=None, *, relink=False, pending=F
         return 'error'
     child = None
     process_fd = None
+    executor = ThreadPoolExecutor(max_workers=1) if poll else None
+    future = None
     try:
         child = subprocess.Popen(command, stderr=subprocess.DEVNULL)
         if hasattr(os, 'pidfd_open'):
@@ -178,23 +181,48 @@ def confirm(dialog, instructions, notifications=None, *, relink=False, pending=F
         while True:
             code = child.poll()
             if code is not None:
+                if future:
+                    result = future.result()
+                    if result.get('status') != 'pending':
+                        return ('poll_result', result)
                 return _action(code)
+            if future and future.done():
+                result = future.result()
+                future = None
+                if result.get('status') != 'pending':
+                    return ('poll_result', result)
+                deadline = time.monotonic() + interval
             remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                return 'poll'
+            if not future and remaining <= 0:
+                if not executor:
+                    return 'poll'
+                future = executor.submit(poll)
             readers = ([notifications.reader] if notifications else []) + ([process_fd] if process_fd is not None else [])
-            readable, unused, unused2 = select.select(readers, [], [], remaining if process_fd is not None else min(.1, remaining))
+            timeout = .1 if future else max(0, remaining)
+            if process_fd is None:
+                timeout = min(.1, timeout)
+            readable, unused, unused2 = select.select(readers, [], [], timeout)
             # A user exit already observed wins over a concurrent notification.
             code = child.poll()
             if code is not None:
+                if future:
+                    result = future.result()
+                    if result.get('status') != 'pending':
+                        return ('poll_result', result)
                 return _action(code)
             if notifications and notifications.reader in readable:
                 event = notifications.take()
                 if event:
+                    if future:
+                        result = future.result()
+                        if result.get('status') != 'pending':
+                            return ('poll_result', result)
                     return event
     except OSError:
         return 'error'
     finally:
+        if executor:
+            executor.shutdown(wait=True)
         if child and child.poll() is None:
             child.terminate()
             try:

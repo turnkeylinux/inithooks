@@ -148,6 +148,45 @@ class DialogLifecycleTest(unittest.TestCase):
             self.assertEqual(command[command.index('--yes-label') + 1], "I've approved")
             child.terminate.assert_called_once_with()
 
+    def test_background_polls_keep_one_dialog_until_linked(self):
+        child = Mock(pid=12345)
+        child.poll.return_value = None
+        poll = Mock(side_effect=[{'status': 'pending'}, {'connection_status': 'linked'}])
+        with patch.object(push.subprocess, 'Popen', return_value=child) as spawn, \
+                patch.object(push.os, 'pidfd_open', side_effect=OSError), \
+                patch.object(push.sys, 'stdin') as stdin, \
+                patch.object(push.termios, 'tcgetattr', return_value=['saved']), \
+                patch.object(push.termios, 'tcsetattr'):
+            stdin.fileno.return_value = 0
+            result = push.confirm(Mock(width=60), 'Instructions', interval=.01, poll=poll)
+        self.assertEqual(result, ('poll_result', {'connection_status': 'linked'}))
+        self.assertEqual(poll.call_count, 2)
+        spawn.assert_called_once()
+        child.terminate.assert_called_once()
+
+    def test_skip_waits_for_inflight_poll_before_returning(self):
+        started = threading.Event()
+        release = threading.Event()
+        child = Mock(pid=12345)
+        def poll():
+            started.set()
+            release.wait(2)
+            return {'status': 'pending'}
+        def child_state():
+            if started.is_set():
+                release.set()
+                return 1
+            return None
+        child.poll.side_effect = child_state
+        with patch.object(push.subprocess, 'Popen', return_value=child), \
+                patch.object(push.os, 'pidfd_open', side_effect=OSError), \
+                patch.object(push.sys, 'stdin') as stdin, \
+                patch.object(push.termios, 'tcgetattr', return_value=['saved']), \
+                patch.object(push.termios, 'tcsetattr'):
+            stdin.fileno.return_value = 0
+            self.assertEqual(push.confirm(Mock(width=60), 'Instructions', interval=.01, poll=poll), 'skip')
+        self.assertTrue(started.is_set())
+
     def test_manual_fallback_preserves_three_way_result_and_backend_error(self):
         for code, expected in ((255, 'escape'), (1, 'skip'), (2, 'error'), (0, 'check')):
             child = Mock(pid=12345)

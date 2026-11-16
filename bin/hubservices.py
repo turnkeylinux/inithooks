@@ -77,7 +77,8 @@ def _connect_mail(d, flow_kind="firstboot"):
             width = min(60, shutil.get_terminal_size((80, 24)).columns - 4)
             action = hub_push.confirm(d, onboarding.link_instructions(pairing, pending, width),
                                       notifications, relink=flow_kind == 'confconsole',
-                                      pending=pending, interval=pairing.get('interval', 5))
+                                      pending=pending, interval=pairing.get('interval', 5),
+                                      poll=lambda: mail_call('connect', '--poll'))
             if action == 'skip':
                 onboarding.observe('skipped')
                 return
@@ -95,10 +96,13 @@ def _connect_mail(d, flow_kind="firstboot"):
                 onboarding.observe('approval_checked')
             if action == 'approved':
                 d.infobox('Approved. Connecting to Hub...')
-            elif pending and action in ('check', 'poll'):
+            elif pending and action == 'check':
                 d.infobox('Checking Hub connection...')
-            arguments = ('connect', '--poll', '--notified') if action in hub_push.TERMINAL else ('connect', '--poll')
-            result = mail_call(*arguments)
+            if isinstance(action, tuple) and action[0] == 'poll_result':
+                result = action[1]
+            else:
+                arguments = ('connect', '--poll', '--notified') if action in hub_push.TERMINAL else ('connect', '--poll')
+                result = mail_call(*arguments)
             if result.get('connection_status') == 'linked' or result.get('domain'):
                 onboarding.observe('link_completed')
                 message = 'Connected. Manage email delivery, DNS and backups in the Hub.'

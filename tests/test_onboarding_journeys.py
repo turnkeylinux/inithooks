@@ -173,12 +173,11 @@ class JourneysTest(unittest.TestCase):
 
     def test_poll_that_completes_linking_replaces_browser_approval_prompt(self):
         dialog = Mock()
-        with patch.object(self.hub.hub_push, 'confirm', side_effect=['code_submitted', 'poll']), \
+        with patch.object(self.hub.hub_push, 'confirm', side_effect=['code_submitted', ('poll_result', {'connection_status': 'linked'})]), \
                 patch.object(self.hub, 'mail_call', side_effect=[
-                    {'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'D34C-F5A9'},
-                    {'connection_status': 'linked'}]):
+                    {'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'D34C-F5A9'}]):
             self.hub.connect_mail(dialog)
-        dialog.infobox.assert_called_once_with('Checking Hub connection...')
+        dialog.infobox.assert_not_called()
         self.assertEqual(self.names()[-1], 'link_completed')
 
     def test_push_skip_and_escape_close_watcher_without_exchange(self):
