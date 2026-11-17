@@ -1,4 +1,7 @@
 #!/bin/bash -e
+# reconfigure: no
+# reconfigure-title: SSH Host Keys
+# reconfigure-description: Generate new SSH host keys.
 # generate new SSH keys
 # note: ssh daemon needs to be restarted for changes to take effect
 

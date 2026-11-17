@@ -1,4 +1,7 @@
 #!/bin/bash
+# reconfigure: no
+# reconfigure-title: Server Identity
+# reconfigure-description: Create the initial server identifier.
 
 [ -n "$_TURNKEY_INIT" ] && exit 0
 

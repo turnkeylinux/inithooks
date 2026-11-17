@@ -1,4 +1,7 @@
 #!/bin/bash -e
+# reconfigure: yes
+# reconfigure-title: Email Notifications
+# reconfigure-description: Configure the recipient for system notification emails.
 # enable security alert emails
 # SEC_ALERTS: SKIP, $EMAIL (if none specified, will be interactive)
 

@@ -1,4 +1,7 @@
 #!/bin/bash
+# reconfigure: no
+# reconfigure-title: Administrator Initialization
+# reconfigure-description: Configure the initial system administrator account.
 
 [ -n "$_TURNKEY_INIT" ] && exit 0
 

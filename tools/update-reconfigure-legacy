@@ -1,0 +1,33 @@
+#!/usr/bin/env python3
+"""Collect annotated external firstboot hooks for compatibility with older images.
+
+Pass the common, app-library and buildtasks checkout directories. Packaged
+inithooks hooks use their own annotations and do not belong in this catalog.
+"""
+import argparse
+import json
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from libinithooks.reconfigure import header
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('roots', nargs='+', type=Path)
+args = parser.parse_args()
+entries = {}
+for root in args.roots:
+    for hook in sorted(root.rglob('firstboot.d/*')):
+        if not hook.is_file():
+            continue
+        data, comments = header(hook)
+        if not {'enabled', 'title', 'description'} <= data.keys():
+            parser.error(f'{hook}: missing reconfiguration annotations')
+        entry = dict(enabled=data['enabled'] == 'yes', title=data['title'], description=data['description'])
+        previous = entries.get(hook.name)
+        if previous and previous['enabled'] != entry['enabled']:
+            parser.error(f'{hook}: conflicting eligibility for {hook.name}')
+        entries.setdefault(hook.name, entry)
+path = Path(__file__).resolve().parents[1] / 'libinithooks/reconfigure_legacy.json'
+path.write_text(json.dumps(entries, indent=2, sort_keys=True) + '\n')
+print(f'{len(entries)} compatibility entries written')

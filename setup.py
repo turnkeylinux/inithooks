@@ -9,4 +9,5 @@ setup(
     author_email="stefan@turnkeylinux.org",
     url="https://github.com/turnkeylinux/inithooks",
     packages=["libinithooks"],
+    package_data={"libinithooks": ["reconfigure_legacy.json"]},
 )

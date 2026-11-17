@@ -1,4 +1,7 @@
 #!/bin/bash
+# reconfigure: no
+# reconfigure-title: Setup Tracking
+# reconfigure-description: Record the start of first boot setup.
 . /etc/default/inithooks
 # Save the denominator and kick its nonblocking delivery before configuration.
 "$INITHOOKS_PATH/bin/turnkey-onboarding" begin

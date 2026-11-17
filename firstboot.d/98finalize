@@ -1,4 +1,7 @@
 #!/bin/bash -e
+# reconfigure: no
+# reconfigure-title: Finalize Setup
+# reconfigure-description: Clear provisioning values and mark first boot complete.
 
 INITHOOKS_DEFAULT=/etc/default/inithooks
 . $INITHOOKS_DEFAULT

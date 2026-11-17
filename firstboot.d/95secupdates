@@ -1,4 +1,7 @@
 #!/bin/bash -e
+# reconfigure: yes
+# reconfigure-title: Security Updates
+# reconfigure-description: Choose whether to install available security updates.
 # install security updates
 # SEC_UPDATES: SKIP, FORCE (if none specified, will be interactive)
 

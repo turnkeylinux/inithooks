@@ -1,4 +1,7 @@
 #!/bin/bash -e
+# reconfigure: no
+# reconfigure-title: Hub Services Initialization
+# reconfigure-description: Initialize Hub services during first boot.
 # Initialize independent Hub services without exposing enrollment capability.
 set +x
 . /etc/default/inithooks

@@ -1,4 +1,7 @@
 #!/bin/bash
+# reconfigure: no
+# reconfigure-title: Task Schedule Initialization
+# reconfigure-description: Randomize scheduled task times.
 
 [ ! -e /etc/crontab ] && exit 0
 [ -n "$_TURNKEY_INIT" ] && exit 0

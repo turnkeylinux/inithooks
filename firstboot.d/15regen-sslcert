@@ -1,4 +1,7 @@
 #!/bin/bash -e
+# reconfigure: no
+# reconfigure-title: TLS Certificate Initialization
+# reconfigure-description: Generate the initial server certificates.
 # Regenerate self-signed TLS/SSL cert & key
 
 [[ -n "$_TURNKEY_INIT" ]] && exit 0

@@ -12,3 +12,5 @@ turnkey-sudoadmin                       /usr/sbin
 turnkey-install-security-updates        /usr/sbin
 
 tklbam-hooks/*                          /etc/tklbam/hooks.d
+
+confconsole/*.py                        /usr/lib/confconsole/plugins.d

@@ -1,4 +1,7 @@
 #!/bin/bash -e
+# reconfigure: no
+# reconfigure-title: Setup Reboot
+# reconfigure-description: Offer the reboot required by first boot updates.
 # reboot system (kernel upgrade, set chmod +x by 95secupdates)
 # will be skipped if running live or REBOOT set to SKIP
 

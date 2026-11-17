@@ -1,0 +1,867 @@
+{
+  "16cups-sslcert": {
+    "description": "Install the generated TLS certificate and key for CUPS.",
+    "enabled": false,
+    "title": "CUPS Certificate"
+  },
+  "16tomcat-sslcert": {
+    "description": "Generate the Tomcat keystore from the server certificate.",
+    "enabled": false,
+    "title": "Tomcat Certificate"
+  },
+  "20-odoo-db-secrets": {
+    "description": "Regenerate the PostgreSQL role password used by Odoo.",
+    "enabled": false,
+    "title": "Odoo Secrets"
+  },
+  "20regen-aspnet-secrets": {
+    "description": "Regenerate the sample application database password.",
+    "enabled": false,
+    "title": "ASP.NET Core Secrets"
+  },
+  "20regen-avideo-secrets": {
+    "description": "Regenerate application secrets, the administrator channel name and database password.",
+    "enabled": false,
+    "title": "AVideo Secrets"
+  },
+  "20regen-bagisto-secrets": {
+    "description": "Regenerate application secrets, the API token and database password.",
+    "enabled": false,
+    "title": "Bagisto Secrets"
+  },
+  "20regen-bookstack-secrets": {
+    "description": "Regenerate the application key and database password.",
+    "enabled": false,
+    "title": "BookStack Secrets"
+  },
+  "20regen-bugzilla-secrets": {
+    "description": "Regenerate the site secret and database password.",
+    "enabled": false,
+    "title": "Bugzilla Secrets"
+  },
+  "20regen-cakephp-secrets": {
+    "description": "Regenerate the security salt and database password.",
+    "enabled": false,
+    "title": "CakePHP Secrets"
+  },
+  "20regen-canvas-secrets": {
+    "description": "Regenerate Canvas and Rich Content Editor encryption and signing secrets.",
+    "enabled": false,
+    "title": "Canvas Secrets"
+  },
+  "20regen-codeigniter-secrets": {
+    "description": "Regenerate the encryption key and database password.",
+    "enabled": false,
+    "title": "CodeIgniter Secrets"
+  },
+  "20regen-concrete5-secrets": {
+    "description": "Regenerate the database password.",
+    "enabled": false,
+    "title": "Concrete CMS Secrets"
+  },
+  "20regen-couchdb-secrets": {
+    "description": "Regenerate the application secret.",
+    "enabled": false,
+    "title": "CouchDB Secrets"
+  },
+  "20regen-django-secrets": {
+    "description": "Regenerate the application secret and database password.",
+    "enabled": false,
+    "title": "Django Secrets"
+  },
+  "20regen-drupal10-secrets": {
+    "description": "Regenerate the hash salt and database password.",
+    "enabled": false,
+    "title": "Drupal 10 Secrets"
+  },
+  "20regen-e107-secrets": {
+    "description": "Regenerate the database password.",
+    "enabled": false,
+    "title": "e107 Secrets"
+  },
+  "20regen-elgg-secrets": {
+    "description": "Regenerate the database password.",
+    "enabled": false,
+    "title": "Elgg Secrets"
+  },
+  "20regen-espocrm-secrets": {
+    "description": "Regenerate encryption secrets and the database password.",
+    "enabled": false,
+    "title": "EspoCRM Secrets"
+  },
+  "20regen-etherpad-secrets": {
+    "description": "Regenerate API and session keys and the database password.",
+    "enabled": false,
+    "title": "Etherpad Secrets"
+  },
+  "20regen-faveo-helpdesk-secrets": {
+    "description": "Regenerate application and API secrets and the database password.",
+    "enabled": false,
+    "title": "Faveo Helpdesk Secrets"
+  },
+  "20regen-foswiki-secrets": {
+    "description": "Regenerate the configuration administrator password.",
+    "enabled": false,
+    "title": "Foswiki Secrets"
+  },
+  "20regen-gallery-secrets": {
+    "description": "Regenerate the database password and remove InnoDB log files.",
+    "enabled": false,
+    "title": "Gallery Secrets"
+  },
+  "20regen-gitea-secrets": {
+    "description": "Regenerate application secrets and the database password.",
+    "enabled": false,
+    "title": "Gitea Secrets"
+  },
+  "20regen-gitlab-secrets": {
+    "description": "Regenerate GitLab secrets during initialization.",
+    "enabled": false,
+    "title": "GitLab Secrets"
+  },
+  "20regen-ibexa-secrets": {
+    "description": "Regenerate the application secret and database password.",
+    "enabled": false,
+    "title": "Ibexa Secrets"
+  },
+  "20regen-icescrum-secrets": {
+    "description": "Regenerate the database password.",
+    "enabled": false,
+    "title": "iceScrum Secrets"
+  },
+  "20regen-jenkins-secrets": {
+    "description": "Regenerate Jenkins identity and secret keys.",
+    "enabled": false,
+    "title": "Jenkins Secrets"
+  },
+  "20regen-laravel-secrets": {
+    "description": "Regenerate the application key and database password.",
+    "enabled": false,
+    "title": "Laravel Secrets"
+  },
+  "20regen-leantime-secrets": {
+    "description": "Regenerate session secrets and the database password.",
+    "enabled": false,
+    "title": "Leantime Secrets"
+  },
+  "20regen-limesurvey-secrets": {
+    "description": "Regenerate the database password.",
+    "enabled": false,
+    "title": "LimeSurvey Secrets"
+  },
+  "20regen-mantis-secrets": {
+    "description": "Regenerate the database password.",
+    "enabled": false,
+    "title": "MantisBT Secrets"
+  },
+  "20regen-matomo-secrets": {
+    "description": "Regenerate the application salt and database password.",
+    "enabled": false,
+    "title": "Matomo Secrets"
+  },
+  "20regen-mattermost-secrets": {
+    "description": "Regenerate file-link and database encryption secrets.",
+    "enabled": false,
+    "title": "Mattermost Secrets"
+  },
+  "20regen-mediawiki-secrets": {
+    "description": "Regenerate the application secret and database password.",
+    "enabled": false,
+    "title": "MediaWiki Secrets"
+  },
+  "20regen-mibew-secrets": {
+    "description": "Regenerate the database password.",
+    "enabled": false,
+    "title": "Mibew Secrets"
+  },
+  "20regen-moodle-secrets": {
+    "description": "Regenerate the database password.",
+    "enabled": false,
+    "title": "Moodle Secrets"
+  },
+  "20regen-mysql-certs": {
+    "description": "Regenerate MariaDB TLS certificates and keys.",
+    "enabled": false,
+    "title": "MariaDB Secrets"
+  },
+  "20regen-nextcloud-secrets": {
+    "description": "Regenerate application secrets, instance identity and the database password.",
+    "enabled": false,
+    "title": "Nextcloud Secrets"
+  },
+  "20regen-ninja-invoice-secrets": {
+    "description": "Regenerate application and API secrets and the database password.",
+    "enabled": false,
+    "title": "Invoice Ninja Secrets"
+  },
+  "20regen-observium-secrets": {
+    "description": "Regenerate the application database password.",
+    "enabled": false,
+    "title": "Observium Secrets"
+  },
+  "20regen-omeka-secrets": {
+    "description": "Regenerate the application database password.",
+    "enabled": false,
+    "title": "Omeka Secrets"
+  },
+  "20regen-opencart-secrets": {
+    "description": "Regenerate the database password in the store and administration configuration.",
+    "enabled": false,
+    "title": "OpenCart Secrets"
+  },
+  "20regen-openldap-secrets": {
+    "description": "Regenerate the LDAP server TLS certificates.",
+    "enabled": false,
+    "title": "OpenLDAP Certificates"
+  },
+  "20regen-orangehrm-secrets": {
+    "description": "Regenerate application encryption keys, CSRF secret and the database password.",
+    "enabled": false,
+    "title": "OrangeHRM Secrets"
+  },
+  "20regen-oscommerce-secrets": {
+    "description": "Regenerate the database password in the store and administration configuration.",
+    "enabled": false,
+    "title": "osCommerce Secrets"
+  },
+  "20regen-otrs-secrets": {
+    "description": "Regenerate the application database password.",
+    "enabled": false,
+    "title": "OTRS Secrets"
+  },
+  "20regen-owncloud-secrets": {
+    "description": "Regenerate database and Redis credentials before application startup.",
+    "enabled": false,
+    "title": "ownCloud Secrets"
+  },
+  "20regen-phpbb-secrets": {
+    "description": "Regenerate the application database password.",
+    "enabled": false,
+    "title": "phpBB Secrets"
+  },
+  "20regen-phpldapadmin-secrets": {
+    "description": "Regenerate the phpLDAPadmin session encryption secret.",
+    "enabled": false,
+    "title": "phpLDAPadmin Secrets"
+  },
+  "20regen-phplist-secrets": {
+    "description": "Regenerate the application database password.",
+    "enabled": false,
+    "title": "phpList Secrets"
+  },
+  "20regen-prestashop-secrets": {
+    "description": "Regenerate application secrets and reset the initial administrator and database credentials.",
+    "enabled": false,
+    "title": "PrestaShop Secrets"
+  },
+  "20regen-processwire-secrets": {
+    "description": "Regenerate authentication salts and the database password.",
+    "enabled": false,
+    "title": "ProcessWire Secrets"
+  },
+  "20regen-proxy-cert": {
+    "description": "Regenerate the HTTPS proxy certificate authority and certificate cache.",
+    "enabled": false,
+    "title": "TKLDev Secrets"
+  },
+  "20regen-rails-secrets": {
+    "description": "Regenerate application credentials and the database password.",
+    "enabled": false,
+    "title": "Rails Secrets"
+  },
+  "20regen-redis-secrets": {
+    "description": "Generate the initial password and disable protected mode.",
+    "enabled": false,
+    "title": "Redis Secrets"
+  },
+  "20regen-redmine-secrets": {
+    "description": "Regenerate database credentials, the application secret and the repository API key.",
+    "enabled": false,
+    "title": "Redmine Secrets"
+  },
+  "20regen-roundup-secrets": {
+    "description": "Regenerate tracker secrets and the database password.",
+    "enabled": false,
+    "title": "Roundup Secrets"
+  },
+  "20regen-semaphore-secrets": {
+    "description": "Regenerate Semaphore session secrets and its database password.",
+    "enabled": false,
+    "title": "Ansible Secrets"
+  },
+  "20regen-sid": {
+    "description": "Remove Samba secrets so its server identity is regenerated.",
+    "enabled": false,
+    "title": "Samba Identity"
+  },
+  "20regen-silverstripe-secrets": {
+    "description": "Regenerate the application database password.",
+    "enabled": false,
+    "title": "SilverStripe Secrets"
+  },
+  "20regen-simplemachines-secrets": {
+    "description": "Regenerate the application database password.",
+    "enabled": false,
+    "title": "Simple Machines Forum Secrets"
+  },
+  "20regen-snipe-it-secrets": {
+    "description": "Regenerate the application encryption key and database password.",
+    "enabled": false,
+    "title": "Snipe-IT Secrets"
+  },
+  "20regen-suitecrm-secrets": {
+    "description": "Regenerate application secrets and the database password.",
+    "enabled": false,
+    "title": "SuiteCRM Secrets"
+  },
+  "20regen-symfony-secrets": {
+    "description": "Regenerate the application secret and database password.",
+    "enabled": false,
+    "title": "Symfony Secrets"
+  },
+  "20regen-syncthing-secrets": {
+    "description": "Recreate the device identity, certificates and initial application configuration.",
+    "enabled": false,
+    "title": "Syncthing Secrets"
+  },
+  "20regen-tracks-secrets": {
+    "description": "Regenerate the application secret and database password.",
+    "enabled": false,
+    "title": "Tracks Secrets"
+  },
+  "20regen-typo3-secrets": {
+    "description": "Regenerate the application encryption key and database password.",
+    "enabled": false,
+    "title": "TYPO3 Secrets"
+  },
+  "20regen-ushahidi-secrets": {
+    "description": "Regenerate the application key, OAuth keys and database password.",
+    "enabled": false,
+    "title": "Ushahidi Secrets"
+  },
+  "20regen-wordpress-secrets": {
+    "description": "Regenerate authentication salts and the database password.",
+    "enabled": false,
+    "title": "WordPress Secrets"
+  },
+  "20regen-xoops-secrets": {
+    "description": "Regenerate the application database password.",
+    "enabled": false,
+    "title": "XOOPS Secrets"
+  },
+  "20regen-zencart-secrets": {
+    "description": "Regenerate the database password in the store and administration configuration.",
+    "enabled": false,
+    "title": "Zen Cart Secrets"
+  },
+  "20regen-znuny-secrets": {
+    "description": "Regenerate the application database password.",
+    "enabled": false,
+    "title": "Znuny Secrets"
+  },
+  "20regen-zoneminder-secrets": {
+    "description": "Regenerate the authentication secret and database password.",
+    "enabled": false,
+    "title": "ZoneMinder Secrets"
+  },
+  "20timezone": {
+    "description": "Synchronize the PHP timezone with the system timezone.",
+    "enabled": false,
+    "title": "PHP Timezone"
+  },
+  "24ec2-pvmshim": {
+    "description": "Select bootloader settings for the EC2 virtualization mode.",
+    "enabled": false,
+    "title": "EC2 Boot Configuration"
+  },
+  "25ec2-resizerootpart": {
+    "description": "Expand the root partition and filesystem during first boot.",
+    "enabled": false,
+    "title": "Root Partition Expansion"
+  },
+  "25ec2-userdata": {
+    "description": "Execute the launch user-data script during first boot.",
+    "enabled": false,
+    "title": "Launch User Data"
+  },
+  "26ec2-resizerootfs": {
+    "description": "Expand the root filesystem during first boot.",
+    "enabled": false,
+    "title": "Root Filesystem Expansion"
+  },
+  "27ec2-mntbind-ephemeral": {
+    "description": "Bind temporary and backup-cache directories to ephemeral storage.",
+    "enabled": false,
+    "title": "Ephemeral Storage"
+  },
+  "28ec2-sudoadmin": {
+    "description": "Apply the launch-specific system administrator account selection.",
+    "enabled": false,
+    "title": "Launch Account Selection"
+  },
+  "29preseed": {
+    "description": "Prepare temporary credentials and defaults for unattended first boot.",
+    "enabled": false,
+    "title": "Headless Setup Defaults"
+  },
+  "30rootpass": {
+    "description": "Set the initial root password when no external password was supplied.",
+    "enabled": false,
+    "title": "Initial System Password"
+  },
+  "32userpass": {
+    "description": "Change the desktop user password.",
+    "enabled": true,
+    "title": "Desktop Password"
+  },
+  "35adminer-mysqlpass": {
+    "description": "Change the adminer database login password.",
+    "enabled": true,
+    "title": "Database Access"
+  },
+  "35pgsqlpass": {
+    "description": "Change the postgres database administrator password.",
+    "enabled": true,
+    "title": "PostgreSQL"
+  },
+  "35postfix-unprivileged": {
+    "description": "Adapt Postfix random-device paths for an unprivileged container.",
+    "enabled": false,
+    "title": "Container Mail Setup"
+  },
+  "35samba-container": {
+    "description": "Initialize the Samba password when container creation supplies the system password.",
+    "enabled": false,
+    "title": "Samba Container Setup"
+  },
+  "35samba-sudoadmin": {
+    "description": "Configure Samba access for the system administrator account.",
+    "enabled": false,
+    "title": "Samba Administrator Setup"
+  },
+  "35timezone": {
+    "description": "Set the system timezone from the public IP address.",
+    "enabled": false,
+    "title": "Automatic Timezone"
+  },
+  "35vcs-passwd": {
+    "description": "Change the vcs system account password.",
+    "enabled": true,
+    "title": "Version Control Password"
+  },
+  "36remote-mysqlpass": {
+    "description": "Change the MariaDB remote account password.",
+    "enabled": true,
+    "title": "Remote Database Access"
+  },
+  "40ansible": {
+    "description": "Set the Ansible and Semaphore passwords and create an SSH key pair.",
+    "enabled": false,
+    "title": "Ansible"
+  },
+  "40avideo": {
+    "description": "Change the administrator password, email and site address.",
+    "enabled": true,
+    "title": "AVideo"
+  },
+  "40bagisto": {
+    "description": "Change the administrator password and email.",
+    "enabled": true,
+    "title": "Bagisto"
+  },
+  "40bookstack": {
+    "description": "Change the administrator password, email and site address.",
+    "enabled": true,
+    "title": "BookStack"
+  },
+  "40bugzilla": {
+    "description": "Change the administrator password, login email and outgoing email address.",
+    "enabled": true,
+    "title": "Bugzilla"
+  },
+  "40canvas": {
+    "description": "Change the administrator password, email and site address.",
+    "enabled": true,
+    "title": "Canvas"
+  },
+  "40concrete": {
+    "description": "Change the administrator password and email.",
+    "enabled": true,
+    "title": "Concrete CMS"
+  },
+  "40couchdb": {
+    "description": "Change the administrator password.",
+    "enabled": true,
+    "title": "CouchDB"
+  },
+  "40django": {
+    "description": "Change the administrator password, email and allowed host.",
+    "enabled": true,
+    "title": "Django"
+  },
+  "40dokuwiki": {
+    "description": "Change the administrator password and email.",
+    "enabled": true,
+    "title": "DokuWiki"
+  },
+  "40domain-controller": {
+    "description": "Replace Samba configuration to create or join a domain.",
+    "enabled": true,
+    "title": "Samba Domain"
+  },
+  "40drupal10": {
+    "description": "Change the administrator password, email and site address.",
+    "enabled": true,
+    "title": "Drupal 10"
+  },
+  "40e107": {
+    "description": "Change the administrator password and email.",
+    "enabled": true,
+    "title": "e107"
+  },
+  "40ec2-sshkeys": {
+    "description": "Install the launch-provided SSH public keys for root.",
+    "enabled": false,
+    "title": "Launch SSH Keys"
+  },
+  "40elgg": {
+    "description": "Change the administrator password, email and site address.",
+    "enabled": true,
+    "title": "Elgg"
+  },
+  "40espocrm": {
+    "description": "Change the administrator password and site address.",
+    "enabled": true,
+    "title": "EspoCRM"
+  },
+  "40etherpad": {
+    "description": "Change the administrator password.",
+    "enabled": true,
+    "title": "Etherpad"
+  },
+  "40faveo-helpdesk": {
+    "description": "Change the administrator password and email.",
+    "enabled": true,
+    "title": "Faveo Helpdesk"
+  },
+  "40foswiki": {
+    "description": "Set the administrator password, email and site address and replace HTTP credentials.",
+    "enabled": false,
+    "title": "Foswiki"
+  },
+  "40gallery": {
+    "description": "Change the administrator password and email.",
+    "enabled": true,
+    "title": "Gallery"
+  },
+  "40gameserver": {
+    "description": "Change the game account password and software source; start the game server.",
+    "enabled": true,
+    "title": "Game Server"
+  },
+  "40gitea": {
+    "description": "Change the administrator password, email and site address.",
+    "enabled": true,
+    "title": "Gitea"
+  },
+  "40gitlab": {
+    "description": "Change the root account password, email and site address.",
+    "enabled": true,
+    "title": "GitLab"
+  },
+  "40ibexa": {
+    "description": "Change the administrator password and email.",
+    "enabled": true,
+    "title": "Ibexa"
+  },
+  "40icescrum": {
+    "description": "Change the administrator password, email and site address.",
+    "enabled": true,
+    "title": "iceScrum"
+  },
+  "40icesecretset": {
+    "description": "Change the Ice administration write secret.",
+    "enabled": true,
+    "title": "Mumble Ice Access"
+  },
+  "40invoice-ninja": {
+    "description": "Change the administrator password, email, site address and API secret.",
+    "enabled": true,
+    "title": "Invoice Ninja"
+  },
+  "40jenkins": {
+    "description": "Change the administrator password.",
+    "enabled": true,
+    "title": "Jenkins"
+  },
+  "40lamp": {
+    "description": "Start Apache after the first-boot certificate update.",
+    "enabled": false,
+    "title": "Apache Startup"
+  },
+  "40leantime": {
+    "description": "Change the administrator password and login email.",
+    "enabled": true,
+    "title": "Leantime"
+  },
+  "40limesurvey": {
+    "description": "Change the administrator password and email addresses.",
+    "enabled": true,
+    "title": "LimeSurvey"
+  },
+  "40mantis": {
+    "description": "Change the administrator password and email.",
+    "enabled": true,
+    "title": "MantisBT"
+  },
+  "40matomo": {
+    "description": "Change the administrator password, email and site address.",
+    "enabled": true,
+    "title": "Matomo"
+  },
+  "40mattermost": {
+    "description": "Change the administrator password, email and site address.",
+    "enabled": true,
+    "title": "Mattermost"
+  },
+  "40mediawiki": {
+    "description": "Change the administrator password and site address.",
+    "enabled": true,
+    "title": "MediaWiki"
+  },
+  "40mibew": {
+    "description": "Change the administrator password.",
+    "enabled": true,
+    "title": "Mibew"
+  },
+  "40moodle": {
+    "description": "Change the administrator password.",
+    "enabled": true,
+    "title": "Moodle"
+  },
+  "40mumblesupw": {
+    "description": "Change the Mumble SuperUser password.",
+    "enabled": true,
+    "title": "Mumble SuperUser"
+  },
+  "40nextcloud": {
+    "description": "Change the administrator password, recovery email and site address.",
+    "enabled": true,
+    "title": "Nextcloud"
+  },
+  "40observium": {
+    "description": "Change the administrator password.",
+    "enabled": true,
+    "title": "Observium"
+  },
+  "40odoo": {
+    "description": "Change the database manager and example administrator passwords.",
+    "enabled": true,
+    "title": "Odoo"
+  },
+  "40omeka": {
+    "description": "Change the administrator password and email address.",
+    "enabled": true,
+    "title": "Omeka"
+  },
+  "40opencart": {
+    "description": "Change the administrator password, email and store address.",
+    "enabled": true,
+    "title": "OpenCart"
+  },
+  "40openldap": {
+    "description": "Reinitialize directory contents, domain and administrator credentials.",
+    "enabled": false,
+    "title": "OpenLDAP"
+  },
+  "40openvpn": {
+    "description": "Recreate VPN keys, client configuration and network settings.",
+    "enabled": false,
+    "title": "OpenVPN"
+  },
+  "40orangehrm": {
+    "description": "Change the administrator password.",
+    "enabled": true,
+    "title": "OrangeHRM"
+  },
+  "40oscommerce": {
+    "description": "Change the administrator password, store email and site address.",
+    "enabled": true,
+    "title": "osCommerce"
+  },
+  "40otrs": {
+    "description": "Change the root@localhost administrator password.",
+    "enabled": true,
+    "title": "OTRS"
+  },
+  "40owncloud": {
+    "description": "Change the administrator password and site address.",
+    "enabled": true,
+    "title": "ownCloud"
+  },
+  "40phpbb": {
+    "description": "Change the administrator password, email and forum address.",
+    "enabled": true,
+    "title": "phpBB"
+  },
+  "40phplist": {
+    "description": "Change the administrator password, email and site address.",
+    "enabled": true,
+    "title": "phpList"
+  },
+  "40prestashop": {
+    "description": "Change the administrator password, email and store address.",
+    "enabled": true,
+    "title": "PrestaShop"
+  },
+  "40processwire": {
+    "description": "Change the administrator password and email address.",
+    "enabled": true,
+    "title": "ProcessWire"
+  },
+  "40redis": {
+    "description": "Change the password, listening address and protected mode.",
+    "enabled": true,
+    "title": "Redis"
+  },
+  "40redmine": {
+    "description": "Change the administrator password and email address.",
+    "enabled": true,
+    "title": "Redmine"
+  },
+  "40roundup": {
+    "description": "Change the administrator password, email and tracker address.",
+    "enabled": true,
+    "title": "Roundup"
+  },
+  "40silverstripe": {
+    "description": "Change the administrator password and email address.",
+    "enabled": true,
+    "title": "SilverStripe"
+  },
+  "40simplemachines": {
+    "description": "Change the administrator password, email and forum address.",
+    "enabled": true,
+    "title": "Simple Machines Forum"
+  },
+  "40snipe-it": {
+    "description": "Change the administrator password, notification email and site address.",
+    "enabled": true,
+    "title": "Snipe-IT"
+  },
+  "40suitecrm": {
+    "description": "Change the administrator password and site address.",
+    "enabled": true,
+    "title": "SuiteCRM"
+  },
+  "40syncthing": {
+    "description": "Change the syncthing web interface password.",
+    "enabled": true,
+    "title": "Syncthing"
+  },
+  "40tkldev": {
+    "description": "Initialize the build environment and Core source checkout.",
+    "enabled": false,
+    "title": "TKLDev"
+  },
+  "40tomcat": {
+    "description": "Change the Tomcat administrator password.",
+    "enabled": true,
+    "title": "Tomcat"
+  },
+  "40torrentserver": {
+    "description": "Change the Transmission administrator password.",
+    "enabled": false,
+    "title": "Transmission"
+  },
+  "40tracks": {
+    "description": "Change the administrator password and email address.",
+    "enabled": true,
+    "title": "Tracks"
+  },
+  "40typo3": {
+    "description": "Change the administrator password, email and install tool password.",
+    "enabled": true,
+    "title": "TYPO3"
+  },
+  "40ushahidi": {
+    "description": "Change the administrator password and email address.",
+    "enabled": true,
+    "title": "Ushahidi"
+  },
+  "40web2py": {
+    "description": "Change the web administration password.",
+    "enabled": true,
+    "title": "web2py"
+  },
+  "40wireguard": {
+    "description": "Recreate VPN keys, interfaces and peer configuration.",
+    "enabled": false,
+    "title": "WireGuard"
+  },
+  "40wordpress": {
+    "description": "Change the administrator password, email and site address.",
+    "enabled": true,
+    "title": "WordPress"
+  },
+  "40xoops": {
+    "description": "Change the administrator password and site email address.",
+    "enabled": false,
+    "title": "XOOPS"
+  },
+  "40zencart": {
+    "description": "Change the administrator password, email and store address.",
+    "enabled": true,
+    "title": "Zen Cart"
+  },
+  "40znuny": {
+    "description": "Change the root@localhost administrator password.",
+    "enabled": true,
+    "title": "Znuny"
+  },
+  "40zoneminder": {
+    "description": "Change the administrator password.",
+    "enabled": true,
+    "title": "ZoneMinder"
+  },
+  "50ansible-key": {
+    "description": "Install the Ansible SSH key in system access and Semaphore.",
+    "enabled": false,
+    "title": "Ansible SSH Access"
+  },
+  "50jellyfin-server": {
+    "description": "Apply the initial administrator password using the bootstrap credential.",
+    "enabled": false,
+    "title": "Jellyfin Initialization"
+  },
+  "70ec2-log-rootpass": {
+    "description": "Display initial login details and SSH host fingerprints.",
+    "enabled": false,
+    "title": "Initial Login Details"
+  },
+  "70logger": {
+    "description": "Display the initial root password and SSH host fingerprints.",
+    "enabled": false,
+    "title": "Initial Login Details"
+  },
+  "81hub-launched": {
+    "description": "Record Hub and Marketplace launch tags.",
+    "enabled": false,
+    "title": "Launch Identification"
+  },
+  "82hub-letsencrypt": {
+    "description": "Publish the managed hostname and request its initial HTTPS certificate.",
+    "enabled": false,
+    "title": "Initial HTTPS Certificate"
+  },
+  "92etckeeper": {
+    "description": "Initialize the configuration repository and its first commit.",
+    "enabled": false,
+    "title": "Configuration History"
+  },
+  "97tklbam-restore": {
+    "description": "Restore the backup selected at launch.",
+    "enabled": false,
+    "title": "Launch Backup Restore"
+  }
+}

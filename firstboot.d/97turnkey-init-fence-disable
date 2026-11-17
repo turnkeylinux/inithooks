@@ -1,4 +1,7 @@
 #!/bin/bash -e
+# reconfigure: no
+# reconfigure-title: Finish Setup Protection
+# reconfigure-description: Disable setup protection after first boot completes.
 
 # shellcheck source=default/inithooks
 source /etc/default/inithooks

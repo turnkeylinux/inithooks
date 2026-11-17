@@ -1,4 +1,7 @@
 #!/bin/bash -e
+# reconfigure: no
+# reconfigure-title: Hub Setup
+# reconfigure-description: Offer the initial Hub account connection.
 # Link before root, application and recovery email prompts.
 set +x
 . /etc/default/inithooks

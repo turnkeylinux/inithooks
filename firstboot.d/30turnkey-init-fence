@@ -1,4 +1,7 @@
 #!/bin/bash
+# reconfigure: no
+# reconfigure-title: Setup Protection
+# reconfigure-description: Activate the initial setup login flow.
 
 # Note that as of v19.0, the init-fence service is enabled by default
 

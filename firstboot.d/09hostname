@@ -1,4 +1,7 @@
 #!/bin/bash -e
+# reconfigure: no
+# reconfigure-title: Hostname Provisioning
+# reconfigure-description: Apply the hostname supplied during deployment.
 # set hostname
 
 . /etc/default/inithooks

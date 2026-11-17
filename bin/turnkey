@@ -1,11 +1,15 @@
 #!/bin/sh
 # Shared Hub registration entrypoint for appliance installations.
-if [ "$#" != 1 ] || [ "$1" != connect ]; then
-    echo 'Usage: turnkey connect' >&2
+if [ "$#" != 1 ]; then
+    echo 'Usage: turnkey connect|reconfigure' >&2
     exit 2
 fi
 if [ "$(id -u)" != 0 ]; then
-    echo 'Run: sudo turnkey connect' >&2
+    echo "Run: sudo turnkey $1" >&2
     exit 1
 fi
-exec /usr/lib/inithooks/bin/hubservices.py --relink
+case "$1" in
+    connect) exec /usr/lib/inithooks/bin/hubservices.py --relink ;;
+    reconfigure) exec /usr/lib/inithooks/bin/turnkey-reconfigure ;;
+    *) echo 'Usage: turnkey connect|reconfigure' >&2; exit 2 ;;
+esac

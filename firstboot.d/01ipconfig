@@ -1,4 +1,7 @@
 #!/bin/bash -e
+# reconfigure: yes
+# reconfigure-title: Network
+# reconfigure-description: Configure network addressing and DNS.
 
 # firstboot network interfaces file generation - runs non-interactively.
 # - config can be customized via inithooks conf file (i.e. preseed)

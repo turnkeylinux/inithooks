@@ -1,4 +1,7 @@
 #!/bin/bash -e
+# reconfigure: no
+# reconfigure-title: Update Schedule Initialization
+# reconfigure-description: Randomize the automatic update schedule.
 # set random hour/minute for security updates (cron-apt)
 
 [ -n "$_TURNKEY_INIT" ] && exit 0

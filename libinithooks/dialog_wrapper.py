@@ -2,12 +2,17 @@
 # Copyright (c) 2020-2025 TurnKey GNU/Linux <admin@turnkeylinux.org>
 
 import re
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import textwrap
 import sys
 import dialog
 from os import environ
 from urllib.parse import urlparse
 import logging
-from libinithooks import onboarding
+from libinithooks import onboarding, passwords
 
 EMAIL_RE = re.compile(r"(?:^|\s).*\S@\S+(?:\s|$)", re.IGNORECASE)
 
@@ -27,16 +32,12 @@ class Error(Exception):
 def password_complexity(password: str) -> int:
     """return password complexity score from 0 (invalid) to 4 (strong)"""
 
-    lowercase = re.search("[a-z]", password) is not None
-    uppercase = re.search("[A-Z]", password) is not None
-    number = re.search(r"\d", password) is not None
-    nonalpha = re.search(r"\W", password) is not None
-
-    return sum([lowercase, uppercase, number, nonalpha])
+    return passwords.complexity(password)
 
 
 class Dialog:
     def __init__(self, title: str, width: int = 60, height: int = 20) -> None:
+        self.title = title
         self.width = width
         self.height = height
 
@@ -201,6 +202,7 @@ class Dialog:
         pass_req: int = 8,
         min_complexity: int = 3,
         blacklist: list[str] | None = None,
+        generate: bool | None = None,
     ) -> str | None:
         """Validated titled message with password (redacted input) box &
         'ok' button - also accepts password limitations
@@ -218,13 +220,18 @@ class Dialog:
             )
         else:
             blacklist = []
-        height = self._calc_height(text + req_string) + 3
+        if generate is None:
+            # Older domain-controller hooks also ask for existing AD credentials.
+            # Callers can explicitly enable generation when creating a new domain.
+            generate = Path(sys.argv[0]).name != 'domain-controller.py'
+        hint = "\n\nLeave blank to generate a strong password." if generate else ""
+        height = self._calc_height(text + req_string + hint) + 3
 
-        def ask(title: str, text: str) -> str:
+        def ask(title: str, text: str, hint: str = "") -> str:
             """Titled input box (input redacted) & 'ok' button"""
             return self.wrapper(
                 "passwordbox",
-                text + req_string,
+                text + req_string + hint,
                 height,
                 self.width,
                 title=title,
@@ -234,7 +241,15 @@ class Dialog:
             )[1]
 
         while 1:
-            password = ask(title, text)
+            password = ask(title, text, hint)
+            if password == "" and generate:
+                try:
+                    password = passwords.generate(pass_req, min_complexity, blacklist)
+                except ValueError as error:
+                    self.error(str(error))
+                    continue
+                self.show_generated_password(title, password)
+                return password
             if not password:
                 self.error("Please enter non-empty password!")
                 continue
@@ -282,6 +297,35 @@ class Dialog:
                 return password
 
             self.error("Password mismatch, please try again.")
+
+    def show_generated_password(self, title: str, password: str) -> None:
+        """Keep generated credentials out of process arguments and disk files."""
+        columns, rows = shutil.get_terminal_size((80, 24))
+        width = min(self.width, columns - 4)
+        text = ("Generated password:\n\n" + password +
+                "\n\nSave this password. Server settings are available via Console > Reconfigure."
+                "\n\nFrom a shell: sudo turnkey reconfigure")
+        lines = sum(max(1, len(textwrap.wrap(line, width - 6))) for line in text.splitlines())
+        arguments = ['--no-collapse', '--no-mouse', '--backtitle', getattr(self, 'title', 'TurnKey GNU/Linux'), '--title', title,
+                     '--ok-label', 'Continue', '--msgbox', text, str(min(rows - 2, lines + 6)), str(width)]
+        # dialog's --file parser accepts double-quoted arguments from an inherited
+        # pipe. Only the descriptor path is visible in the child command line.
+        payload = ' '.join('"' + arg.replace('\\', '\\\\').replace('"', '\\"') + '"' for arg in arguments)
+        while True:
+            reader, writer = os.pipe()
+            try:
+                os.write(writer, payload.encode())
+                os.close(writer)
+                writer = None
+                code = subprocess.run(['dialog', '--file', '/proc/self/fd/' + str(reader)], pass_fds=(reader,)).returncode
+            finally:
+                os.close(reader)
+                if writer is not None:
+                    os.close(writer)
+            if code not in (0, 255):
+                raise Error('Could not display the generated password')
+            if self._handle_exitcode('esc' if code == 255 else 'ok'):
+                return
 
     def get_email(self, title: str, text: str, init: str = "") -> str | None:
         """Vaidated input box (email) with optional prefilled value and 'Ok'

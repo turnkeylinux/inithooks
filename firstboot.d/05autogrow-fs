@@ -1,4 +1,7 @@
 #!/bin/bash
+# reconfigure: no
+# reconfigure-title: Filesystem Expansion
+# reconfigure-description: Expand the filesystem during initial startup.
 # auto grow filesystem for block device based appliances - (c) Aug/2014 by Peter Lieven <pl@kamp.de>
 
 [ -n "$_TURNKEY_INIT" ] && exit 0

@@ -63,8 +63,7 @@ def main():
     std_input = ":".join([username, password])
 
     try:
-        p = subprocess.Popen(command, stdin=subprocess.PIPE, shell=False)
-        p.communicate(std_input.encode(sys.stdin.encoding))
+        subprocess.run(command, input=std_input + "\n", text=True, check=True)
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as e:
         fatal(e)
 
