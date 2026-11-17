@@ -114,6 +114,7 @@ class ReconfigureTest(unittest.TestCase):
         self.assertIn('30rootpass', names)
         self.assertNotIn('98finalize', names)
         self.assertNotIn('30hub-link', names)
+        self.assertNotIn('01ipconfig', names)
         legacy = json.loads(rc.LEGACY.read_text())
         for name in ('29preseed', '40openldap', '40openvpn', '40wireguard', '50jellyfin-server'):
             self.assertFalse(legacy[name]['enabled'])

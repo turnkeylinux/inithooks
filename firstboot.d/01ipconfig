@@ -1,5 +1,5 @@
 #!/bin/bash -e
-# reconfigure: yes
+# reconfigure: no
 # reconfigure-title: Network
 # reconfigure-description: Configure network addressing and DNS.
 
