@@ -15,6 +15,9 @@ from libinithooks import reconfigure as rc
 
 class ReconfigureTest(unittest.TestCase):
     def setUp(self):
+        logging_patch = patch('logging.basicConfig')
+        logging_patch.start()
+        self.addCleanup(logging_patch.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
@@ -57,6 +60,16 @@ class ReconfigureTest(unittest.TestCase):
         self.hook('40disabled', 'exit 0').chmod(0o644)
         self.hook('41invalid', '# reconfigure: maybe\nexit 0')
         self.assertEqual(self.discover(), [])
+
+    def test_explicit_opt_in_runs_container_disabled_hook_without_chmod(self):
+        marker = self.root / 'changed'
+        path = self.hook('30rootpass', '# reconfigure: yes\n' + f'touch {marker}\n')
+        path.chmod(0o644)
+        hooks = self.discover()
+        self.assertEqual(len(hooks), 1)
+        self.assertEqual(rc.execute(hooks[0], self.root), 0)
+        self.assertTrue(marker.exists())
+        self.assertEqual(path.stat().st_mode & 0o777, 0o644)
 
     def test_execute_runs_only_selected_hook_without_inherited_preseeds(self):
         marker = self.root / 'result'

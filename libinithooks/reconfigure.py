@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import shlex
 import subprocess
 import sys
 import textwrap
@@ -47,7 +48,7 @@ def discover(directory=HOOKS, legacy_path=LEGACY):
     if not directory.exists():
         return found
     for path in sorted(directory.iterdir()):
-        if not path.is_file() or not os.access(path, os.X_OK):
+        if not path.is_file():
             continue
         try:
             metadata, comments = header(path)
@@ -61,6 +62,9 @@ def discover(directory=HOOKS, legacy_path=LEGACY):
             enabled = defaults.get('enabled', True)
         if not enabled:
             continue
+        if not os.access(path, os.X_OK):
+            if metadata.get('enabled', '').lower() != 'yes' or not path.read_text().startswith('#!'):
+                continue
         title = metadata.get('title') or defaults.get('title') or re.sub(r'^\d+[-_]*', '', path.name).replace('-', ' ').replace('_', ' ').title()
         description = metadata.get('description') or defaults.get('description') or (comments[0] if comments else '')
         found.append(Hook(path.name, title, description))
@@ -81,7 +85,15 @@ def execute(hook, directory=HOOKS):
                HOME='/root', USER='root', LOGNAME='root',
                _TURNKEY_INIT='1', _TURNKEY_RECONFIGURE='1')
     # env retains the historical execvp handling of shell hooks without a shebang.
-    process = subprocess.Popen(['env', str(directory / hook.name)], env=env)
+    path = directory / hook.name
+    command = ['env', str(path)]
+    if not os.access(path, os.X_OK):
+        # Some container images use dpkg-statoverride to disable first-boot
+        # password entry. Explicit reconfiguration uses the declared interpreter
+        # while preserving that boot-time permission setting.
+        interpreter = shlex.split(path.read_text().splitlines()[0][2:])
+        command = [*interpreter, str(path)]
+    process = subprocess.Popen(command, env=env)
     while True:
         try:
             return process.wait()

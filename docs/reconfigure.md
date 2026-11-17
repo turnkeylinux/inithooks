@@ -17,8 +17,8 @@ supported by the installed hooks; the generated password is displayed once.
 
 ## Hook annotations
 
-Reconfigure discovers executable files in `/usr/lib/inithooks/firstboot.d/`
-when the menu opens. New hooks appear by default. Add these opening comments
+Reconfigure discovers files in `/usr/lib/inithooks/firstboot.d/` when the menu
+opens. New executable hooks appear by default. Add these opening comments
 to describe an entry:
 
 ```sh
@@ -31,7 +31,10 @@ to describe an entry:
 Use `# reconfigure: no` for initialization-only operations and hooks that require
 other first-boot steps. Put annotations before executable statements. Explicit
 annotations take precedence over the package's compatibility catalog. Malformed
-explicit eligibility values hide the entry until corrected.
+explicit eligibility values hide the entry until corrected. An explicit `yes`
+also permits a non-executable script with a shebang to run through its declared
+interpreter. This preserves container policies that disable password hooks during
+first boot while permitting an administrator to reconfigure them later.
 
 Without metadata, the title comes from the filename with leading digits removed,
 dashes and underscores converted to spaces, and words capitalized. The first
