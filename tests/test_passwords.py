@@ -21,14 +21,15 @@ class PasswordTest(unittest.TestCase):
         self.assertEqual(len(values), 20)
         self.assertTrue(all(passwords.valid(v, 30, 4, ['-', '"', "'"]) for v in values))
 
-    def test_format_uses_five_uniform_word_draws_and_two_digits(self):
+    def test_format_uses_four_uniform_word_draws_and_four_digits(self):
         words = passwords.wordlist()
         self.assertEqual(len(words), 7776)
         self.assertEqual(len(set(words)), 7776)
-        with patch.object(passwords.secrets, "choice", side_effect=["acorn", "river", "candle", "harbor", "lilac"]) as choice, \
-             patch.object(passwords.secrets, "randbelow", return_value=7):
-            self.assertEqual(passwords.generate(), "Acorn-river-candle-harbor-lilac-07")
-        self.assertEqual(choice.call_count, 5)
+        with patch.object(passwords.secrets, "choice", side_effect=["acorn", "river", "candle", "harbor"]) as choice, \
+             patch.object(passwords.secrets, "randbelow", return_value=7) as digits:
+            self.assertEqual(passwords.generate(), "Acorn-river-candle-harbor-0007")
+        digits.assert_called_once_with(10000)
+        self.assertEqual(choice.call_count, 4)
         self.assertTrue(all(call.args == (words,) for call in choice.call_args_list))
 
     def test_impossible_policy_fails_instead_of_looping(self):

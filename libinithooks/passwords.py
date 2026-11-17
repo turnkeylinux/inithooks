@@ -27,9 +27,9 @@ def generate(minimum=8, categories=3, blacklist=()):
         raise ValueError("Automatic generation cannot satisfy these password requirements. Enter a password.")
     words = wordlist()
     for unused in range(128):
-        selected = [secrets.choice(words) for _ in range(5)]
+        selected = [secrets.choice(words) for _ in range(4)]
         selected[0] = selected[0].capitalize()
-        digits = f"{secrets.randbelow(100):02d}"
+        digits = f"{secrets.randbelow(10000):04d}"
         password = separator.join([*selected, digits])
         if valid(password, minimum, categories, blacklist):
             return password
