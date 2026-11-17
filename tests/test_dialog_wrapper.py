@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Exercise the shared dialog contract without a terminal or system log access."""
 import importlib.util
+import os
+import signal
 from pathlib import Path
 import sys
 import tempfile
@@ -60,6 +62,26 @@ class DialogWrapperTest(unittest.TestCase):
                 self.assertIs(actual, accepted)
                 self.assertEqual(self.console.inputbox.call_count, 2)
                 self.console.inputbox.assert_called_with("\nQuestion", init="old")
+
+    def test_ctrl_c_confirms_and_decline_reopens_prompt(self):
+        def interrupt(*args, **kwargs):
+            os.kill(os.getpid(), signal.SIGINT)
+            return ('cancel', '')
+        calls = iter([True, False])
+        self.console.inputbox.side_effect = lambda *args, **kwargs: interrupt(*args, **kwargs) if next(calls) else ('ok', 'answer')
+        self.console.yesno.return_value = 'cancel'
+        self.assertEqual(self.dialog.wrapper('inputbox', 'Question'), ('ok', 'answer'))
+        self.console.yesno.assert_called_once_with('Do you really want to quit?')
+
+    def test_ctrl_c_confirmation_exits_with_setup_cancel_status(self):
+        def interrupt(*args, **kwargs):
+            os.kill(os.getpid(), signal.SIGINT)
+            return ('cancel', '')
+        self.console.inputbox.side_effect = interrupt
+        self.console.yesno.return_value = 'ok'
+        with self.assertRaises(SystemExit) as caught:
+            self.dialog.wrapper('inputbox', 'Question')
+        self.assertEqual(caught.exception.code, 130)
 
     def test_success_and_cancel_results_retain_their_shape(self):
         for result in ("ok", "cancel", ("ok", "answer"), ("cancel", "")):

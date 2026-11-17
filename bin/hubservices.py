@@ -20,6 +20,7 @@ from typing import NoReturn
 from dialog import DialogError
 from libinithooks.dialog_wrapper import Dialog
 from libinithooks import hub_push, onboarding
+from libinithooks.interrupt import dialog_interrupt
 
 def usage(msg: str | getopt.GetoptError = "") -> NoReturn:
     if msg:
@@ -44,6 +45,18 @@ def mail_call(*arguments):
         return {"status": "error", "message": "The Hub connection could not finish. Try again."}
 
 
+def interactive_mail_call(d, *arguments):
+    """Confirm Ctrl-C during connection preparation and retry when declined."""
+    while True:
+        with dialog_interrupt() as interrupted:
+            result = mail_call(*arguments)
+        if not interrupted[0]:
+            return result
+        if d.yesno('Quit setup', 'Do you really want to quit?'):
+            raise SystemExit(130)
+        d.infobox('Connecting to TurnKey Hub...')
+
+
 def connect_mail(d, flow_kind="firstboot", progress_shown=False):
     try:
         return _connect_mail(d, flow_kind, progress_shown)
@@ -61,7 +74,7 @@ def _connect_mail(d, flow_kind="firstboot", progress_shown=False):
         d.infobox("Connecting to TurnKey Hub...")
     onboarding.start_flow(flow_kind)
     onboarding.observe("link_started")
-    result = mail_call("connect", "--start")
+    result = interactive_mail_call(d, "connect", "--start")
     if result.get("status") == "error":
         onboarding.observe("error", error_code="link_start_failed")
         onboarding.observe("skipped")
@@ -126,7 +139,7 @@ def _connect_mail(d, flow_kind="firstboot", progress_shown=False):
                     notifications.close()
                     notifications = None
                 d.infobox('Connecting to TurnKey Hub...')
-                result = mail_call('connect', '--start')
+                result = interactive_mail_call(d, 'connect', '--start')
                 if result.get('status') == 'error':
                     onboarding.observe('error', error_code='link_start_failed')
                     onboarding.observe('skipped')
@@ -148,7 +161,7 @@ def _connect_mail(d, flow_kind="firstboot", progress_shown=False):
             notifications.close()
 
 
-def early(unattended=False, progress=None):
+def early(unattended=False, progress=None, interactive_call=None):
     """Run before application prompts, without a network call on local no-op paths."""
     token = sys.stdin.read(256).strip() if not sys.stdin.isatty() else ""
     if token:
@@ -170,7 +183,7 @@ def early(unattended=False, progress=None):
         return True
     if progress is not None:
         progress()
-    current = mail_call("status", "--local")
+    current = (interactive_call or mail_call)("status", "--local")
     if current.get("connection_status") == "linked":
         onboarding.observe("link_completed")
         return True
@@ -217,7 +230,8 @@ def main():
             early_dialog.infobox("Connecting to TurnKey Hub...")
 
         try:
-            if early(unattended, show_progress):
+            if early(unattended, show_progress,
+                     lambda *args: interactive_mail_call(early_dialog, *args)):
                 return
         except DialogError:
             onboarding.observe("error", error_code="link_dialog_failed")

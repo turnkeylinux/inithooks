@@ -13,6 +13,7 @@ from os import environ
 from urllib.parse import urlparse
 import logging
 from libinithooks import onboarding, passwords
+from libinithooks.interrupt import dialog_interrupt
 
 EMAIL_RE = re.compile(r"(?:^|\s).*\S@\S+(?:\s|$)", re.IGNORECASE)
 
@@ -54,7 +55,14 @@ class Dialog:
         logging.debug(f"_handle_exitcode(retcode={retcode!r})")
         if retcode == self.console.ESC:  # ESC, ALT+?
             text = "Do you really want to quit?"
-            if self.console.yesno(text) == self.console.OK:
+            with dialog_interrupt() as interrupted:
+                try:
+                    answer = self.console.yesno(text)
+                except Exception:
+                    if not interrupted[0]:
+                        raise
+                    answer = self.console.CANCEL
+            if not interrupted[0] and answer == self.console.OK:
                 # A cancelled hook is not successful initialization. Let the
                 # runner stop before disabling the appliance's web fence.
                 sys.exit(130)
@@ -90,7 +98,15 @@ class Dialog:
         while True:
             # A failed backend cannot reliably display another error dialog.
             # Let the caller report the failure or select a different frontend.
-            result = method("\n" + text, *args, **kws)
+            with dialog_interrupt() as interrupted:
+                try:
+                    result = method("\n" + text, *args, **kws)
+                except Exception:
+                    if not interrupted[0]:
+                        raise
+                    result = self.console.ESC
+            if interrupted[0]:
+                result = self.console.ESC
             if self._handle_exitcode(result):
                 return result
 
@@ -317,7 +333,10 @@ class Dialog:
                 os.write(writer, payload.encode())
                 os.close(writer)
                 writer = None
-                code = subprocess.run(['dialog', '--file', '/proc/self/fd/' + str(reader)], pass_fds=(reader,)).returncode
+                with dialog_interrupt() as interrupted:
+                    code = subprocess.run(['dialog', '--file', '/proc/self/fd/' + str(reader)], pass_fds=(reader,)).returncode
+                if interrupted[0]:
+                    code = 255
             finally:
                 os.close(reader)
                 if writer is not None:

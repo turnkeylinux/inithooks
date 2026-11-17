@@ -19,6 +19,7 @@ firstboot.d hook execution environment:
 
 """
 import os
+import signal
 import sys
 
 from conffile import ConfFile
@@ -104,12 +105,16 @@ def main():
             if arg in ('-c', '--full-confconsole'):
                 confconsole = confconsole[:-1]
 
+    # The active hook owns Ctrl-C and can ask before aborting setup.
+    previous_sigint = signal.signal(signal.SIGINT, signal.SIG_IGN)
     inithooks = InitHooks()
     try:
         inithooks.execute('firstboot.d')
     except subprocess.CalledProcessError as error:
         fatal("Setup stopped at %s. Correct the error and run turnkey-init again."
               % os.path.basename(error.cmd[-1]))
+    finally:
+        signal.signal(signal.SIGINT, previous_sigint)
 
     subprocess.run(confconsole)
 

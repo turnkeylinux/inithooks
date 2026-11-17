@@ -15,6 +15,7 @@ import termios
 import textwrap
 import threading
 import time
+from libinithooks.interrupt import dialog_interrupt
 
 URL = 'wss://ajax.turnkeylinux.org/initfence/v2/pairing'
 STATE = Path('/var/lib/turnkey-mail/state.json')
@@ -152,6 +153,13 @@ def _action(returncode):
 
 
 def confirm(dialog, instructions, notifications=None, *, relink=False, pending=False, expires_at=None, poll=None):
+    with dialog_interrupt() as interrupted:
+        result = _confirm(dialog, instructions, notifications, relink=relink, pending=pending,
+                          expires_at=expires_at, poll=poll)
+    return 'escape' if interrupted[0] else result
+
+
+def _confirm(dialog, instructions, notifications=None, *, relink=False, pending=False, expires_at=None, poll=None):
     terminal = shutil.get_terminal_size((80, 24))
     width = min(dialog.width, terminal.columns - 4)
     lines = sum(max(1, len(textwrap.wrap(line, max(20, width - 6)))) for line in instructions.splitlines())

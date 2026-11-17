@@ -10,6 +10,7 @@ import shlex
 import subprocess
 import sys
 import textwrap
+from libinithooks.interrupt import dialog_interrupt
 
 HOOKS = Path('/usr/lib/inithooks/firstboot.d')
 DEFAULTS = Path('/etc/default/inithooks')
@@ -107,8 +108,18 @@ def message(dialog, title, text):
     columns, rows = shutil.get_terminal_size((80, 24))
     width = min(76, columns - 4)
     lines = sum(max(1, len(textwrap.wrap(line, width - 6))) for line in text.splitlines())
-    # Escape closes a menu-owned message and returns to the list.
-    return dialog.console.msgbox(text, title=title, width=width, height=min(rows - 2, lines + 6))
+    # Escape closes a menu-owned message; Ctrl-C asks before quitting.
+    while True:
+        with dialog_interrupt() as interrupted:
+            try:
+                result = dialog.console.msgbox(text, title=title, width=width, height=min(rows - 2, lines + 6))
+            except Exception:
+                if not interrupted[0]:
+                    raise
+                result = None
+        if not interrupted[0]:
+            return result
+        dialog._handle_exitcode(dialog.console.ESC)
 
 
 def menu(directory=HOOKS):
@@ -130,10 +141,19 @@ def menu(directory=HOOKS):
                                                     width=max(20, d.width - 12), placeholder='...'))
                        for i, h in enumerate(hooks)]
             # Use the dialog directly: Escape here means Back, not quit firstboot.
-            status, value = d.console.menu('Choose what to reconfigure.', title='Reconfigure',
-                width=d.width, height=min(rows - 2, len(hooks) + 8),
-                menu_height=min(len(hooks), max(1, rows - 10)), choices=choices,
-                ok_label='Open', cancel_label='Back', help_button=True, help_label='Details')
+            with dialog_interrupt() as interrupted:
+                try:
+                    status, value = d.console.menu('Choose what to reconfigure.', title='Reconfigure',
+                        width=d.width, height=min(rows - 2, len(hooks) + 8),
+                        menu_height=min(len(hooks), max(1, rows - 10)), choices=choices,
+                        ok_label='Open', cancel_label='Back', help_button=True, help_label='Details')
+                except Exception:
+                    if not interrupted[0]:
+                        raise
+                    status, value = 'cancel', ''
+            if interrupted[0]:
+                d._handle_exitcode(d.console.ESC)
+                continue
             if status not in ('ok', 'help'):
                 return 0
             try:

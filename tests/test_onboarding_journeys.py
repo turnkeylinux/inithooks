@@ -2,6 +2,7 @@
 import importlib.util
 import io
 import os
+import signal
 from pathlib import Path
 import re
 import subprocess
@@ -146,6 +147,28 @@ class JourneysTest(unittest.TestCase):
         with patch.object(self.hub.sys, 'stdin', io.StringIO('')), \
                 patch.object(self.hub, 'mail_call', side_effect=check):
             self.assertTrue(self.hub.early(progress=progress))
+
+    def test_ctrl_c_during_connection_can_retry_or_quit(self):
+        d = Mock()
+        d.yesno.return_value = False
+        calls = iter([True, False])
+        def request(*args):
+            if next(calls):
+                os.kill(os.getpid(), signal.SIGINT)
+                return {'status': 'error'}
+            return {'status': 'pending'}
+        with patch.object(self.hub, 'mail_call', side_effect=request):
+            self.assertEqual(self.hub.interactive_mail_call(d, 'connect', '--start'), {'status': 'pending'})
+        d.yesno.assert_called_once_with('Quit setup', 'Do you really want to quit?')
+        d.infobox.assert_called_once_with('Connecting to TurnKey Hub...')
+
+        d.yesno.return_value = True
+        def interrupted(*args):
+            os.kill(os.getpid(), signal.SIGINT)
+            return {'status': 'error'}
+        with patch.object(self.hub, 'mail_call', side_effect=interrupted), self.assertRaises(SystemExit) as caught:
+            self.hub.interactive_mail_call(d, 'connect', '--start')
+        self.assertEqual(caught.exception.code, 130)
 
     def test_progress_appears_before_request(self):
         dialog = Mock()

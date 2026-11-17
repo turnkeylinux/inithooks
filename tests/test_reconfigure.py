@@ -123,6 +123,18 @@ class ReconfigureTest(unittest.TestCase):
             self.assertTrue(legacy[name]['enabled'])
         self.assertNotIn('98finalize', legacy)
 
+    def test_ctrl_c_on_menu_asks_then_returns_to_menu_when_declined(self):
+        self.hook('40example', '# Change an example setting.\nexit 0')
+        d = Mock()
+        def interrupt(*args, **kwargs):
+            os.kill(os.getpid(), signal.SIGINT)
+            return ('cancel', '')
+        calls = iter([True, False])
+        d.console.menu.side_effect = lambda *args, **kwargs: interrupt(*args, **kwargs) if next(calls) else ('cancel', '')
+        with patch('libinithooks.dialog_wrapper.Dialog', return_value=d), patch.object(rc, 'setup_pending', return_value=False):
+            self.assertEqual(rc.menu(self.root), 0)
+        d._handle_exitcode.assert_called_once_with(d.console.ESC)
+
     def test_failure_and_cancel_return_to_menu(self):
         self.hook('40example', '# Change an example setting.\nexit 1')
         d = Mock()
