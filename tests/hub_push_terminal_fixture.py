@@ -1,6 +1,7 @@
 """Real owned dialog with controlled wake events and isolated local state."""
 import importlib.util
 import json
+import logging
 import os
 from pathlib import Path
 import sys
@@ -11,6 +12,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+logging.basicConfig(stream=sys.stderr, level=logging.CRITICAL)
 spec = importlib.util.spec_from_file_location('hubservices', ROOT / 'bin/hubservices.py')
 ui = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ui)
@@ -19,6 +21,8 @@ control.unlink(missing_ok=True)
 state = tempfile.TemporaryDirectory()
 ui.onboarding.STATE_DIR = Path(state.name)
 ui.onboarding.HUB_STATE = Path(state.name) / 'hub.json'
+from libinithooks import hub_runtime
+hub_runtime.start_observations = lambda: None
 calls = []
 
 
@@ -50,7 +54,7 @@ class Wake:
 def exchange(*arguments):
     calls.append(arguments)
     if arguments == ('connect', '--start'):
-        return {'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'D34C-F5A9', 'interval': 1 if mode == 'fallback-auto' else 5}
+        return {'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'D34C-F5A9', 'expires_in': 1 if mode == 'fallback-auto' else 900}
     if '--notified' in arguments or mode in ('manual', 'fallback-auto'):
         return {'connection_status': 'linked'}
     return {'status': 'pending'}

@@ -95,7 +95,7 @@ def exercise(mode, columns):
             wait('could not continue', 'backend-error')
         else:
             initial = wait('D34C-F5A9', 'code')
-            assert "I've entered the code" in initial and 'Skip' in initial
+            assert "I've approved" in initial and 'Skip' in initial
             assert 'hub.turnkeylinux.org/connect' in initial and 'Connect email delivery' in initial
             assert 'Open https://hub.turnkeylinux.org/connect' in initial
             assert 'Get security alerts by email.' in initial
@@ -136,7 +136,7 @@ def exercise(mode, columns):
         assert 'Traceback' not in text and 'Warning:' not in text and 'warning:' not in text
         result = json.JSONDecoder().raw_decode(text.split('RESULT ', 1)[1])[0]
         if mode == 'auto':
-            assert result['calls'] == [['connect', '--start'], ['connect', '--poll'], ['connect', '--poll', '--notified']], result
+            assert result['calls'] == [['connect', '--start'], ['connect', '--poll', '--notified']], result
             assert 'approval_checked' not in result['events'] and 'link_completed' in result['events']
         if mode == 'fallback-auto':
             assert result['calls'] == [['connect', '--start'], ['connect', '--poll']], result

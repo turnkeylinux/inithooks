@@ -14,6 +14,8 @@ spec.loader.exec_module(module)
 Dialog = module.Dialog
 state = tempfile.TemporaryDirectory()
 module.onboarding.STATE_DIR = Path(state.name)
+from libinithooks import hub_runtime
+hub_runtime.start_observations = lambda: None
 
 
 def dialog(*args, **kwargs):
@@ -25,14 +27,16 @@ def dialog(*args, **kwargs):
 module.Dialog = dialog
 mode = sys.argv[1] if len(sys.argv) > 1 else 'ready'
 polls = 0
+starts = 0
 
 
 def invoke(*args):
-    global polls
+    global polls, starts
     if args == ('connect', '--start'):
+        starts += 1
         if mode == 'start-error':
             return {'status': 'error', 'message': 'The Hub is temporarily unavailable. Try again shortly.'}
-        return {'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'D34C-F5A9'}
+        return {'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'AAAA-BBBB' if mode == 'expired' and starts > 1 else 'D34C-F5A9'}
     polls += 1
     if mode == 'pending' and polls == 1:
         return {'status': 'pending'}

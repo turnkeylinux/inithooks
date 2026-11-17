@@ -83,7 +83,6 @@ class Notifications:
                     'subscribed' if 'subscribed' in events else events[-1] if events else None)
 
     def _run(self):
-        subscribed = False
         submitted = False
         delay = 1
         while not self.stopped.is_set() and time.time() < self.capability['expires_at']:
@@ -94,12 +93,10 @@ class Notifications:
                 client.connect(URL, header={'Authorization': 'Bearer ' + self.capability['token']},
                                timeout=3, redirect_limit=0, suppress_origin=True)
                 if client.getstatus() != 101:
-                    return
+                    raise OSError('Notification subscription failed')
                 if self.stopped.is_set():
                     return
-                if not subscribed:
-                    subscribed = True
-                    self._signal('subscribed')
+                self._signal('subscribed')
                 client.settimeout(1)
                 while not self.stopped.is_set() and time.time() < self.capability['expires_at']:
                     try:
@@ -154,12 +151,12 @@ def _action(returncode):
     return {0: 'check', 1: 'skip', 255: 'escape'}.get(returncode, 'error')
 
 
-def confirm(dialog, instructions, notifications=None, *, relink=False, pending=False, interval=5, poll=None):
+def confirm(dialog, instructions, notifications=None, *, relink=False, pending=False, expires_at=None, poll=None):
     terminal = shutil.get_terminal_size((80, 24))
     width = min(dialog.width, terminal.columns - 4)
     lines = sum(max(1, len(textwrap.wrap(line, max(20, width - 6)))) for line in instructions.splitlines())
-    label = "I've approved" if pending else "I've entered the code"
-    deadline = time.monotonic() + interval
+    label = "I've approved"
+    deadline = expires_at
     command = ['dialog', '--no-collapse', '--no-mouse', '--backtitle',
                'TurnKey GNU/Linux - Hub services' if relink else 'TurnKey GNU/Linux - First boot configuration',
                '--title', 'Connect to TurnKey Hub', '--yes-label', label, '--no-label', 'Skip',
@@ -191,16 +188,16 @@ def confirm(dialog, instructions, notifications=None, *, relink=False, pending=F
                 future = None
                 if result.get('status') != 'pending':
                     return ('poll_result', result)
-                deadline = time.monotonic() + interval
-            remaining = deadline - time.monotonic()
-            if not future and remaining <= 0:
+                deadline = None
+            remaining = None if deadline is None else deadline - time.monotonic()
+            if not future and remaining is not None and remaining <= 0:
                 if not executor:
                     return 'poll'
                 future = executor.submit(poll)
             readers = ([notifications.reader] if notifications else []) + ([process_fd] if process_fd is not None else [])
-            timeout = .1 if future else max(0, remaining)
+            timeout = .1 if future else None if remaining is None else max(0, remaining)
             if process_fd is None:
-                timeout = min(.1, timeout)
+                timeout = .1 if timeout is None else min(.1, timeout)
             readable, unused, unused2 = select.select(readers, [], [], timeout)
             # A user exit already observed wins over a concurrent notification.
             code = child.poll()

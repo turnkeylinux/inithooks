@@ -46,13 +46,15 @@ class JourneysTest(unittest.TestCase):
     def names(self):
         return [e['event_name'] for e in onboarding.load()['pending']]
 
-    def test_interrupted_or_failed_dialog_exits_without_traceback(self):
-        for error, code in ((KeyboardInterrupt(), 130), (self.hub.DialogError("backend failed"), 1)):
-            with self.subTest(code=code), patch.object(self.hub, '_connect_mail', side_effect=error), patch('sys.stderr', new_callable=io.StringIO) as stderr:
-                with self.assertRaises(SystemExit) as result:
-                    self.hub.connect_mail(Mock())
-                self.assertEqual(result.exception.code, code)
-                self.assertIn('turnkey-init', stderr.getvalue())
+    def test_interruption_exits_and_dialog_failure_skips(self):
+        with patch.object(self.hub, '_connect_mail', side_effect=KeyboardInterrupt), patch('sys.stderr', new_callable=io.StringIO):
+            with self.assertRaises(SystemExit) as result:
+                self.hub.connect_mail(Mock())
+            self.assertEqual(result.exception.code, 130)
+        with patch.object(self.hub, '_connect_mail', side_effect=self.hub.DialogError("backend failed")), patch('sys.stderr', new_callable=io.StringIO) as stderr:
+            self.hub.connect_mail(Mock())
+            self.assertEqual(onboarding.decision(), 'skipped')
+            self.assertIn('sudo turnkey connect', stderr.getvalue())
 
     def test_unattended_path_does_not_invoke_helper_or_dialog(self):
         with patch.object(self.hub.sys, 'stdin', io.StringIO('')), patch.object(self.hub, 'mail_call') as call:
@@ -145,28 +147,48 @@ class JourneysTest(unittest.TestCase):
         self.assertEqual(onboarding.decision(), 'skipped')
         self.assertIn('D34C-F5A9', self.confirm.call_args.args[1])
 
-    def test_failed_link_check_stops_setup_without_recording_skip(self):
+    def test_failed_link_check_skips_and_continues_setup(self):
         d = Mock()
-        d.yesno.return_value = True
         with patch.object(self.hub, 'mail_call', side_effect=[
                 {'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'D34C-F5A9'},
-                {'status': 'error', 'message': 'Unavailable'}]), self.assertRaises(SystemExit) as error:
+                {'status': 'error', 'message': 'Hub unavailable', 'retryable': True}]):
             self.hub.connect_mail(d)
-        self.assertEqual(error.exception.code, 1)
-        self.assertIsNone(onboarding.decision())
-        self.assertEqual(self.names()[-2:], ['approval_checked', 'error'])
+        self.assertEqual(onboarding.decision(), 'skipped')
+        self.assertIn('sudo turnkey connect', d.msgbox.call_args.args[1])
+        self.assertEqual(self.names()[-3:], ['approval_checked', 'error', 'skipped'])
+
+    def test_start_failure_skips_and_continues_setup(self):
+        d = Mock()
+        with patch.object(self.hub, 'mail_call', return_value={'status': 'error', 'message': 'Unavailable'}):
+            self.hub.connect_mail(d)
+        self.assertEqual(onboarding.decision(), 'skipped')
+        self.assertIn('sudo turnkey connect', d.msgbox.call_args.args[1])
+
+    def test_expiry_displays_new_code(self):
+        with patch.object(self.hub.hub_push, 'confirm', side_effect=[('poll_result', {'status': 'expired'}), 'skip']) as confirm, \
+                patch.object(self.hub, 'mail_call', side_effect=[
+                    {'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'D34C-F5A9'},
+                    {'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'AAAA-BBBB'}]):
+            self.hub.connect_mail(Mock())
+        self.assertIn('AAAA-BBBB', confirm.call_args.args[1])
+        self.assertIn('previous code expired', confirm.call_args.args[1])
+
+    def test_helper_error_json_survives_nonzero_exit(self):
+        result = subprocess.CompletedProcess([], 1, stdout='{"status":"error","message":"Hub unavailable","retryable":true}')
+        with patch.object(self.hub.subprocess, 'run', return_value=result):
+            self.assertEqual(self.hub.mail_call('connect', '--poll')['message'], 'Hub unavailable')
 
     def test_push_reconciles_then_approves_without_manual_check(self):
         watcher = Mock()
         with patch.object(self.hub.hub_push.Notifications, 'open', return_value=watcher), \
-                patch.object(self.hub.hub_push, 'confirm', side_effect=['subscribed', 'poll', 'code_submitted', 'approved']) as confirm, \
+                patch.object(self.hub.hub_push, 'confirm', side_effect=['subscribed', 'code_submitted', 'approved']) as confirm, \
                 patch.object(self.hub, 'mail_call', side_effect=[
                     {'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'D34C-F5A9'},
-                    {'status': 'pending'}, {'status': 'pending'}, {'connection_status': 'linked'}]) as call:
+                    {'connection_status': 'linked'}]) as call:
             self.hub.connect_mail(Mock())
         self.assertEqual([c.args for c in call.call_args_list], [
-            ('connect', '--start'), ('connect', '--poll'), ('connect', '--poll'), ('connect', '--poll', '--notified')])
-        self.assertEqual([c.kwargs['pending'] for c in confirm.call_args_list], [False, False, False, True])
+            ('connect', '--start'), ('connect', '--poll', '--notified')])
+        self.assertEqual([c.kwargs['pending'] for c in confirm.call_args_list], [False, False, True])
         self.assertNotIn('approval_checked', self.names())
         self.assertEqual(self.names()[-1], 'link_completed')
         watcher.close.assert_called_once_with()

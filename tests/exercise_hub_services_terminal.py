@@ -33,12 +33,12 @@ for cols in (60, 80, 120):
         stream = pyte.Stream(screen)
         text = capture(child, screen, stream, f'{cols}-firstboot-{mode}-approval')
         if mode == 'start-error':
-            assert 'Retry' in text and 'Skip' in text
+            assert 'Hub connection skipped' in text and 'sudo turnkey connect' in text
         else:
-            assert 'D34C-F5A9' in text and "I've entered the code" in text
+            assert 'D34C-F5A9' in text and "I've approved" in text
             assert 'Connect email delivery' in text and 'security' in text and 'alerts' in text and 'migration' in text
         if mode in ('skip', 'start-error'):
-            child.send('\t\r')
+            child.send('\t\r' if mode == 'skip' else '\r')
             child.expect('EVENTS ([^\r\n]+)')
             assert 'skipped' in child.match.group(1)
         elif mode == 'escape':
@@ -57,12 +57,16 @@ for cols in (60, 80, 120):
                 assert 'Approve in your browser.' in text
                 child.send('\r')
                 text = capture(child, screen, stream, f'{cols}-firstboot-{mode}-connected')
-            assert ('Hub linked' in text) if mode in ('ready', 'pending') else ('Error' in text)
-            child.send('\r')
+            if mode == 'expired':
+                assert 'AAAA-BBBB' in text and 'previous code expired' in text
+                child.send('\t\r')
+            else:
+                assert ('Hub linked' in text) if mode in ('ready', 'pending') else ('Hub connection skipped' in text)
+                child.send('\r')
             child.expect('EVENTS ([^\r\n]+)')
             events = child.match.group(1)
-            assert 'approval_checked' in events and 'skipped' not in events
-            assert ('link_completed' in events) if mode in ('ready', 'pending') else ('error' in events)
+            assert 'approval_checked' in events
+            assert ('link_completed' in events and 'skipped' not in events) if mode in ('ready', 'pending') else ('error' in events and 'skipped' in events)
         child.expect('FINISHED')
         child.expect(pexpect.EOF)
         child.close()

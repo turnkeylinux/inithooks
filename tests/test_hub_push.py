@@ -131,38 +131,34 @@ class DialogLifecycleTest(unittest.TestCase):
             self.assertEqual(result, expected)
             child.terminate.assert_not_called()
 
-    def test_periodic_check_keeps_working_without_notifications(self):
-        for notifications in (None, Mock(reader=99)):
-            child = Mock(pid=12345)
-            child.poll.return_value = None
-            with patch.object(push.subprocess, 'Popen', return_value=child) as spawn, \
-                    patch.object(push.os, 'pidfd_open', side_effect=OSError), \
-                    patch.object(push.sys, 'stdin') as stdin, \
-                    patch.object(push.termios, 'tcgetattr', return_value=['saved']), \
-                    patch.object(push.termios, 'tcsetattr'), \
-                    patch.object(push.time, 'monotonic', side_effect=[0, 5]):
-                stdin.fileno.return_value = 0
-                result = push.confirm(Mock(width=60), 'Instructions', notifications, pending=True)
-            self.assertEqual(result, 'poll')
-            command = spawn.call_args.args[0]
-            self.assertEqual(command[command.index('--yes-label') + 1], "I've approved")
-            child.terminate.assert_called_once_with()
-
-    def test_background_polls_keep_one_dialog_until_linked(self):
+    def test_no_background_poll_before_expiry_without_notifications(self):
         child = Mock(pid=12345)
         child.poll.return_value = None
-        poll = Mock(side_effect=[{'status': 'pending'}, {'connection_status': 'linked'}])
-        with patch.object(push.subprocess, 'Popen', return_value=child) as spawn, \
+        poll = Mock()
+        with patch.object(push.subprocess, 'Popen', return_value=child), \
+                patch.object(push.os, 'pidfd_open', side_effect=OSError), \
+                patch.object(push.sys, 'stdin') as stdin, \
+                patch.object(push.termios, 'tcgetattr', return_value=['saved']), \
+                patch.object(push.termios, 'tcsetattr'), \
+                patch.object(push.select, 'select', side_effect=lambda *args: setattr(child.poll, 'return_value', 1) or ([], [], [])):
+            stdin.fileno.return_value = 0
+            result = push.confirm(Mock(width=60), 'Instructions', expires_at=time.monotonic() + 900, poll=poll)
+        self.assertEqual(result, 'skip')
+        poll.assert_not_called()
+
+    def test_expiry_runs_one_check(self):
+        child = Mock(pid=12345)
+        child.poll.return_value = None
+        poll = Mock(return_value={'status': 'expired'})
+        with patch.object(push.subprocess, 'Popen', return_value=child), \
                 patch.object(push.os, 'pidfd_open', side_effect=OSError), \
                 patch.object(push.sys, 'stdin') as stdin, \
                 patch.object(push.termios, 'tcgetattr', return_value=['saved']), \
                 patch.object(push.termios, 'tcsetattr'):
             stdin.fileno.return_value = 0
-            result = push.confirm(Mock(width=60), 'Instructions', interval=.01, poll=poll)
-        self.assertEqual(result, ('poll_result', {'connection_status': 'linked'}))
-        self.assertEqual(poll.call_count, 2)
-        spawn.assert_called_once()
-        child.terminate.assert_called_once()
+            result = push.confirm(Mock(width=60), 'Instructions', expires_at=time.monotonic(), poll=poll)
+        self.assertEqual(result, ('poll_result', {'status': 'expired'}))
+        poll.assert_called_once()
 
     def test_skip_waits_for_inflight_poll_before_returning(self):
         started = threading.Event()
@@ -184,7 +180,7 @@ class DialogLifecycleTest(unittest.TestCase):
                 patch.object(push.termios, 'tcgetattr', return_value=['saved']), \
                 patch.object(push.termios, 'tcsetattr'):
             stdin.fileno.return_value = 0
-            self.assertEqual(push.confirm(Mock(width=60), 'Instructions', interval=.01, poll=poll), 'skip')
+            self.assertEqual(push.confirm(Mock(width=60), 'Instructions', expires_at=time.monotonic(), poll=poll), 'skip')
         self.assertTrue(started.is_set())
 
     def test_manual_fallback_preserves_three_way_result_and_backend_error(self):

@@ -14,6 +14,7 @@ import os
 import signal
 import shutil
 import subprocess
+import time
 from typing import NoReturn
 
 from dialog import DialogError
@@ -36,11 +37,11 @@ def mail_call(*arguments):
         result = subprocess.run([MAIL_HELPER, *arguments, "--json"],
                                 capture_output=True, text=True, timeout=90)
         data = json.loads(result.stdout)
-        if result.returncode or not isinstance(data, dict):
+        if not isinstance(data, dict) or (result.returncode and data.get("status") != "error"):
             raise ValueError()
         return data
     except (OSError, subprocess.TimeoutExpired, ValueError):
-        return {"status": "error", "message": "The Hub connection could not finish. Check the network, then try again."}
+        return {"status": "error", "message": "The Hub connection could not finish. Try again."}
 
 
 def connect_mail(d, flow_kind="firstboot"):
@@ -50,8 +51,9 @@ def connect_mail(d, flow_kind="firstboot"):
         print("Hub setup interrupted. Run turnkey-init to continue setup.", file=sys.stderr)
         raise SystemExit(130)
     except DialogError:
-        print("Hub setup could not display a dialog. Check the terminal size and run turnkey-init to continue setup.", file=sys.stderr)
-        raise SystemExit(1)
+        onboarding.observe("error", error_code="link_dialog_failed")
+        onboarding.observe("skipped")
+        print("Hub setup was skipped. Run sudo turnkey connect later.", file=sys.stderr)
 
 
 def _connect_mail(d, flow_kind="firstboot"):
@@ -59,25 +61,25 @@ def _connect_mail(d, flow_kind="firstboot"):
     onboarding.observe("link_started")
     result = mail_call("connect", "--start")
     if result.get("status") == "error":
-        onboarding.observe("prompt_shown")
-    while result.get("status") == "error":
         onboarding.observe("error", error_code="link_start_failed")
-        if not d.yesno("Connect to TurnKey Hub",
-                result["message"],
-                "Retry", "Skip"):
-            onboarding.observe("skipped")
-            return
-        result = mail_call("connect", "--start")
+        onboarding.observe("skipped")
+        d.msgbox("Hub connection skipped", "Could not connect to the Hub.\n\nTo connect later, run sudo turnkey connect.")
+        return
     pairing = result
     pending = False
+    new_code = False
+    expires_at = time.monotonic() + pairing.get("expires_in", 900)
     onboarding.observe("prompt_shown")
     notifications = hub_push.Notifications.open(pairing['user_code'])
     try:
         while True:
             width = min(60, shutil.get_terminal_size((80, 24)).columns - 4)
-            action = hub_push.confirm(d, onboarding.link_instructions(pairing, pending, width),
+            instructions = onboarding.link_instructions(pairing, pending, width)
+            if new_code:
+                instructions += '\n\nThe previous code expired. Enter this new code.'
+            action = hub_push.confirm(d, instructions,
                                       notifications, relink=flow_kind == 'confconsole',
-                                      pending=pending, interval=pairing.get('interval', 5),
+                                      pending=pending, expires_at=expires_at,
                                       poll=lambda: mail_call('connect', '--poll'))
             if action == 'skip':
                 onboarding.observe('skipped')
@@ -87,8 +89,11 @@ def _connect_mail(d, flow_kind="firstboot"):
                     raise SystemExit(130)
                 continue
             if action == 'error':
-                d.error('The connection dialog could not continue. Run turnkey-hub to try again.')
-                raise SystemExit(1)
+                onboarding.observe('error', error_code='link_dialog_failed')
+                onboarding.observe('skipped')
+                return
+            if action == 'subscribed':
+                continue
             if action == 'code_submitted':
                 pending = True
                 continue
@@ -113,10 +118,28 @@ def _connect_mail(d, flow_kind="firstboot"):
             status = result.get('status')
             if status == 'pending':
                 pending = pending or action == 'check'
+            elif status == 'expired':
+                onboarding.observe('error', error_code='expired')
+                if notifications:
+                    notifications.close()
+                    notifications = None
+                result = mail_call('connect', '--start')
+                if result.get('status') == 'error':
+                    onboarding.observe('error', error_code='link_start_failed')
+                    onboarding.observe('skipped')
+                    d.msgbox('Hub connection skipped', 'Could not connect to the Hub.\n\nTo connect later, run sudo turnkey connect.')
+                    return
+                pairing = result
+                expires_at = time.monotonic() + pairing.get('expires_in', 900)
+                new_code = True
+                pending = False
+                notifications = hub_push.Notifications.open(pairing['user_code'])
             else:
-                onboarding.observe('error', error_code=status if status in ('denied', 'expired') else 'link_check_failed')
-                d.error(result.get('message') or 'This connection request %s. Run setup again to reconnect.' % status)
-                raise SystemExit(1)
+                onboarding.observe('error', error_code=status if status == 'denied' else 'link_check_failed')
+                onboarding.observe('skipped')
+                message = 'The connection was not approved.' if status == 'denied' else 'Could not connect to the Hub.'
+                d.msgbox('Hub connection skipped', message + '\n\nTo connect later, run sudo turnkey connect.')
+                return
     finally:
         if notifications:
             notifications.close()

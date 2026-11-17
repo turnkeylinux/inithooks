@@ -257,7 +257,7 @@ def observe(name, **fields):
 
 def link_instructions(result, pending=False, width=60):
     content_width = max(1, width - 4)
-    action = 'Approve in your browser.' if pending else 'Enter this code:'
+    action = 'Approve in your browser.' if pending else 'Enter this code and approve:'
     return (
         'Connect email delivery, DNS, backups and migration.\n'
         'Get security alerts by email.\n\n'
