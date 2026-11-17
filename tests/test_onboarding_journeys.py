@@ -57,8 +57,10 @@ class JourneysTest(unittest.TestCase):
             self.assertIn('sudo turnkey connect', stderr.getvalue())
 
     def test_unattended_path_does_not_invoke_helper_or_dialog(self):
+        progress = Mock()
         with patch.object(self.hub.sys, 'stdin', io.StringIO('')), patch.object(self.hub, 'mail_call') as call:
-            self.assertTrue(self.hub.early(unattended=True))
+            self.assertTrue(self.hub.early(unattended=True, progress=progress))
+        progress.assert_not_called()
         call.assert_not_called()
         self.hub.Dialog.assert_not_called()
         self.assertIsNone(onboarding.decision())
@@ -136,6 +138,24 @@ class JourneysTest(unittest.TestCase):
         call.assert_called_once_with('status', '--local')
         self.assertEqual(onboarding.decision(), 'linked')
 
+    def test_early_progress_appears_before_local_connection_check(self):
+        progress = Mock()
+        def check(*args):
+            progress.assert_called_once_with()
+            return {"connection_status": "linked"}
+        with patch.object(self.hub.sys, 'stdin', io.StringIO('')), \
+                patch.object(self.hub, 'mail_call', side_effect=check):
+            self.assertTrue(self.hub.early(progress=progress))
+
+    def test_progress_appears_before_request(self):
+        dialog = Mock()
+        def start(*args):
+            dialog.infobox.assert_called_once_with("Connecting to TurnKey Hub...")
+            return {'status': 'error'}
+        with patch.object(self.hub, 'mail_call', side_effect=start):
+            self.hub.connect_mail(dialog)
+        self.assertEqual(onboarding.decision(), 'skipped')
+
     def test_explicit_skip_is_recorded_and_does_not_poll(self):
         d = Mock()
         d.yesno.return_value = False
@@ -199,7 +219,7 @@ class JourneysTest(unittest.TestCase):
                 patch.object(self.hub, 'mail_call', side_effect=[
                     {'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'D34C-F5A9'}]):
             self.hub.connect_mail(dialog)
-        dialog.infobox.assert_not_called()
+        dialog.infobox.assert_called_once_with("Connecting to TurnKey Hub...")
         self.assertEqual(self.names()[-1], 'link_completed')
 
     def test_push_skip_and_escape_close_watcher_without_exchange(self):

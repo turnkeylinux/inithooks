@@ -44,9 +44,9 @@ def mail_call(*arguments):
         return {"status": "error", "message": "The Hub connection could not finish. Try again."}
 
 
-def connect_mail(d, flow_kind="firstboot"):
+def connect_mail(d, flow_kind="firstboot", progress_shown=False):
     try:
-        return _connect_mail(d, flow_kind)
+        return _connect_mail(d, flow_kind, progress_shown)
     except KeyboardInterrupt:
         print("Hub setup interrupted. Run turnkey-init to continue setup.", file=sys.stderr)
         raise SystemExit(130)
@@ -56,7 +56,9 @@ def connect_mail(d, flow_kind="firstboot"):
         print("Hub setup was skipped. Run sudo turnkey connect later.", file=sys.stderr)
 
 
-def _connect_mail(d, flow_kind="firstboot"):
+def _connect_mail(d, flow_kind="firstboot", progress_shown=False):
+    if not progress_shown:
+        d.infobox("Connecting to TurnKey Hub...")
     onboarding.start_flow(flow_kind)
     onboarding.observe("link_started")
     result = mail_call("connect", "--start")
@@ -123,6 +125,7 @@ def _connect_mail(d, flow_kind="firstboot"):
                 if notifications:
                     notifications.close()
                     notifications = None
+                d.infobox('Connecting to TurnKey Hub...')
                 result = mail_call('connect', '--start')
                 if result.get('status') == 'error':
                     onboarding.observe('error', error_code='link_start_failed')
@@ -145,7 +148,7 @@ def _connect_mail(d, flow_kind="firstboot"):
             notifications.close()
 
 
-def early(unattended=False):
+def early(unattended=False, progress=None):
     """Run before application prompts, without a network call on local no-op paths."""
     token = sys.stdin.read(256).strip() if not sys.stdin.isatty() else ""
     if token:
@@ -165,6 +168,8 @@ def early(unattended=False):
         return True
     if unattended or onboarding.decision() == "skipped":
         return True
+    if progress is not None:
+        progress()
     current = mail_call("status", "--local")
     if current.get("connection_status") == "linked":
         onboarding.observe("link_completed")
@@ -202,8 +207,23 @@ def main():
         elif opt == "--fqdn":
             fqdn = val
 
-    if early_mode and early(unattended):
-        return
+    early_dialog = None
+    if early_mode:
+        def show_progress():
+            nonlocal early_dialog
+            early_dialog = Dialog("TurnKey GNU/Linux - First boot configuration",
+                                  width=min(60, shutil.get_terminal_size((80, 24)).columns - 4),
+                                  height=min(18, shutil.get_terminal_size((80, 24)).lines - 2))
+            early_dialog.infobox("Connecting to TurnKey Hub...")
+
+        try:
+            if early(unattended, show_progress):
+                return
+        except DialogError:
+            onboarding.observe("error", error_code="link_dialog_failed")
+            onboarding.observe("skipped")
+            print("Hub setup was skipped. Run sudo turnkey connect later.", file=sys.stderr)
+            return
 
     if apikey:
         # Backup and DNS are independent. Failure in one must not skip the other.
@@ -242,9 +262,9 @@ def main():
             print("Connected to TurnKey Hub.")
             return
 
-    d = Dialog("TurnKey GNU/Linux - Hub services" if relink else "TurnKey GNU/Linux - First boot configuration",
+    d = early_dialog or Dialog("TurnKey GNU/Linux - Hub services" if relink else "TurnKey GNU/Linux - First boot configuration",
                width=min(60, shutil.get_terminal_size((80, 24)).columns - 4), height=min(18, shutil.get_terminal_size((80, 24)).lines - 2))
-    connect_mail(d, "confconsole" if relink else "firstboot")
+    connect_mail(d, "confconsole" if relink else "firstboot", progress_shown=early_dialog is not None)
 
 
 
