@@ -16,3 +16,9 @@ along with this program; If not, see <https://www.gnu.org/licenses/>.
 
 On Debian and Ubuntu systems, the complete text of the GNU General Public
 License can be found in /usr/share/common-licenses/GPL file.
+
+The file libinithooks/eff_large_wordlist.txt is the EFF Long Wordlist by
+the Electronic Frontier Foundation, published at
+https://www.eff.org/files/2016/07/18/eff_large_wordlist.txt.
+It is available under Creative Commons Attribution 4.0 International:
+https://creativecommons.org/licenses/by/4.0/
