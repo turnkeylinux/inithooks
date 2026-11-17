@@ -1,5 +1,5 @@
 #!/bin/bash -e
-# reconfigure: yes
+# reconfigure: no
 # reconfigure-title: Security Updates
 # reconfigure-description: Choose whether to install available security updates.
 # install security updates
