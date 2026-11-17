@@ -79,8 +79,8 @@ ERRORS = {
     "expired": "This connection request expired. Start a new connection.",
     "denied": "The connection was not approved. Start again when ready.",
     "invalid_token": "This connection request is invalid or expired. Start a new connection.",
-    "revoked": "This appliance's connection was revoked. Connect it again in the Hub.",
-    "not_authorized": "This appliance is no longer authorized. Check its connection in the Hub.",
+    "revoked": "This server's connection was revoked. Connect it again in the Hub.",
+    "not_authorized": "This server is no longer authorized. Check its connection in the Hub.",
     "rate_limited": "The Hub is busy. Please wait and try again.",
 }
 
