@@ -44,6 +44,7 @@ import secrets
 import smtplib
 import socket
 import ssl
+import stat
 import subprocess
 import tempfile
 import time
@@ -66,17 +67,25 @@ STATE_DIR = Path("/var/lib/turnkey-mail")
 POSTFIX_DIR = Path("/etc/postfix")
 SYSTEMD_DIR = Path("/etc/systemd/system")
 BACKUP_DIR = Path("/var/lib/tklbam")
+BACKUP_CRON = Path("/etc/cron.daily/tklbam-backup")
+BACKUP_CRON_REFERENCE = Path("/usr/share/tklbam/contrib/cron.sh")
+BACKUP_CRON_CAPABILITY = b"# Supports Hub-managed daily backups (v1)."
+BACKUP_CRON_CHANGED = ("This server’s daily backup job changed during setup. "
+                       "Start a new connection to use its current backup settings.")
 HUBDNS_DIR = Path("/var/lib/hubdns")
 HELPER = "/usr/lib/inithooks/bin/turnkey-hub"
 MAX_JSON = 65536
 DEVICE_CODE = re.compile(r"^[A-Za-z0-9_-]{32,256}$")
 SERVICE_SECRET = re.compile(r"^[A-Za-z0-9_-]{43}$")
+BACKUP_TOKEN = re.compile(r"tklbam2\.([0-9a-f]{32})\.[A-Za-z0-9_-]{43}")
+DAILY_BACKUP_MARKER = re.compile(r"([0-9a-f]{32}) (local|managed)")
 DEVICE_ID = re.compile(r"^[a-f0-9]{32}$")
 ENROLLMENT_TOKEN = re.compile(r"^[a-f0-9]{32}\.[a-f0-9]{64}$")
 HOST = re.compile(r"^(?=.{1,253}$)[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$", re.I)
 ADDRESS = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+$")
-# These are wire formats. Optional consumers can be installed after pairing.
-SUPPORTED_SERVICES = {"email": [1], "dns": [1], "backup": [1]}
+# Optional consumers can be installed after pairing. Backup v2 also requires
+# the stock TKLBAM scheduler when the appliance starts the connection.
+SUPPORTED_SERVICES = {"email": [1], "dns": [1], "backup": [1, 2]}
 SERVICE_FIELDS = {"email": ("enabled", "status", "grant_id", "domain", "sender"),
                   "dns": ("enabled", "status", "hostname", "update_uri"),
                   "backup": ("requested", "status", "action_url")}
@@ -136,6 +145,74 @@ def atomic(path, content, mode=0o600):
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
+
+
+def stock_backup_cron_mode():
+    try:
+        if BACKUP_CRON.is_symlink() or not BACKUP_CRON.is_file():
+            return None
+        reference = BACKUP_CRON_REFERENCE.read_bytes()
+        if BACKUP_CRON_CAPABILITY in reference.splitlines() and BACKUP_CRON.read_bytes() == reference:
+            return stat.S_IMODE(BACKUP_CRON.stat().st_mode)
+    except OSError:
+        pass
+    return None
+
+
+def eligible_backup_cron_mode():
+    mode = stock_backup_cron_mode()
+    if mode is None:
+        return None
+    for frequency in ("hourly", "weekly"):
+        alternate = BACKUP_CRON.parent.with_name("cron." + frequency) / BACKUP_CRON.name
+        if alternate.is_file() and os.access(alternate, os.X_OK):
+            return None
+    return mode
+
+
+def forget_backup_auth(device_id):
+    credential = BACKUP_DIR / "sub_apikey"
+    try:
+        token = credential.read_text()
+    except FileNotFoundError:
+        return
+    if token.startswith("tklbam2." + device_id + "."):
+        credential.unlink(missing_ok=True)
+        (BACKUP_DIR / "credentials").unlink(missing_ok=True)
+
+
+def backup_file(name):
+    try:
+        return (BACKUP_DIR / name).read_text().rstrip()
+    except FileNotFoundError:
+        return None
+
+
+def daily_backup_marker():
+    content = backup_file("hub-managed-daily")
+    if content is None:
+        return None
+    previous = DAILY_BACKUP_MARKER.fullmatch(content)
+    if not previous:
+        raise Error("The daily backup schedule marker is invalid. Check the TKLBAM schedule on this server.")
+    return previous.groups()
+
+
+def remove_daily_backup():
+    previous = daily_backup_marker()
+    if previous and previous[1] == "managed":
+        stock_mode = stock_backup_cron_mode()
+        if stock_mode is not None and stock_mode & stat.S_IXUSR:
+            BACKUP_CRON.chmod(stock_mode & ~stat.S_IXUSR)
+    # A locally owned executable falls back to the legacy invocation when the
+    # marker is removed. Retire credentials for both pending and ready devices.
+    ready = backup_file("hub-daily-initialized")
+    if ready and DEVICE_ID.fullmatch(ready):
+        forget_backup_auth(ready)
+    if previous and previous[0] != ready:
+        forget_backup_auth(previous[0])
+    (BACKUP_DIR / "hub-daily-initialized").unlink(missing_ok=True)
+    (BACKUP_DIR / "hub-managed-daily").unlink(missing_ok=True)
 
 
 def run(command, data=None, timeout=30):
@@ -233,6 +310,10 @@ def connection_service(name, entry, device_id):
         if type(entry[key]) is not kind:
             raise Error("The Hub returned invalid service settings.")
         public[key] = entry[key]
+    if name == "backup" and version == 2 and (
+            "requested" not in public or public.get("status") not in (
+                "disabled", "active", "secret_required", "setup_required", "migration_required")):
+        raise Error("The Hub returned invalid backup settings.")
     secret = entry.get("credential")
     if name == "email" and public.get("status") in ("active", "pending_verification"):
         if (not public.get("enabled") or not DEVICE_ID.fullmatch(public.get("grant_id", "")) or
@@ -531,6 +612,7 @@ class Mail:
             result = request("enroll", {key: pending[key] for key in ("token", "control_secret", "dns_password")})
             if result.get("version") != 2 or not re.fullmatch(r"[a-f0-9]{32}", result.get("device_id", "")):
                 raise Error("The Hub returned an invalid connection.")
+            remove_daily_backup()
             if self.linked().get("device_id") != result["device_id"]:
                 HUB_EMAIL_CACHE.unlink(missing_ok=True)
                 for key in ("smtp_secret", "backup_secret", "services"):
@@ -613,6 +695,50 @@ class Mail:
         elif secret:
             self.state["smtp_secret"] = {"grant_id": public["grant_id"], "password": secret}
 
+    def prepare_daily_backup(self, pairing, device_id, account_id, secret):
+        mode = eligible_backup_cron_mode()
+        if mode is None:
+            raise Error(BACKUP_CRON_CHANGED)
+        previous = daily_backup_marker()
+        original = previous[1] if previous else ("local" if mode & 0o111 else "managed")
+        pending_path = BACKUP_DIR / "hub-managed-daily"
+        ready_path = BACKUP_DIR / "hub-daily-initialized"
+        ready = backup_file("hub-daily-initialized")
+        link = self.linked()
+        previous_account_id = link.get("backup_account_id")
+        rotate = False
+        token = new_token = None
+        if previous and secret and type(previous_account_id) is int and previous_account_id == account_id:
+            former_device = link.get("device_id")
+            token = backup_file("sub_apikey")
+            authorization = BACKUP_TOKEN.fullmatch(token or "")
+            new_token = "tklbam2.%s.%s" % (device_id, secret)
+            former_token = authorization and authorization.group(1) == former_device
+            previously_ready = previous[0] == ready == former_device and former_token
+            # A completion replay can resume after any of the registry writes.
+            resuming = (pairing.get("daily_rotation_device") == device_id and previous[0] == device_id
+                        and (ready in (former_device, device_id) or ready is None and former_device == device_id)
+                        and (former_token or token == new_token))
+            rotate = ((previously_ready or resuming) and backup_file("secret") and backup_file("key")
+                      and backup_file("hbr") and backup_file("profile/profile_id")
+                      and (BACKUP_DIR / "profile/stamp").is_file())
+            if rotate and pairing.get("daily_rotation_device") != device_id:
+                pairing["daily_rotation_device"] = device_id
+                self.save()
+
+        # The new pending device and old readiness prevent cron from using a
+        # stale registry token during rotation. A same-device secret change
+        # needs to disarm its readiness explicitly until its new token is saved.
+        if ready == device_id and (not rotate or token != new_token):
+            ready_path.unlink()
+        BACKUP_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+        atomic(pending_path, "%s %s\n" % (device_id, original))
+        if rotate:
+            if token != new_token:
+                atomic(BACKUP_DIR / "sub_apikey", new_token + "\n")
+            (BACKUP_DIR / "credentials").unlink(missing_ok=True)
+            atomic(ready_path, device_id + "\n")
+
     def complete(self, pairing, value):
         device_id = value.get("device_id")
         entries = value.get("services")
@@ -620,10 +746,23 @@ class Mail:
             raise Error("The Hub returned an invalid connection.", retryable=True)
         services = {name: connection_service(name, entry, device_id) for name, entry in entries.items()
                     if name in SUPPORTED_SERVICES}
+        backup, backup_secret = services.get("backup", ({}, None))
+        daily = backup.get("version") == 2
+        if daily and not pairing.get("backup_v2_offered"):
+            raise Error("The Hub returned backup settings this connection did not request. Start a new connection.")
+        account_id = value.get("backup_account_id")
+        if type(account_id) is not int or account_id <= 0:
+            account_id = None
+        if daily:
+            self.prepare_daily_backup(pairing, device_id, account_id, backup_secret)
+        else:
+            remove_daily_backup()
         for field in ("smtp_secret", "backup_secret", "pending", "pairing", "error", "enrolled_token_hash"):
             self.state.pop(field, None)
         self.state["link"] = dict(mode="hub", device_id=device_id, control_secret=pairing["control_secret"],
                                   flow=pairing.get("flow", {}), connections_api=True)
+        if daily and account_id is not None:
+            self.state["link"]["backup_account_id"] = account_id
         HUB_EMAIL_CACHE.unlink(missing_ok=True)
         email = remember_account_email(value.get("account_email"))
         self.state["services"] = dict(device_id=device_id, connection_status="linked", account_email=email)
@@ -764,14 +903,15 @@ class Mail:
     def check_backup(self, backup):
         status = backup.get("status")
         if status == "disabled":
-            raise Error("Enable backups for this server in the Hub, then run tklbam-backup again.")
+            raise Error("Enable backups for this server in the Hub, then run tklbam-backup again.", code=status)
         if status not in ("active", "secret_required"):
             action = urllib.parse.urljoin(HUB, backup.get("action_url", "/backup/"))
             if urllib.parse.urlsplit(action).netloc != urllib.parse.urlsplit(HUB).netloc:
                 action = HUB + "/backup/"
             message = ("Finish migrating your backup account" if status == "migration_required" else
                        "Finish backup setup and connect your AWS account")
-            raise Error(message + " in the Hub:\n\n  " + action + "\n\nThen retry your command.")
+            code = status if status in ("setup_required", "migration_required") else "failed"
+            raise Error(message + " in the Hub:\n\n  " + action + "\n\nThen retry your command.", code=code)
 
     def use_hub(self):
         self.state["mail_preference"] = "hub"
@@ -780,7 +920,10 @@ class Mail:
 
     def start(self):
         correlation = journey()
-        metadata = dict(correlation, **appliance_description(), supported_services=SUPPORTED_SERVICES)
+        offers = dict(SUPPORTED_SERVICES)
+        if eligible_backup_cron_mode() is None:
+            offers["backup"] = [1]
+        metadata = dict(correlation, **appliance_description(), supported_services=offers)
         result = request("start", metadata, "connections")
         try:
             uri = urllib.parse.urlsplit(result["verification_uri"])
@@ -799,6 +942,7 @@ class Mail:
         self.state["pairing"] = {"device_code": result["device_code"], "control_secret": secrets.token_urlsafe(32),
                                  "expires": time.time() + ttl,
                                  "interval": interval, "next_poll": 0, "flow": correlation,
+                                 "backup_v2_offered": 2 in offers["backup"],
                                  "verification_uri": result["verification_uri"], "user_code": result["user_code"]}
         try:
             from libinithooks.hub_push import validated_notification
@@ -814,6 +958,8 @@ class Mail:
         pairing = self.state.get("pairing", {})
         if pairing.get("expires", 0) <= time.time():
             return {"status": "expired"}
+        if pairing.get("backup_v2_offered") and eligible_backup_cron_mode() is None:
+            raise Error(BACKUP_CRON_CHANGED)
         if not notified and pairing.get("next_poll", 0) > time.time():
             return {"status": "pending", "interval": pairing["interval"]}
         pairing["next_poll"] = time.time() + pairing["interval"]
@@ -896,11 +1042,10 @@ class Mail:
                 (SYSTEMD_DIR / (name + "." + extension)).unlink(missing_ok=True)
         if not RUNTIME:
             run(["systemctl", "daemon-reload"])
-        credential = BACKUP_DIR / "sub_apikey"
-        if not mail_only and credential.exists() and self.linked().get("device_id"):
-            if credential.read_text().startswith("tklbam2." + self.linked()["device_id"] + "."):
-                credential.unlink()
-                (BACKUP_DIR / "credentials").unlink(missing_ok=True)
+        if not mail_only:
+            remove_daily_backup()
+            if self.linked().get("device_id"):
+                forget_backup_auth(self.linked()["device_id"])
         retained = {key: value for key, value in self.state.items() if key not in ("active", "baseline", "owned_options", "owned_files", "guard", "applying")} if mail_only else {}
         if mail_only:
             retained["mail_preference"] = "manual"

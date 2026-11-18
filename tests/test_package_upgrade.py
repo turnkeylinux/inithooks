@@ -27,7 +27,7 @@ class ScheduledHelperUpgradeTest(unittest.TestCase):
         systemctl.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$CALL_LOG"\n')
         systemctl.chmod(0o755)
         source = (ROOT / "debian/postinst").read_text()
-        for directory in ("/etc/systemd/system", "/usr/lib/python3", "/run"):
+        for directory in ("/etc/systemd/system", "/etc/cron.daily", "/usr/lib/python3", "/var/lib/tklbam", "/run"):
             source = source.replace(directory + "/", str(self.root) + directory + "/")
         self.script = self.root / "postinst"
         self.script.write_text(source)
@@ -107,6 +107,17 @@ class ScheduledHelperUpgradeTest(unittest.TestCase):
             "daemon-reload", "enable turnkey-onboarding.timer", "enable turnkey-hub-provision.timer", "enable inithooks.service",
             "enable turnkey-init-fence.service"])
         self.assertEqual(list(self.units.iterdir()), [])
+
+    def test_package_upgrade_keeps_a_disabled_daily_backup_disabled(self):
+        cron = self.root / "etc/cron.daily/tklbam-backup"
+        cron.parent.mkdir(parents=True)
+        cron.write_text("# Stock job installed by TKLBAM\n")
+        cron.chmod(0o644)
+        marker = self.root / "var/lib/tklbam/hub-managed-daily"
+        self.run_postinst("configure", "2.3.6+14")
+        self.assertEqual(cron.read_text(), "# Stock job installed by TKLBAM\n")
+        self.assertEqual(cron.stat().st_mode & 0o777, 0o644)
+        self.assertFalse(marker.exists())
 
     def test_metapackage_requires_migration_version(self):
         control = (ROOT / "debian/control").read_text().split("Package: turnkey-hub\n", 1)[1]

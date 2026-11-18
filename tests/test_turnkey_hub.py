@@ -24,6 +24,8 @@ DEVICE_CODE = "t" * 43
 PASSWORD = "p" * 43
 DNS_PASSWORD = "d" * 43
 BACKUP_PASSWORD = "b" * 43
+DAILY_PAIRING = {"control_secret": "c" * 43, "backup_v2_offered": True}
+LEGACY_OFFERS = dict(mail.SUPPORTED_SERVICES, backup=[1])
 CONFIG = {"version": 1, "device_id": "a" * 32,
           "smtp": {"host": "smtp.hub.turnkeylinux.org", "port": 587, "username": "tkl-" + "a" * 32},
           "sender": "noreply@fixture.tklapp.com", "domain": "fixture.tklapp.com", "status": "ready",
@@ -42,6 +44,9 @@ class MailTest(unittest.TestCase):
                         patch.object(mail, "TURNKEY_VERSION", self.root / "turnkey_version"),
                         patch.object(mail, "BUILD_TAGS", self.root / "01turnkey"),
                         patch.object(mail, "STATE_DIR", self.root / "state"),
+                        patch.object(mail, "BACKUP_DIR", self.root / "backup"),
+                        patch.object(mail, "BACKUP_CRON", self.root / "cron.daily/tklbam-backup"),
+                        patch.object(mail, "BACKUP_CRON_REFERENCE", self.root / "packaged-backup"),
                         patch.object(mail, "POSTFIX_DIR", self.root / "postfix"),
                         patch.object(mail, "SYSTEMD_DIR", self.root / "systemd")]
         for item in self.patches:
@@ -105,6 +110,357 @@ class MailTest(unittest.TestCase):
             services["backup"] = dict(version=1, requested=True, status="active",
                                       credential=f"tklbam2.{device}.{BACKUP_PASSWORD}")
         return dict(status="linked", device_id=device, account_email="owner@example.net", services=services)
+
+    def stock_backup_job(self, mode=0o644):
+        mail.BACKUP_CRON.parent.mkdir(exist_ok=True)
+        stock = b"#!/bin/sh\n" + mail.BACKUP_CRON_CAPABILITY + b"\n"
+        mail.BACKUP_CRON_REFERENCE.write_bytes(stock)
+        mail.BACKUP_CRON.write_bytes(stock)
+        mail.BACKUP_CRON.chmod(mode)
+
+    def backup_completion(self, device=CONFIG["device_id"], version=2, enabled=True, account_id=None):
+        if enabled:
+            entry = dict(version=version, requested=True, status="active",
+                         credential=f"tklbam2.{device}.{BACKUP_PASSWORD}")
+        else:
+            entry = dict(version=version, requested=False, status="disabled")
+        response = dict(status="linked", device_id=device, services={"backup": entry})
+        if account_id is not None:
+            response["backup_account_id"] = account_id
+        return response
+
+    def initialized_daily_backup(self, account_id=10, mode=0o644):
+        self.stock_backup_job(mode=mode)
+        self.client.complete(DAILY_PAIRING, self.backup_completion(account_id=account_id))
+        registry = mail.BACKUP_DIR
+        (registry / "profile").mkdir(exist_ok=True)
+        records = {"secret": "existing encryption secret", "key": "existing key packet",
+                   "hbr": "existing backup record", "profile/profile_id": "existing profile",
+                   "profile/stamp": "", "credentials": "existing AWS credential cache",
+                   "hub-daily-initialized": CONFIG["device_id"],
+                   "sub_apikey": f"tklbam2.{CONFIG['device_id']}.{BACKUP_PASSWORD}"}
+        for key, value in records.items():
+            (registry / key).write_text(value + "\n" if value else "")
+        if not mode & 0o111:
+            mail.BACKUP_CRON.chmod(mode | 0o100)
+        return registry, records
+
+    def test_daily_backup_offer_requires_compatible_stock_cron_and_no_other_frequency(self):
+        response = {"verification_uri": mail.HUB + "/connect", "user_code": "D34C-F5A9",
+                    "device_code": DEVICE_CODE, "expires_in": 600, "interval": 5}
+
+        def offered(expected):
+            with patch.object(mail, "request", return_value=response) as request:
+                self.client.start()
+            self.assertEqual(request.call_args.args[1]["supported_services"]["backup"], expected)
+
+        offered([1])
+        self.stock_backup_job()
+        offered([1, 2])
+
+        mail.BACKUP_CRON.write_text("# Local schedule\n")
+        offered([1])
+        self.stock_backup_job()
+        mail.BACKUP_CRON.unlink()
+        mail.BACKUP_CRON.symlink_to(mail.BACKUP_CRON_REFERENCE)
+        offered([1])
+        mail.BACKUP_CRON.unlink()
+
+        for frequency in ("hourly", "weekly"):
+            with self.subTest(frequency=frequency):
+                self.stock_backup_job()
+                alternate = self.root / ("cron." + frequency) / mail.BACKUP_CRON.name
+                alternate.parent.mkdir()
+                alternate.write_bytes(mail.BACKUP_CRON_REFERENCE.read_bytes())
+                alternate.chmod(0o755)
+                offered([1])
+                alternate.chmod(0o644)
+                offered([1, 2])
+
+        for path in (mail.BACKUP_CRON, mail.BACKUP_CRON_REFERENCE):
+            path.write_text("#!/bin/sh\nexec tklbam-backup --quiet\n")
+        offered([1])
+
+    def test_daily_backup_preparation_uses_existing_completion_and_leaves_cron_dormant(self):
+        self.stock_backup_job()
+        control = self.start_connection()
+        device = CONFIG["device_id"]
+        marker = mail.BACKUP_DIR / "hub-managed-daily"
+        with patch.object(mail, "request", return_value=self.backup_completion()) as request:
+            result = self.client.poll()
+        request.assert_called_once_with("complete", {"device_code": DEVICE_CODE, "control_secret": control}, "connections")
+        self.assertEqual(result["services"]["backup"]["version"], 2)
+        self.assertEqual(marker.read_text(), f"{device} managed\n")
+        self.assertEqual(marker.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(mail.BACKUP_CRON.stat().st_mode & 0o777, 0o644)
+        self.assertEqual(list(mail.SYSTEMD_DIR.iterdir()), [])
+
+        with patch.object(mail, "request") as request:
+            self.assertEqual(mail.Mail().credential("backup")["credential"], f"tklbam2.{device}.{BACKUP_PASSWORD}")
+        request.assert_not_called()
+
+    def test_daily_pairing_rechecks_stock_job_before_completion_request(self):
+        marker = mail.BACKUP_DIR / "hub-managed-daily"
+        saved = mail.STATE_DIR / "state.json"
+        for change in ("edit", "remove", "alternate"):
+            with self.subTest(change=change):
+                self.stock_backup_job()
+                self.client.complete(DAILY_PAIRING, self.backup_completion())
+                self.start_connection()
+                state_before = saved.read_bytes()
+                if change == "edit":
+                    mail.BACKUP_CRON.write_text("# Administrator-owned job\n")
+                elif change == "remove":
+                    mail.BACKUP_CRON.unlink()
+                else:
+                    alternate = self.root / "cron.hourly/tklbam-backup"
+                    alternate.parent.mkdir()
+                    alternate.write_bytes(mail.BACKUP_CRON_REFERENCE.read_bytes())
+                    alternate.chmod(0o744)
+
+                with patch.object(mail, "request") as request, \
+                        self.assertRaisesRegex(mail.Error, "Start a new connection"):
+                    self.client.poll()
+
+                request.assert_not_called()
+                self.assertEqual(saved.read_bytes(), state_before)
+                self.assertEqual(marker.read_text(), CONFIG["device_id"] + " managed\n")
+
+    def test_daily_pairing_rechecks_stock_job_after_completion_response(self):
+        self.stock_backup_job()
+        self.client.complete(DAILY_PAIRING, self.backup_completion())
+        self.start_connection()
+        active_link = copy.deepcopy(self.client.state["link"])
+        active_services = copy.deepcopy(self.client.state["services"])
+
+        def complete(*args):
+            mail.BACKUP_CRON.write_text("# Administrator-owned job\n")
+            mail.BACKUP_CRON.chmod(0o640)
+            return self.backup_completion(device="b" * 32)
+
+        with patch.object(mail, "request", side_effect=complete) as request, \
+                self.assertRaisesRegex(mail.Error, "Start a new connection"):
+            self.client.poll()
+
+        request.assert_called_once()
+        self.assertEqual(request.call_args.args[0], "complete")
+        saved = mail.Mail().state
+        self.assertEqual(saved["link"], active_link)
+        self.assertEqual(saved["services"], active_services)
+        marker = mail.BACKUP_DIR / "hub-managed-daily"
+        self.assertEqual(marker.read_text(), CONFIG["device_id"] + " managed\n")
+        self.assertEqual(mail.BACKUP_CRON.read_text(), "# Administrator-owned job\n")
+        self.assertEqual(mail.BACKUP_CRON.stat().st_mode & 0o777, 0o640)
+
+    def test_daily_pairing_keeps_prior_link_if_preparation_cannot_be_saved(self):
+        self.stock_backup_job()
+        self.client.complete(DAILY_PAIRING, self.backup_completion())
+        marker = mail.BACKUP_DIR / "hub-managed-daily"
+        saved = mail.STATE_DIR / "state.json"
+        state_before = saved.read_bytes()
+        with patch.object(mail, "atomic", side_effect=PermissionError), self.assertRaises(PermissionError):
+            self.client.complete(DAILY_PAIRING, self.backup_completion(device="b" * 32))
+        self.assertEqual(saved.read_bytes(), state_before)
+        self.assertEqual(marker.read_text(), CONFIG["device_id"] + " managed\n")
+        self.assertEqual(marker.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(mail.BACKUP_CRON.stat().st_mode & 0o777, 0o644)
+
+    def test_malformed_daily_backup_service_does_not_prepare_cron(self):
+        self.stock_backup_job()
+        response = self.backup_completion()
+        response["services"]["backup"] = {"version": 2, "requested": True}
+        with self.assertRaises(mail.Error):
+            self.client.complete(DAILY_PAIRING, response)
+        self.assertEqual(mail.BACKUP_CRON.stat().st_mode & 0o777, 0o644)
+        self.assertFalse((mail.BACKUP_DIR / "hub-managed-daily").exists())
+
+    def test_daily_backup_controller_preserves_version_while_backup_access_is_off(self):
+        self.stock_backup_job()
+        control = self.start_connection()
+        device = CONFIG["device_id"]
+        with patch.object(mail, "request", return_value=self.backup_completion(enabled=False)):
+            self.client.poll()
+        self.assertEqual((mail.BACKUP_DIR / "hub-managed-daily").read_text(), f"{device} managed\n")
+        self.assertEqual(mail.BACKUP_CRON.stat().st_mode & 0o777, 0o644)
+
+        def hub(route, value, namespace="appmail"):
+            if route == "configure":
+                return dict(device_id=device, connection_status="linked", dns={"enabled": False},
+                            mail={"enabled": False}, backup={"requested": False, "status": "disabled"})
+            return dict(version=2, requested=False, status="disabled")
+
+        with patch.object(mail, "request", side_effect=hub) as request:
+            self.assertEqual(self.client.sync()["services"]["backup"]["version"], 2)
+            with self.assertRaises(mail.Error) as caught:
+                self.client.credential("backup")
+        self.assertEqual(caught.exception.code, "disabled")
+        request.assert_called_with("service", {"device_id": device, "control_secret": control,
+                                                "service": "backup", "version": 2}, "connections")
+        self.assertEqual(request.call_count, 2)
+
+    def test_daily_backup_relink_retains_original_mode_ownership_and_rotates_device(self):
+        self.stock_backup_job()
+        marker = mail.BACKUP_DIR / "hub-managed-daily"
+        proof = DAILY_PAIRING
+        self.client.complete(proof, self.backup_completion())
+        self.assertEqual(mail.BACKUP_CRON.stat().st_mode & 0o777, 0o644)
+        # Simulate a successful TKLBAM initialization enabling the job.
+        mail.BACKUP_CRON.chmod(0o744)
+        self.client.complete(proof, self.backup_completion())
+        next_device = "b" * 32
+        self.client.complete(proof, self.backup_completion(device=next_device))
+        self.assertEqual(marker.read_text(), f"{next_device} managed\n")
+        self.assertEqual(mail.BACKUP_CRON.stat().st_mode & 0o777, 0o744)
+
+        original_unlink = Path.unlink
+
+        def unlink(path, *args, **kwargs):
+            if path == marker:
+                self.assertEqual(mail.BACKUP_CRON.stat().st_mode & 0o777, 0o644)
+            return original_unlink(path, *args, **kwargs)
+
+        with patch.object(Path, "unlink", unlink):
+            self.client.complete(proof, self.backup_completion(device="e" * 32, version=1))
+        self.assertFalse(marker.exists())
+        self.assertEqual(mail.BACKUP_CRON.stat().st_mode & 0o777, 0o644)
+
+    def test_same_account_relink_rotates_ready_registry_with_one_request(self):
+        registry, records = self.initialized_daily_backup()
+        device = "b" * 32
+        control = self.start_connection()
+        atomic = mail.atomic
+        sequence = []
+
+        def write(path, contents, mode=0o600):
+            if path.parent == registry:
+                sequence.append(path.name)
+                if path.name == "sub_apikey":
+                    self.assertEqual((registry / "hub-managed-daily").read_text(), f"{device} managed\n")
+                    self.assertEqual((registry / "hub-daily-initialized").read_text(), CONFIG["device_id"] + "\n")
+            atomic(path, contents, mode)
+
+        with patch.object(mail, "request", return_value=self.backup_completion(device, account_id=10)) as request, \
+                patch.object(mail, "atomic", side_effect=write):
+            result = self.client.poll()
+        request.assert_called_once_with("complete", {"device_code": DEVICE_CODE, "control_secret": control}, "connections")
+        self.assertEqual(sequence, ["hub-managed-daily", "sub_apikey", "hub-daily-initialized"])
+        self.assertEqual((registry / "sub_apikey").read_text(), f"tklbam2.{device}.{BACKUP_PASSWORD}\n")
+        self.assertEqual((registry / "hub-daily-initialized").read_text(), device + "\n")
+        self.assertFalse((registry / "credentials").exists())
+        for name in ("secret", "key", "hbr", "profile/profile_id", "profile/stamp"):
+            self.assertEqual((registry / name).read_text().rstrip(), records[name])
+        self.assertEqual(mail.BACKUP_CRON.stat().st_mode & 0o777, 0o744)
+        self.assertEqual(mail.Mail().linked()["backup_account_id"], 10)
+        self.assertNotIn("backup_account_id", json.dumps(result))
+
+    def test_same_account_relink_replays_after_interruption_during_rotation(self):
+        registry, _ = self.initialized_daily_backup()
+        device = "b" * 32
+        self.start_connection()
+        atomic = mail.atomic
+
+        def interrupt(path, contents, mode=0o600):
+            if path == registry / "hub-daily-initialized":
+                raise OSError("simulated interrupted marker write")
+            atomic(path, contents, mode)
+
+        response = self.backup_completion(device, account_id=10)
+        with patch.object(mail, "request", return_value=response) as request:
+            with patch.object(mail, "atomic", side_effect=interrupt), self.assertRaises(OSError):
+                self.client.poll()
+            self.assertEqual((registry / "hub-managed-daily").read_text(), f"{device} managed\n")
+            self.assertEqual((registry / "sub_apikey").read_text(), f"tklbam2.{device}.{BACKUP_PASSWORD}\n")
+            self.assertEqual((registry / "hub-daily-initialized").read_text(), CONFIG["device_id"] + "\n")
+            self.client = mail.Mail()
+            self.assertEqual(self.client.linked()["device_id"], CONFIG["device_id"])
+            self.client.poll(notified=True)
+        self.assertEqual(request.call_count, 2)
+        self.assertEqual(request.call_args_list[0], request.call_args_list[1])
+        self.assertEqual((registry / "hub-daily-initialized").read_text(), device + "\n")
+        self.assertEqual(mail.Mail().linked()["device_id"], device)
+
+    def test_same_device_replay_disarms_readiness_during_token_change(self):
+        registry, _ = self.initialized_daily_backup()
+        device = CONFIG["device_id"]
+        self.start_connection()
+        response = self.backup_completion(account_id=10)
+        token = f"tklbam2.{device}.{'n' * 43}"
+        response["services"]["backup"]["credential"] = token
+        atomic = mail.atomic
+
+        def write(path, contents, mode=0o600):
+            if path == registry / "sub_apikey":
+                self.assertFalse((registry / "hub-daily-initialized").exists())
+            atomic(path, contents, mode)
+
+        with patch.object(mail, "request", return_value=response), patch.object(mail, "atomic", side_effect=write):
+            self.client.poll()
+        self.assertEqual(mail.backup_file("sub_apikey"), token)
+        self.assertEqual(mail.backup_file("hub-daily-initialized"), device)
+
+    def test_relink_stays_dormant_without_same_account_and_initialized_registry(self):
+        for changed in ("account", "absent-account", "old-hub", "invalid-account", "grant-off", "ready", "key",
+                        "profile", "token", "no-record", "empty-record"):
+            with self.subTest(changed=changed):
+                registry, _ = self.initialized_daily_backup(account_id=None if changed == "old-hub" else 10)
+                next_account = {"account": 11, "absent-account": None, "invalid-account": True}.get(changed, 10)
+                paths = {"ready": "hub-daily-initialized", "key": "key", "profile": "profile/stamp",
+                         "token": "sub_apikey", "no-record": "hbr"}
+                if changed in paths:
+                    (registry / paths[changed]).unlink()
+                if changed == "empty-record":
+                    (registry / "hbr").write_text("\n")
+                device = "b" * 32
+                self.start_connection()
+                result = self.backup_completion(device, account_id=next_account, enabled=changed != "grant-off")
+                with patch.object(mail, "request", return_value=result):
+                    self.client.poll()
+                self.assertEqual((registry / "hub-managed-daily").read_text(), f"{device} managed\n")
+                self.assertNotEqual(mail.backup_file("hub-daily-initialized"), device)
+                self.assertNotEqual(mail.backup_file("sub_apikey"), f"tklbam2.{device}.{BACKUP_PASSWORD}")
+                if type(next_account) is not int:
+                    self.assertNotIn("backup_account_id", self.client.linked())
+                self.client.reset()
+
+    def test_daily_backup_reset_removes_stale_initialized_device_auth_after_relink(self):
+        registry, records = self.initialized_daily_backup(mode=0o750)
+        self.client.complete(DAILY_PAIRING, self.backup_completion(device="b" * 32, account_id=11))
+        self.assertEqual(mail.backup_file("sub_apikey"), records["sub_apikey"])
+        self.client.reset()
+        for name in ("hub-managed-daily", "hub-daily-initialized", "sub_apikey", "credentials"):
+            self.assertFalse((registry / name).exists())
+        self.assertEqual(mail.backup_file("hbr"), records["hbr"])
+        self.assertEqual(mail.BACKUP_CRON.stat().st_mode & 0o777, 0o750)
+
+    def test_daily_backup_reset_preserves_an_existing_executable_job_and_history(self):
+        self.stock_backup_job(mode=0o750)
+        device = CONFIG["device_id"]
+        proof = DAILY_PAIRING
+        self.client.complete(proof, self.backup_completion())
+        marker = mail.BACKUP_DIR / "hub-managed-daily"
+        self.assertEqual(marker.read_text(), f"{device} local\n")
+        token = mail.BACKUP_DIR / "sub_apikey"
+        token.write_text(f"tklbam2.{device}.{BACKUP_PASSWORD}")
+        history = mail.BACKUP_DIR / "hbr"
+        history.write_text("existing backup record")
+        self.client.reset(mail_only=True)
+        self.assertTrue(marker.exists())
+        self.assertTrue(token.exists())
+        self.client.reset()
+        self.assertFalse(marker.exists())
+        self.assertFalse(token.exists())
+        self.assertEqual(history.read_text(), "existing backup record")
+        self.assertEqual(mail.BACKUP_CRON.stat().st_mode & 0o777, 0o750)
+
+    def test_daily_backup_reset_preserves_a_job_edited_after_activation(self):
+        self.stock_backup_job()
+        self.client.complete(DAILY_PAIRING, self.backup_completion())
+        mail.BACKUP_CRON.chmod(0o744)
+        mail.BACKUP_CRON.write_text("# Administrator-owned job\n")
+        self.client.reset()
+        self.assertEqual(mail.BACKUP_CRON.read_text(), "# Administrator-owned job\n")
+        self.assertEqual(mail.BACKUP_CRON.stat().st_mode & 0o777, 0o744)
+        self.assertFalse((mail.BACKUP_DIR / "hub-managed-daily").exists())
 
     def test_modern_completion_and_background_setup_do_not_discover_or_register_ready_services(self):
         control = self.start_connection()
@@ -384,7 +740,7 @@ class MailTest(unittest.TestCase):
             mail.ONBOARDING_STATE.write_text(json.dumps(state))
             with patch.object(mail, "request", return_value=response.copy()) as request:
                 self.client.start()
-            request.assert_called_once_with("start", dict(expected, supported_services=mail.SUPPORTED_SERVICES),
+            request.assert_called_once_with("start", dict(expected, supported_services=LEGACY_OFFERS),
                                             "connections")
 
     def test_pairing_describes_the_appliance_when_its_build_metadata_is_known(self):
@@ -409,7 +765,7 @@ class MailTest(unittest.TestCase):
                     (self.root / name).write_text(text + "\n")
                 with patch.object(mail, "request", return_value=response.copy()) as request:
                     self.client.start()
-                request.assert_called_once_with("start", dict(expected, supported_services=mail.SUPPORTED_SERVICES),
+                request.assert_called_once_with("start", dict(expected, supported_services=LEGACY_OFFERS),
                                                 "connections")
 
     def test_sync_persists_exact_grant_secret_before_registration_and_retries(self):
@@ -499,6 +855,7 @@ class MailTest(unittest.TestCase):
             with patch.object(mail, "request", side_effect=unavailable) as request:
                 with self.assertRaises(mail.Error) as error:
                     self.client.credential("backup")
+            self.assertEqual(error.exception.code, status)
             if status != "disabled":
                 message = str(error.exception)
                 self.assertIn("in the Hub:\n\n  https://", message)
@@ -956,7 +1313,7 @@ class MailTest(unittest.TestCase):
                             "verification_uri": mail.HUB + "/connect"}
                 with patch.object(mail, "request", return_value=response) as request:
                     public = self.client.start()
-                request.assert_called_once_with("start", {"supported_services": mail.SUPPORTED_SERVICES}, "connections")
+                request.assert_called_once_with("start", {"supported_services": LEGACY_OFFERS}, "connections")
                 self.assertEqual(public["user_code"], "D34C-F5A9")
                 saved = json.loads((mail.STATE_DIR / "state.json").read_text())["pairing"]
                 self.assertEqual(saved["user_code"], "D34C-F5A9")
