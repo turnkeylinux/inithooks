@@ -125,7 +125,7 @@ def _connect_mail(d, flow_kind="firstboot", progress_shown=False):
                 result = mail_call(*arguments)
             if result.get('connection_status') == 'linked' or result.get('domain'):
                 onboarding.observe('link_completed')
-                message = 'Connected. Manage email delivery, DNS and backups in the Hub.'
+                message = 'CONNECTED: Manage email, DNS and backups in the Hub.'
                 if result.get('dns_setup_error'):
                     message += '\n\n' + result['dns_setup_error']
                 d.msgbox('Hub linked', message)
