@@ -213,15 +213,23 @@ class JourneysTest(unittest.TestCase):
         self.assertIn('D34C-F5A9', self.confirm.call_args.args[1])
         self.assertIn('Try again with this code', self.confirm.call_args.args[1])
 
-    def test_confirmation_names_only_services_that_are_finishing_setup(self):
-        self.assertEqual(self.hub.confirmation_message({"services": {"backup": {"status": "active"}}}),
-                         "CONNECTED: Hub connection saved.")
-        self.assertEqual(self.hub.confirmation_message(
-            {"setup_pending": True, "services": {"dns": {"enabled": True}}}),
-            "CONNECTED: Setting up DNS.")
-        self.assertEqual(self.hub.confirmation_message(
-            {"setup_pending": True, "services": {"mail": {"enabled": True}, "dns": {"enabled": True}}}),
-            "CONNECTED: Setting up email delivery and DNS.")
+    def test_link_continues_without_confirmation_and_reports_dns_errors(self):
+        for flow, error in ((flow, error) for flow in ('firstboot', 'confconsole')
+                            for error in (None, 'DNS setup failed. Try again.')):
+            with self.subTest(flow=flow, error=error):
+                dialog = Mock()
+                self.confirm.return_value = 'approved'
+                result = {'connection_status': 'linked', 'setup_pending': True}
+                if error:
+                    result['dns_setup_error'] = error
+                with patch.object(self.hub, 'mail_call', side_effect=[
+                        {'verification_uri': 'https://hub.turnkeylinux.org/connect',
+                         'user_code': 'D34C-F5A9'}, result]):
+                    self.hub.connect_mail(dialog, flow_kind=flow)
+                if error:
+                    dialog.msgbox.assert_called_once_with('DNS setup', error)
+                else:
+                    dialog.msgbox.assert_not_called()
 
     def test_start_failure_skips_and_continues_setup(self):
         d = Mock()

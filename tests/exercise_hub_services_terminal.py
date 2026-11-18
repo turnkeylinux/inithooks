@@ -52,16 +52,16 @@ for cols in (60, 80, 120):
             assert 'skipped' not in child.match.group(1)
         else:
             child.send('\r')
-            text = capture(child, screen, stream, f'{cols}-firstboot-{mode}-result')
+            if mode not in ('ready',):
+                text = capture(child, screen, stream, f'{cols}-firstboot-{mode}-result')
             if mode == 'pending':
                 assert 'Approve in your browser.' in text
                 child.send('\r')
-                text = capture(child, screen, stream, f'{cols}-firstboot-{mode}-connected')
             if mode == 'expired':
                 assert 'AAAA-BBBB' in text and 'previous code expired' in text
                 child.send('\t\r')
-            else:
-                assert ('Hub linked' in text) if mode in ('ready', 'pending') else ('Hub connection skipped' in text)
+            elif mode not in ('ready', 'pending'):
+                assert 'Hub connection skipped' in text
                 child.send('\r')
             child.expect('EVENTS ([^\r\n]+)')
             events = child.match.group(1)

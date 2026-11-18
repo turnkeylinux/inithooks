@@ -69,20 +69,6 @@ def connect_mail(d, flow_kind="firstboot", progress_shown=False):
         print("Hub setup was skipped. Run sudo turnkey connect later.", file=sys.stderr)
 
 
-def confirmation_message(result):
-    if not result.get('setup_pending'):
-        return 'CONNECTED: Hub connection saved.'
-    services = result.get('services', {})
-    pending = []
-    if result.get('mail_preference') != 'manual' and services.get('mail', {}).get('enabled'):
-        pending.append('email delivery')
-    if services.get('dns', {}).get('enabled'):
-        pending.append('DNS')
-    if not pending:
-        return 'CONNECTED: Finishing service setup.'
-    return 'CONNECTED: Setting up %s.' % ' and '.join(pending)
-
-
 def _connect_mail(d, flow_kind="firstboot", progress_shown=False):
     if not progress_shown:
         d.infobox("Connecting to TurnKey Hub...")
@@ -142,10 +128,8 @@ def _connect_mail(d, flow_kind="firstboot", progress_shown=False):
                 result = mail_call(*arguments)
             if result.get('connection_status') == 'linked' or result.get('domain'):
                 onboarding.observe('link_completed')
-                message = confirmation_message(result)
                 if result.get('dns_setup_error'):
-                    message += '\n\n' + result['dns_setup_error']
-                d.msgbox('Hub linked', message)
+                    d.msgbox('DNS setup', result['dns_setup_error'])
                 return
             status = result.get('status')
             retry_connection = (status == 'error' and result.get('retryable') is True and

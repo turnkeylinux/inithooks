@@ -112,17 +112,9 @@ def exercise(mode, columns):
             browser = wait("I've approved", 'browser')
             assert 'Approve in your browser.' in browser
             signal('approved')
-            success = wait('Hub linked', 'success')
-            assert 'CONNECTED: Setting up email delivery and DNS.' in success
-            os.write(master, b'\r')
         elif mode == 'fallback-auto':
-            success = wait('Hub linked', 'success')
-            assert 'CONNECTED: Setting up email delivery and DNS.' in success
-            os.write(master, b'\r')
+            pass
         elif mode == 'manual':
-            os.write(master, b'\r')
-            success = wait('Hub linked', 'success')
-            assert 'CONNECTED: Setting up email delivery and DNS.' in success
             os.write(master, b'\r')
         elif mode in ('skip', 'fallback-skip'):
             os.write(master, b'\t\r')
@@ -138,6 +130,7 @@ def exercise(mode, columns):
         text = raw.decode('utf-8', 'replace')
         assert process.returncode == 0, text
         assert 'Traceback' not in text and 'Warning:' not in text and 'warning:' not in text
+        assert 'Hub linked' not in text
         result = json.JSONDecoder().raw_decode(text.split('RESULT ', 1)[1])[0]
         if mode == 'auto':
             assert result['calls'] == [['connect', '--start'], ['connect', '--poll', '--notified', '--background']], result
