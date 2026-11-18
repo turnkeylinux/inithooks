@@ -49,7 +49,7 @@ class DialogWrapperTest(unittest.TestCase):
                     self.dialog.wrapper("passwordbox", "Password")
                 self.assertEqual(caught.exception.code, 130)
                 self.console.yesno.assert_called_once_with(
-                    "Do you really want to quit?")
+                    "    Do you really want to quit?", height=7, width=39)
 
     def test_declined_quit_reopens_widget_and_preserves_result(self):
         for escaped, accepted in (("esc", "ok"),
@@ -71,7 +71,7 @@ class DialogWrapperTest(unittest.TestCase):
         self.console.inputbox.side_effect = lambda *args, **kwargs: interrupt(*args, **kwargs) if next(calls) else ('ok', 'answer')
         self.console.yesno.return_value = 'cancel'
         self.assertEqual(self.dialog.wrapper('inputbox', 'Question'), ('ok', 'answer'))
-        self.console.yesno.assert_called_once_with('Do you really want to quit?')
+        self.console.yesno.assert_called_once_with('    Do you really want to quit?', height=7, width=39)
 
     def test_ctrl_c_confirmation_exits_with_setup_cancel_status(self):
         def interrupt(*args, **kwargs):
