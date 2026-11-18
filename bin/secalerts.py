@@ -21,8 +21,8 @@ from libinithooks import onboarding
 TITLE = "System Notifications and Critical Security Alerts"
 
 TEXT = (
-    "Forward local system notifications (root@localhost) to your inbox. "
-    "These include security update reports and system messages.\n\nEmail:"
+    "Receive system notifications, including security update reports and "
+    "system messages, in your inbox.\n\nYour Email:"
 )
 
 
