@@ -1,0 +1,9 @@
+[Unit]
+Description=Retry pending Hub setup
+
+[Timer]
+OnBootSec=30s
+OnUnitInactiveSec=1min
+
+[Install]
+WantedBy=timers.target

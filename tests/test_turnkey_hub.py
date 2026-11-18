@@ -86,6 +86,49 @@ class MailTest(unittest.TestCase):
         self.client.apply(config)
         return config
 
+    def test_background_enrollment_saves_connection_and_defers_services(self):
+        self.main.write_text("myhostname = original.example\n")
+        def response(route, payload):
+            value = self.hub(route, payload)
+            if route == "enroll":
+                value["account_email"] = "owner@example.net"
+            return value
+        with patch.object(mail, "request", side_effect=response) as request:
+            result = self.client.enroll(TOKEN, background=True)
+        self.assertTrue(result["setup_pending"])
+        self.assertEqual(result["connection_status"], "linked")
+        self.assertEqual([c.args[0] for c in request.call_args_list], ["enroll"])
+        self.assertTrue((mail.STATE_DIR / "provision-pending").exists())
+        self.assertEqual(mail.HUB_EMAIL_CACHE.read_text().strip(), "owner@example.net")
+        self.assertTrue(mail.Mail().state["provision_pending"])
+        self.assertIn("defer_transports", mail.cf_entries(self.main.read_text()))
+        with patch.object(mail, "request", side_effect=self.hub):
+            result = mail.Mail().sync()
+        self.assertEqual(result["mode"], "hub")
+        self.assertNotIn("defer_transports", mail.cf_entries(self.main.read_text()))
+
+    def test_provision_retries_failures_and_clears_marker_after_dns(self):
+        self.main.write_text("myhostname = original.example\n")
+        with patch.object(mail, "request", side_effect=self.hub):
+            self.client.enroll(TOKEN, background=True)
+        self.fail_command = ["postfix", "check"]
+        with patch.object(mail, "request", side_effect=self.hub), \
+                patch.object(mail, "initialize_linked_dns") as dns, \
+                patch.object(mail.os, "geteuid", return_value=0), \
+                patch.object(mail.sys, "argv", ["turnkey-hub", "provision", "--json"]), \
+                patch.object(mail.sys, "stdout", new_callable=io.StringIO):
+            self.assertEqual(mail.main(), 1)
+            dns.assert_not_called()
+            self.assertTrue((mail.STATE_DIR / "provision-pending").exists())
+            self.fail_command = None
+            dns.side_effect = lambda result: result.update(dns_setup_error="DNS failed")
+            self.assertEqual(mail.main(), 1)
+            self.assertTrue((mail.STATE_DIR / "provision-pending").exists())
+            dns.side_effect = None
+            self.assertEqual(mail.main(), 0)
+        self.assertFalse((mail.STATE_DIR / "provision-pending").exists())
+        self.assertFalse(mail.Mail().state.get("provision_pending"))
+
     def test_authenticated_email_cache_is_private_optional_and_reset_scoped(self):
         def response(route, payload):
             value = self.hub(route, payload)
@@ -745,7 +788,7 @@ class MailTest(unittest.TestCase):
             self.assertEqual(self.client.poll()['status'], 'pending')
             self.assertEqual(request.call_count, 1)
             self.assertEqual(self.client.poll(notified=True)['connection_status'], 'linked')
-        enroll.assert_called_once_with(TOKEN, {})
+        enroll.assert_called_once_with(TOKEN, {}, background=False)
         self.assertEqual(request.call_args.args, ('device/poll', {'device_code': DEVICE_CODE}))
 
     def test_notified_denial_and_local_expiry_cannot_enroll(self):

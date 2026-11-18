@@ -8,6 +8,7 @@ CRON = Path('/etc/cron.d')
 JOBS = {
     'retry': ('turnkey-mail-retry', '* * * * *', '/usr/lib/inithooks/bin/turnkey-hub retry'),
     'dns-update': ('turnkey-mail-dns', '17 * * * *', '/usr/lib/inithooks/bin/turnkey-hub dns-update'),
+    'provision': ('turnkey-hub-provision', '* * * * *', '/usr/lib/inithooks/bin/turnkey-hub provision'),
     'observe': ('turnkey-onboarding', '*/5 * * * *', '/usr/lib/inithooks/bin/turnkey-onboarding flush'),
 }
 
@@ -45,4 +46,19 @@ def start_observations():
                        stderr=subprocess.DEVNULL, timeout=1)
     except (OSError, subprocess.TimeoutExpired):
         # The durable spool and ordinary timer/cron retries remain authoritative.
+        pass
+
+
+def start_provision():
+    """Start pending setup without holding up the connection dialog."""
+    try:
+        if enabled():
+            schedule('provision')
+            command = ['/usr/sbin/start-stop-daemon', '--start', '--background',
+                       '--exec', '/usr/lib/inithooks/bin/turnkey-hub', '--', 'provision']
+        else:
+            command = ['systemctl', 'start', '--no-block', 'turnkey-hub-provision.service']
+        subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, timeout=1)
+    except (OSError, subprocess.TimeoutExpired):
         pass

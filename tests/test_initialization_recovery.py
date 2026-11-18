@@ -48,19 +48,19 @@ class PackageUpgradeTest(unittest.TestCase):
     def test_upgrade_does_not_interrupt_active_initialization(self):
         result, calls, mode = self.run_postinst(["configure", "2.3.6"], active=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(calls, ["daemon-reload", "enable turnkey-onboarding.timer"])
+        self.assertEqual(calls, ["daemon-reload", "enable turnkey-onboarding.timer", "enable turnkey-hub-provision.timer"])
         self.assertEqual(mode, 0o755)
 
     def test_upgrade_does_not_restart_console_session(self):
         result, calls, mode = self.run_postinst(["configure", "2.3.6"])
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(calls, ["daemon-reload", "enable turnkey-onboarding.timer"])
+        self.assertEqual(calls, ["daemon-reload", "enable turnkey-onboarding.timer", "enable turnkey-hub-provision.timer"])
         self.assertEqual(mode, 0o755)
 
     def test_first_install_enables_services(self):
         result, calls, mode = self.run_postinst(["configure"])
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(calls, ["daemon-reload", "enable turnkey-onboarding.timer", "enable inithooks.service",
+        self.assertEqual(calls, ["daemon-reload", "enable turnkey-onboarding.timer", "enable turnkey-hub-provision.timer", "enable inithooks.service",
                                  "enable turnkey-init-fence.service"])
         self.assertEqual(mode, 0o755)
 
@@ -145,7 +145,7 @@ class HubRetryTest(unittest.TestCase):
                 patch.object(self.module.subprocess, "run") as run:
             self.module.main()
         run.assert_not_called()
-        self.assertIn("Connected.", dialog.msgbox.call_args.args[1])
+        self.assertIn("CONNECTED:", dialog.msgbox.call_args.args[1])
 
     def test_retry_accepts_only_tklbam_completed_initialization(self):
         self.assertEqual(self.run_main(1, "error: already initialized\n"),

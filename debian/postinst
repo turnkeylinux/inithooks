@@ -39,6 +39,7 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] \
     rm -f /run/inithooks-was-active /run/turnkey-init-fence-was-active
     if [ "$1" = "configure" ]; then
         systemctl enable turnkey-onboarding.timer
+        systemctl enable turnkey-hub-provision.timer
     fi
     if [ -z "$2" ]; then
         # fresh install ($2 is empty) - enable services

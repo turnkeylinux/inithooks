@@ -230,7 +230,7 @@ class JourneysTest(unittest.TestCase):
                     {'connection_status': 'linked'}]) as call:
             self.hub.connect_mail(Mock())
         self.assertEqual([c.args for c in call.call_args_list], [
-            ('connect', '--start'), ('connect', '--poll', '--notified')])
+            ('connect', '--start'), ('connect', '--poll', '--notified', '--background')])
         self.assertEqual([c.kwargs['pending'] for c in confirm.call_args_list], [False, False, True])
         self.assertNotIn('approval_checked', self.names())
         self.assertEqual(self.names()[-1], 'link_completed')

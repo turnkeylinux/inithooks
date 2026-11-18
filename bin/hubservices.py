@@ -95,7 +95,7 @@ def _connect_mail(d, flow_kind="firstboot", progress_shown=False):
             action = hub_push.confirm(d, instructions,
                                       notifications, relink=flow_kind == 'confconsole',
                                       pending=pending, expires_at=expires_at,
-                                      poll=lambda: mail_call('connect', '--poll'))
+                                      poll=lambda: mail_call('connect', '--poll', '--background'))
             if action == 'skip':
                 onboarding.observe('skipped')
                 return
@@ -121,11 +121,12 @@ def _connect_mail(d, flow_kind="firstboot", progress_shown=False):
             if isinstance(action, tuple) and action[0] == 'poll_result':
                 result = action[1]
             else:
-                arguments = ('connect', '--poll', '--notified') if action in hub_push.TERMINAL else ('connect', '--poll')
+                arguments = ('connect', '--poll', '--notified', '--background') if action in hub_push.TERMINAL else ('connect', '--poll', '--background')
                 result = mail_call(*arguments)
             if result.get('connection_status') == 'linked' or result.get('domain'):
                 onboarding.observe('link_completed')
-                message = 'CONNECTED: Email delivery, DNS & backups in the Hub.'
+                message = ('CONNECTED: Setting up email delivery and DNS.' if result.get('setup_pending')
+                           else 'CONNECTED: Email delivery, DNS & backups in the Hub.')
                 if result.get('dns_setup_error'):
                     message += '\n\n' + result['dns_setup_error']
                 d.msgbox('Hub linked', message)

@@ -27,3 +27,4 @@ override_dh_installsystemd:
 	dh_installsystemd --name=inithooks-restart-getty1
 	dh_installsystemd --name=turnkey-init-fence
 	dh_installsystemd --name=turnkey-onboarding
+	dh_installsystemd --name=turnkey-hub-provision

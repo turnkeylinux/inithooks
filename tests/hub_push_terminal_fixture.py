@@ -56,7 +56,7 @@ def exchange(*arguments):
     if arguments == ('connect', '--start'):
         return {'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'D34C-F5A9', 'expires_in': 1 if mode == 'fallback-auto' else 900}
     if '--notified' in arguments or mode in ('manual', 'fallback-auto'):
-        return {'connection_status': 'linked'}
+        return {'connection_status': 'linked', 'setup_pending': True}
     return {'status': 'pending'}
 
 

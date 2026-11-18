@@ -92,7 +92,8 @@ def exercise(mode, columns):
 
     try:
         if mode == 'fallback-error':
-            wait('could not continue', 'backend-error')
+            process.wait(timeout=8)
+            capture('backend-error')
         else:
             initial = wait('D34C-F5A9', 'code')
             assert "I've approved" in initial and 'Skip' in initial
@@ -111,19 +112,22 @@ def exercise(mode, columns):
             browser = wait("I've approved", 'browser')
             assert 'Approve in your browser.' in browser
             signal('approved')
-            wait('Hub linked', 'success')
+            success = wait('Hub linked', 'success')
+            assert 'CONNECTED: Setting up email delivery and DNS.' in success
             os.write(master, b'\r')
         elif mode == 'fallback-auto':
-            wait('Hub linked', 'success')
+            success = wait('Hub linked', 'success')
+            assert 'CONNECTED: Setting up email delivery and DNS.' in success
             os.write(master, b'\r')
         elif mode == 'manual':
             os.write(master, b'\r')
-            wait('Hub linked', 'success')
+            success = wait('Hub linked', 'success')
+            assert 'CONNECTED: Setting up email delivery and DNS.' in success
             os.write(master, b'\r')
         elif mode in ('skip', 'fallback-skip'):
             os.write(master, b'\t\r')
         elif mode == 'fallback-error':
-            os.write(master, b'\r')
+            pass
         else:
             os.write(master, b'\x1b')
             wait('really want to quit', 'escape')
@@ -136,15 +140,15 @@ def exercise(mode, columns):
         assert 'Traceback' not in text and 'Warning:' not in text and 'warning:' not in text
         result = json.JSONDecoder().raw_decode(text.split('RESULT ', 1)[1])[0]
         if mode == 'auto':
-            assert result['calls'] == [['connect', '--start'], ['connect', '--poll', '--notified']], result
+            assert result['calls'] == [['connect', '--start'], ['connect', '--poll', '--notified', '--background']], result
             assert 'approval_checked' not in result['events'] and 'link_completed' in result['events']
         if mode == 'fallback-auto':
-            assert result['calls'] == [['connect', '--start'], ['connect', '--poll']], result
+            assert result['calls'] == [['connect', '--start'], ['connect', '--poll', '--background']], result
             assert 'approval_checked' not in result['events'] and 'link_completed' in result['events']
         if mode in ('skip', 'escape', 'fallback-skip', 'fallback-escape', 'fallback-error'):
             assert result['calls'] == [['connect', '--start']], result
-            assert ('skipped' in result['events']) == mode.endswith('skip'), result
-            assert result['exit'] == (1 if mode == 'fallback-error' else 130 if mode.endswith('escape') else 0), result
+            assert ('skipped' in result['events']) == (mode.endswith('skip') or mode == 'fallback-error'), result
+            assert result['exit'] == (130 if mode.endswith('escape') else 0), result
         print('PASS', columns, mode, flush=True)
     finally:
         if process.poll() is None:

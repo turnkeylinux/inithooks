@@ -426,7 +426,7 @@ class Mail:
             if path.parent == POSTFIX_DIR and path.name.startswith("turnkey-mail-"):
                 path.unlink(missing_ok=True)
 
-    def enroll(self, token=None, flow=None):
+    def enroll(self, token=None, flow=None, background=False):
         if token:
             if not ENROLLMENT_TOKEN.fullmatch(token):
                 raise Error("The connection code is invalid. Start a new connection.")
@@ -457,8 +457,19 @@ class Mail:
             for key in ("pending", "pairing", "error"):
                 self.state.pop(key, None)
             self.state.setdefault("mail_preference", "hub")
+            if background:
+                email = result.get("account_email")
+                if isinstance(email, str) and len(email) <= 254 and ADDRESS.fullmatch(email):
+                    HUB_EMAIL_CACHE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                    atomic(HUB_EMAIL_CACHE, email + "\n")
+                # Install the container retry before marking this work durable.
+                if RUNTIME:
+                    RUNTIME.schedule("provision")
+                # The marker precedes the state update so a crash leaves a retry.
+                atomic(STATE_DIR / "provision-pending", "")
+                self.state["provision_pending"] = True
             self.save()
-            return self.sync()
+            return self.status(refresh=False) if background else self.sync()
         except Error as error:
             self.state["error"] = {"code": error.code, "message": str(error)}
             if not error.retryable and self.state.get("pending"):
@@ -603,7 +614,7 @@ class Mail:
         self.save()
         return {key: result[key] for key in ("verification_uri", "user_code", "expires_in", "interval")}
 
-    def poll(self, notified=False):
+    def poll(self, notified=False, background=False):
         pairing = self.state.get("pairing", {})
         if pairing.get("expires", 0) <= time.time():
             return {"status": "expired"}
@@ -616,7 +627,7 @@ class Mail:
             token = result.get("enrollment_token", "")
             if not isinstance(token, str) or not ENROLLMENT_TOKEN.fullmatch(token):
                 raise Error("The Hub returned an invalid connection approval.")
-            return self.enroll(token, pairing.get("flow", {}))
+            return self.enroll(token, pairing.get("flow", {}), background=background)
         if result.get("status") not in ("pending", "expired", "denied"):
             raise Error("The Hub returned an invalid connection status.")
         return {"status": result["status"], "interval": pairing["interval"]}
@@ -632,7 +643,9 @@ class Mail:
                 "mode": active.get("mode", ""), "mail_preference": self.state.get("mail_preference", "hub"),
                 "domain": active.get("domain", ""), "sender": active.get("sender", ""),
                 "host": active.get("smtp", {}).get("host", ""), "services": services,
-                "message": self.state.get("error", {}).get("message", self.state.get("legacy_dns", ""))}
+                "setup_pending": bool(self.state.get("provision_pending")),
+                "message": self.state.get("error", {}).get("message", self.state.get("legacy_dns", "")) or
+                           ("Email delivery and DNS setup is continuing." if self.state.get("provision_pending") else "")}
 
     def legacy_dns(self):
         return (Path("/var/lib/hubdns/sub_apikey").exists()
@@ -687,6 +700,9 @@ class Mail:
             retained["enrolled_token_hash"] = self.state["enrolled_token_hash"]
         if not mail_only:
             HUB_EMAIL_CACHE.unlink(missing_ok=True)
+            (STATE_DIR / "provision-pending").unlink(missing_ok=True)
+            if RUNTIME:
+                RUNTIME.schedule("provision", False)
         self.state = retained
         self.save()
         return {"status": "disconnected"}
@@ -754,19 +770,20 @@ def main():
     mode.add_argument("--start", action="store_true")
     mode.add_argument("--poll", action="store_true")
     connect.add_argument("--notified", action="store_true")
+    connect.add_argument("--background", action="store_true")
     custom = commands.add_parser("configure")
     custom.add_argument("--stdin", action="store_true", required=True)
     status = commands.add_parser("status")
     status.add_argument("--local", action="store_true")
-    for name in ("reset", "reset-mail", "retry", "dns-update", "sync", "use-hub"):
+    for name in ("reset", "reset-mail", "retry", "dns-update", "sync", "use-hub", "provision"):
         commands.add_parser(name)
     test = commands.add_parser("test")
     test.add_argument("--recipient", required=True)
     for command in commands.choices.values():
         command.add_argument("--json", action="store_true")
     args = parser.parse_args()
-    if args.command == "connect" and args.notified and not args.poll:
-        parser.error("--notified requires --poll")
+    if args.command == "connect" and (args.notified or args.background) and not args.poll:
+        parser.error("--notified and --background require --poll")
     try:
         if os.geteuid() != 0:
             raise Error("Run this command as root.")
@@ -802,7 +819,20 @@ def main():
                 except (ValueError, KeyError, TypeError):
                     raise Error("The custom SMTP settings are invalid.")
             elif args.command == "connect":
-                result = mail.poll(notified=args.notified) if args.poll else mail.start()
+                result = mail.poll(notified=args.notified, background=args.background) if args.poll else mail.start()
+            elif args.command == "provision":
+                if mail.state.get("provision_pending"):
+                    result = mail.sync()
+                    service_mail = result.get("services", {}).get("mail", {})
+                    if (service_mail.get("error") or
+                            (result.get("mail_preference") == "hub" and service_mail.get("enabled") and
+                             (not service_mail.get("smtp") or result.get("mode") != "hub"))):
+                        raise Error("Hub email setup could not finish; it will be retried.", retryable=True)
+                elif mail.state.get("pending"):
+                    result = mail.enroll()
+                else:
+                    (STATE_DIR / "provision-pending").unlink(missing_ok=True)
+                    result = mail.status(refresh=False)
             elif args.command == "dns-update":
                 result = mail.dns_update()
             elif args.command == "test":
@@ -822,9 +852,24 @@ def main():
                     break
             if result.get("status") in ("expired", "denied"):
                 raise Error(ERRORS[result["status"]], code=result["status"])
-        if (args.command in ("enroll", "connect", "retry") and not was_linked and
-                result.get("connection_status") == "linked"):
+        if result.get("setup_pending") and args.command == "connect":
+            from libinithooks import hub_runtime
+            hub_runtime.start_provision()
+        if ((args.command in ("enroll", "connect", "retry") and not was_linked and
+                not result.get("setup_pending")) or args.command == "provision") and \
+                result.get("connection_status") == "linked":
             initialize_linked_dns(result)
+        if args.command == "provision":
+            if result.get("dns_setup_error"):
+                raise Error(result["dns_setup_error"], retryable=True)
+            with locked():
+                current = Mail()
+                if current.linked().get("device_id") == mail.linked().get("device_id"):
+                    current.state.pop("provision_pending", None)
+                    current.save()
+                    (STATE_DIR / "provision-pending").unlink(missing_ok=True)
+                    if RUNTIME:
+                        RUNTIME.schedule("provision", False)
         if args.command == "enroll" and args.require_backup:
             run(["tklbam-init"], timeout=60)
         if result.get("dns_setup_error") and not args.json:

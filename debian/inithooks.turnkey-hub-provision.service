@@ -1,0 +1,10 @@
+[Unit]
+Description=Finish pending Hub setup
+After=network-online.target
+ConditionPathExists=/var/lib/turnkey-mail/provision-pending
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/inithooks/bin/turnkey-hub provision
+TimeoutStartSec=180
+UMask=0077
