@@ -70,9 +70,16 @@ HUBDNS_DIR = Path("/var/lib/hubdns")
 HELPER = "/usr/lib/inithooks/bin/turnkey-hub"
 MAX_JSON = 65536
 DEVICE_CODE = re.compile(r"^[A-Za-z0-9_-]{32,256}$")
+SERVICE_SECRET = re.compile(r"^[A-Za-z0-9_-]{43}$")
+DEVICE_ID = re.compile(r"^[a-f0-9]{32}$")
 ENROLLMENT_TOKEN = re.compile(r"^[a-f0-9]{32}\.[a-f0-9]{64}$")
 HOST = re.compile(r"^(?=.{1,253}$)[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$", re.I)
 ADDRESS = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+$")
+# These are wire formats. Optional consumers can be installed after pairing.
+SUPPORTED_SERVICES = {"email": [1], "dns": [1], "backup": [1]}
+SERVICE_FIELDS = {"email": ("enabled", "status", "grant_id", "domain", "sender"),
+                  "dns": ("enabled", "status", "hostname", "update_uri"),
+                  "backup": ("requested", "status", "action_url")}
 ERRORS = {
     "stale_configuration": "The Hub settings changed. Synchronize again.",
     "invalid_credentials": "This Hub connection is no longer authorized. Link it again.",
@@ -148,12 +155,12 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def request(route, payload):
+def request(route, payload, namespace="appmail"):
     """Only post credentials to the fixed, certificate-verified Hub origin."""
-    if not re.fullmatch(r"[a-z/]+", route):
+    if namespace not in ("appmail", "connections") or not re.fullmatch(r"[a-z/]+", route):
         raise Error("Invalid Hub operation.")
     body = json.dumps(payload).encode()
-    req = urllib.request.Request(HUB + "/api/appmail/" + route, data=body,
+    req = urllib.request.Request("%s/api/%s/%s" % (HUB, namespace, route), data=body,
                                  headers={"Content-Type": "application/json", "Accept": "application/json"})
     opener = urllib.request.build_opener(NoRedirect(), urllib.request.HTTPSHandler(context=ssl.create_default_context()))
     try:
@@ -209,6 +216,65 @@ def checked_config(value, password, custom=False):
         return result
     except (KeyError, ValueError, TypeError, AttributeError):
         raise Error("The mail settings are incomplete or invalid. Existing settings were kept.")
+
+
+def connection_service(name, entry, device_id):
+    """Keep supported settings separate from the secrets they arrived with."""
+    if not isinstance(entry, dict) or type(entry.get("version")) is not int:
+        raise Error("The Hub returned invalid service settings.")
+    version = entry["version"]
+    if version not in SUPPORTED_SERVICES[name]:
+        return {}, None
+    public = {"version": version}
+    for key in SERVICE_FIELDS[name]:
+        if key not in entry:
+            continue
+        kind = bool if key in ("enabled", "requested") else str
+        if type(entry[key]) is not kind:
+            raise Error("The Hub returned invalid service settings.")
+        public[key] = entry[key]
+    secret = entry.get("credential")
+    if name == "email" and public.get("status") in ("active", "pending_verification"):
+        if (not public.get("enabled") or not DEVICE_ID.fullmatch(public.get("grant_id", "")) or
+                not isinstance(secret, str) or not SERVICE_SECRET.fullmatch(secret)):
+            raise Error("The Hub returned an invalid email credential.")
+        config = hub_mail_config(device_id, dict(public, smtp=entry.get("smtp")), secret)
+        public["smtp"] = config["smtp"]
+    elif name == "dns" and public.get("enabled"):
+        hostname = public.get("hostname", "")
+        if (not HOST.fullmatch(hostname) or not hostname.endswith(".tklapp.com") or
+                public.get("update_uri") != HUB + "/api/appmail/dns/update"):
+            raise Error("The Hub returned invalid DNS settings.")
+        secret = scoped_secret(secret, "hubdns2", device_id)
+    elif name == "backup" and public.get("status") == "active":
+        if not public.get("requested"):
+            raise Error("The Hub returned invalid backup settings.")
+        secret = scoped_secret(secret, "tklbam2", device_id)
+    else:
+        secret = None
+    return public, secret
+
+
+def scoped_secret(token, scope, device_id):
+    prefix = "%s.%s." % (scope, device_id)
+    if not isinstance(token, str) or not token.startswith(prefix) or not SERVICE_SECRET.fullmatch(token[len(prefix):]):
+        raise Error("The Hub returned an invalid service credential.")
+    return token[len(prefix):]
+
+
+def hub_mail_config(device_id, mail, secret):
+    envelope = dict(version=1, device_id=device_id, smtp=mail.get("smtp"),
+                    domain=mail.get("domain"), sender=mail.get("sender"),
+                    status="ready" if mail.get("status") == "active" else "pending")
+    return checked_config(envelope, secret)
+
+
+def remember_account_email(email):
+    if isinstance(email, str) and len(email) <= 254 and ADDRESS.fullmatch(email):
+        HUB_EMAIL_CACHE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        atomic(HUB_EMAIL_CACHE, email + "\n")
+        return email
+    return ""
 
 
 def smtp_check(config):
@@ -331,6 +397,25 @@ class Mail:
             self.state.pop("guard", None)
             self.save()
             raise
+
+    def release_guard(self):
+        guard = self.state.get("guard")
+        if not guard:
+            return
+        path = POSTFIX_DIR / "main.cf"
+        original = path.read_text()
+        if cf_entries(original).get("defer_transports") == guard["value"]:
+            self.state["applying"] = {"original": original, "files": []}
+            self.save()
+            try:
+                atomic(path, change_cf(original, {"defer_transports": guard["before"]}), 0o644)
+                run(["postfix", "reload"])
+            except (Error, OSError):
+                self.recover()
+                raise
+            self.state.pop("applying", None)
+        self.state.pop("guard")
+        self.save()
 
     def linked(self):
         # Read older combined state until the next successful configuration change.
@@ -458,16 +543,8 @@ class Mail:
                 self.state.pop(key, None)
             self.state.setdefault("mail_preference", "hub")
             if background:
-                email = result.get("account_email")
-                if isinstance(email, str) and len(email) <= 254 and ADDRESS.fullmatch(email):
-                    HUB_EMAIL_CACHE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-                    atomic(HUB_EMAIL_CACHE, email + "\n")
-                # Install the container retry before marking this work durable.
-                if RUNTIME:
-                    RUNTIME.schedule("provision")
-                # The marker precedes the state update so a crash leaves a retry.
-                atomic(STATE_DIR / "provision-pending", "")
-                self.state["provision_pending"] = True
+                remember_account_email(result.get("account_email"))
+                self.queue_provision()
             self.save()
             return self.status(refresh=False) if background else self.sync()
         except Error as error:
@@ -487,6 +564,108 @@ class Mail:
             return self.sync()
         return self.status(refresh=False)
 
+    def queue_provision(self):
+        # Schedule before saving the state so an interrupted command can be retried.
+        if RUNTIME:
+            RUNTIME.schedule("provision")
+        atomic(STATE_DIR / "provision-pending", "")
+        self.state["provision_pending"] = True
+
+    def clear_provision(self):
+        self.state.pop("provision_pending", None)
+        self.save()
+        (STATE_DIR / "provision-pending").unlink(missing_ok=True)
+        if RUNTIME:
+            RUNTIME.schedule("provision", False)
+
+    def fetch_service(self, name):
+        link = self.linked()
+        public_name = "mail" if name == "email" else name
+        version = self.state["services"].get(public_name, {}).get("version", 1)
+        result = request("service", {"device_id": link["device_id"], "control_secret": link["control_secret"],
+                                     "service": name, "version": version}, "connections")
+        return connection_service(name, result, link["device_id"])
+
+    def refresh_provision_service(self, name):
+        try:
+            return self.fetch_service(name)
+        except Error as error:
+            if error.code not in ("revoked", "invalid_credentials", "not_authorized"):
+                raise
+            return {"enabled": False, "status": "revoked"}, None
+
+    def remember_service(self, name, public, secret):
+        public_name = "mail" if name == "email" else name
+        self.state["services"][public_name] = public
+        if name == "dns":
+            link = self.linked()
+            if secret:
+                link["dns_password"] = secret
+                link["dyndns"] = {key: public[key] for key in ("hostname", "update_uri")}
+            else:
+                link.pop("dns_password", None)
+                link["dyndns"] = None
+        elif name == "backup":
+            if secret:
+                self.state["backup_secret"] = secret
+            else:
+                self.state.pop("backup_secret", None)
+        elif secret:
+            self.state["smtp_secret"] = {"grant_id": public["grant_id"], "password": secret}
+
+    def complete(self, pairing, value):
+        device_id = value.get("device_id")
+        entries = value.get("services")
+        if not isinstance(device_id, str) or not DEVICE_ID.fullmatch(device_id) or not isinstance(entries, dict):
+            raise Error("The Hub returned an invalid connection.", retryable=True)
+        services = {name: connection_service(name, entry, device_id) for name, entry in entries.items()
+                    if name in SUPPORTED_SERVICES}
+        for field in ("smtp_secret", "backup_secret", "pending", "pairing", "error", "enrolled_token_hash"):
+            self.state.pop(field, None)
+        self.state["link"] = dict(mode="hub", device_id=device_id, control_secret=pairing["control_secret"],
+                                  flow=pairing.get("flow", {}), connections_api=True)
+        HUB_EMAIL_CACHE.unlink(missing_ok=True)
+        email = remember_account_email(value.get("account_email"))
+        self.state["services"] = dict(device_id=device_id, connection_status="linked", account_email=email)
+        for name, (public, secret) in services.items():
+            if public:
+                self.remember_service(name, public, secret)
+        self.state.setdefault("mail_preference", "hub")
+        if (self.state.get("guard") or self.state["services"].get("dns", {}).get("enabled") or
+                (self.state["mail_preference"] == "hub" and self.state["services"].get("mail", {}).get("enabled"))):
+            self.queue_provision()
+            self.save()
+        else:
+            self.clear_provision()
+        return self.status(refresh=False)
+
+    def apply_hub_mail(self, mail):
+        if (self.state.get("mail_preference", "hub") == "hub" and mail.get("enabled") and
+                mail.get("status") in ("active", "pending_verification") and mail.get("smtp")):
+            config = hub_mail_config(self.linked()["device_id"], mail, self.state["smtp_secret"]["password"])
+            if self.state.get("active") != config:
+                try:
+                    self.apply(config)
+                except Error as error:
+                    # A failed local apply can replace state with the rollback snapshot.
+                    self.state["services"]["mail"]["error"] = str(error)
+
+    def provision_connection_mail(self):
+        mail = self.state["services"].get("mail", {})
+        if self.state.get("mail_preference", "hub") != "hub":
+            return self.status(refresh=False)
+        if mail.get("enabled"):
+            self.guard()
+            if mail.get("status") == "unavailable" or mail.get("error"):
+                mail, secret = self.refresh_provision_service("email")
+                self.remember_service("email", mail, secret)
+        if not mail.get("enabled"):
+            self.release_guard()
+        mail.pop("error", None)
+        self.apply_hub_mail(mail)
+        self.save()
+        return self.status(refresh=False)
+
     def sync(self):
         link = self.linked()
         if not link.get("control_secret"):
@@ -500,40 +679,35 @@ class Mail:
         if mail.get("enabled") and self.state.get("mail_preference", "hub") == "hub":
             self.guard()
             grant = mail.get("grant_id", "")
-            if not re.fullmatch(r"[a-f0-9]{32}", grant):
+            if not DEVICE_ID.fullmatch(grant):
                 raise Error("The Hub returned an invalid email grant.")
-            if self.state.get("smtp_secret", {}).get("grant_id") != grant:
-                self.state["smtp_secret"] = {"grant_id": grant, "password": secrets.token_urlsafe(32)}
-                self.save()
-            if mail["status"] == "secret_required":
-                registration.update(smtp_grant_id=grant, smtp_password=self.state["smtp_secret"]["password"])
+            secret = self.state.get("smtp_secret", {})
+            if link.get("connections_api"):
+                if secret.get("grant_id") != grant or mail["status"] == "secret_required":
+                    mail, new_secret = self.fetch_service("email")
+                    self.remember_service("email", mail, new_secret)
+                    value["mail"] = mail
+            else:
+                if secret.get("grant_id") != grant:
+                    secret = self.state["smtp_secret"] = {"grant_id": grant, "password": secrets.token_urlsafe(32)}
+                    self.save()
+                if mail["status"] == "secret_required":
+                    registration.update(smtp_grant_id=grant, smtp_password=secret["password"])
         if registration:
             value = request("configure", dict(proof, **registration))
-        account_email = value.get("account_email")
-        if isinstance(account_email, str) and len(account_email) <= 254 and ADDRESS.fullmatch(account_email):
-            HUB_EMAIL_CACHE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            atomic(HUB_EMAIL_CACHE, account_email + "\n")
+        remember_account_email(value.get("account_email"))
+        if link.get("connections_api"):
+            for name in ("mail", "dns", "backup"):
+                version = self.state["services"].get(name, {}).get("version")
+                if version is not None:
+                    value[name].setdefault("version", version)
         self.state["services"] = value
         dns = value["dns"]
         link["dyndns"] = {"hostname": dns["hostname"], "update_uri": dns["update_uri"]} if dns["enabled"] else None
         self.save()
-        mail = value["mail"]
-        if (self.state.get("mail_preference", "hub") == "hub" and mail.get("enabled") and
-                mail["status"] in ("active", "pending_verification") and mail.get("smtp")):
-            envelope = dict(version=1, device_id=link["device_id"], smtp=mail["smtp"],
-                            domain=mail["domain"], sender=mail["sender"],
-                            status="ready" if mail["status"] == "active" else "pending")
-            config = checked_config(envelope, self.state["smtp_secret"]["password"])
-            if self.state.get("active") != config:
-                try:
-                    self.apply(config)
-                except Error as error:
-                    mail["error"] = str(error)
-        account_email = value.get("account_email")
-        if isinstance(account_email, str) and len(account_email) <= 254 and ADDRESS.fullmatch(account_email):
-            HUB_EMAIL_CACHE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            atomic(HUB_EMAIL_CACHE, account_email + "\n")
-        self.state["services"] = value
+        if link.get("connections_api") and not value["mail"].get("enabled"):
+            self.release_guard()
+        self.apply_hub_mail(value["mail"])
         self.state.pop("error", None)
         self.save()
         return self.status(refresh=False)
@@ -546,6 +720,23 @@ class Mail:
                     "hostname": link["dyndns"]["hostname"]}
         if not link.get("control_secret"):
             raise Error("Connect this server by running turnkey-hub, then try again.")
+        if link.get("connections_api"):
+            if service == "backup" and self.state.get("backup_secret"):
+                return {"credential": "tklbam2.%s.%s" % (link["device_id"], self.state["backup_secret"])}
+            entry, secret = self.fetch_service(service)
+            if service == "dns":
+                if not secret:
+                    raise Error("Enable DNS for this server in the Hub, then run hubdns-init again.")
+                result = {"credential": "hubdns2.%s.%s" % (link["device_id"], secret),
+                          "hostname": entry["hostname"]}
+            else:
+                self.check_backup(entry)
+                if not secret:
+                    raise Error("Backup setup could not finish. Check backup settings in the Hub and try again.")
+                result = {"credential": "tklbam2.%s.%s" % (link["device_id"], secret)}
+            self.remember_service(service, entry, secret)
+            self.save()
+            return result
         proof = {key: link[key] for key in ("device_id", "control_secret")}
         value = request("configure", proof)
         if value.get("device_id") != link["device_id"] or value.get("connection_status") != "linked":
@@ -560,6 +751,17 @@ class Mail:
             return {"credential": "hubdns2.%s.%s" % (link["device_id"], secret),
                     "hostname": dns["hostname"]}
         backup = value["backup"]
+        self.check_backup(backup)
+        if not self.state.get("backup_secret"):
+            self.state["backup_secret"] = secrets.token_urlsafe(32)
+            self.save()
+        secret = self.state["backup_secret"]
+        result = request("configure", dict(proof, backup_secret=secret))
+        if result.get("backup", {}).get("status") != "active":
+            raise Error("Backup setup could not finish. Check backup settings in the Hub and try again.")
+        return {"credential": "tklbam2.%s.%s" % (link["device_id"], secret)}
+
+    def check_backup(self, backup):
         status = backup.get("status")
         if status == "disabled":
             raise Error("Enable backups for this server in the Hub, then run tklbam-backup again.")
@@ -570,14 +772,6 @@ class Mail:
             message = ("Finish migrating your backup account" if status == "migration_required" else
                        "Finish backup setup and connect your AWS account")
             raise Error(message + " in the Hub:\n\n  " + action + "\n\nThen retry your command.")
-        if not self.state.get("backup_secret"):
-            self.state["backup_secret"] = secrets.token_urlsafe(32)
-            self.save()
-        secret = self.state["backup_secret"]
-        result = request("configure", dict(proof, backup_secret=secret))
-        if result.get("backup", {}).get("status") != "active":
-            raise Error("Backup setup could not finish. Check backup settings in the Hub and try again.")
-        return {"credential": "tklbam2.%s.%s" % (link["device_id"], secret)}
 
     def use_hub(self):
         self.state["mail_preference"] = "hub"
@@ -586,7 +780,8 @@ class Mail:
 
     def start(self):
         correlation = journey()
-        result = request("device/start", dict(correlation, **appliance_description()))
+        metadata = dict(correlation, **appliance_description(), supported_services=SUPPORTED_SERVICES)
+        result = request("start", metadata, "connections")
         try:
             uri = urllib.parse.urlsplit(result["verification_uri"])
             if uri.scheme != "https" or uri.netloc != urllib.parse.urlsplit(HUB).netloc:
@@ -601,7 +796,8 @@ class Mail:
             raise Error("The Hub returned an invalid connection request.")
         # Older helpers require an ampersand on the wire; display a dash locally.
         result["user_code"] = result["user_code"].replace("&", "-")
-        self.state["pairing"] = {"device_code": result["device_code"], "expires": time.time() + ttl,
+        self.state["pairing"] = {"device_code": result["device_code"], "control_secret": secrets.token_urlsafe(32),
+                                 "expires": time.time() + ttl,
                                  "interval": interval, "next_poll": 0, "flow": correlation,
                                  "verification_uri": result["verification_uri"], "user_code": result["user_code"]}
         try:
@@ -622,8 +818,20 @@ class Mail:
             return {"status": "pending", "interval": pairing["interval"]}
         pairing["next_poll"] = time.time() + pairing["interval"]
         self.save()
-        result = request("device/poll", {"device_code": pairing["device_code"]})
-        if result.get("status") == "approved":
+        if "control_secret" in pairing:
+            try:
+                result = request("complete", {key: pairing[key] for key in ("device_code", "control_secret")}, "connections")
+            except Error as error:
+                if error.retryable:
+                    pairing["next_poll"] = 0
+                    self.save()
+                raise
+            if result.get("status") == "linked":
+                return self.complete(pairing, result)
+        else:
+            # Let an already-started legacy pairing finish after a package update.
+            result = request("device/poll", {"device_code": pairing["device_code"]})
+        if result.get("status") == "approved" and "control_secret" not in pairing:
             token = result.get("enrollment_token", "")
             if not isinstance(token, str) or not ENROLLMENT_TOKEN.fullmatch(token):
                 raise Error("The Hub returned an invalid connection approval.")
@@ -645,7 +853,7 @@ class Mail:
                 "host": active.get("smtp", {}).get("host", ""), "services": services,
                 "setup_pending": bool(self.state.get("provision_pending")),
                 "message": self.state.get("error", {}).get("message", self.state.get("legacy_dns", "")) or
-                           ("Email delivery and DNS setup is continuing." if self.state.get("provision_pending") else "")}
+                           ("Hub service setup is continuing." if self.state.get("provision_pending") else "")}
 
     def legacy_dns(self):
         return (Path("/var/lib/hubdns/sub_apikey").exists()
@@ -724,11 +932,22 @@ class Mail:
 
 
 def initialize_linked_dns(result):
-    """Delegate first-link DNS setup to the optional service package."""
-    if (not result.get("services", {}).get("dns", {}).get("enabled") or
-            (HUBDNS_DIR / "sub_apikey").exists()):
+    """Keep manual DNS settings and refresh an old scoped token on a relink."""
+    services = result.get("services", {})
+    dns = services.get("dns", {})
+    if not dns.get("enabled"):
         return
     try:
+        command = ["/usr/bin/hubdns-init"]
+        saved = HUBDNS_DIR / "sub_apikey"
+        if saved.exists():
+            if "version" not in dns:
+                return
+            token = re.fullmatch(r"hubdns2\.([a-f0-9]{32})\.[A-Za-z0-9_-]{43}",
+                                 saved.read_text(errors="replace").strip())
+            if not token or token[1] == services.get("device_id"):
+                return
+            command.append("--force")
         version = subprocess.run(["dpkg-query", "-W", "-f=${Version}", "hubdns"],
                                  capture_output=True, text=True, timeout=5)
         if version.returncode:
@@ -737,7 +956,7 @@ def initialize_linked_dns(result):
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
         if compatible.returncode:
             return
-        initialized = subprocess.run(["/usr/bin/hubdns-init"], stdin=subprocess.DEVNULL,
+        initialized = subprocess.run(command, stdin=subprocess.DEVNULL,
                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
         if not initialized.returncode:
             return
@@ -798,6 +1017,7 @@ def main():
             result = subprocess.call([HELPER], stdout=sys.stderr)
             if result:
                 raise Error("Connection was not completed. Run turnkey-hub to try again.")
+        provision_error = None
         with locked():
             mail = Mail()
             was_linked = bool(mail.linked().get("control_secret"))
@@ -822,12 +1042,22 @@ def main():
                 result = mail.poll(notified=args.notified, background=args.background) if args.poll else mail.start()
             elif args.command == "provision":
                 if mail.state.get("provision_pending"):
-                    result = mail.sync()
+                    if mail.linked().get("connections_api"):
+                        try:
+                            result = mail.provision_connection_mail()
+                        except (Error, OSError):
+                            # DNS uses its own credential and can proceed if email is unavailable.
+                            provision_error = "Hub email setup could not finish; it will be retried."
+                            result = mail.status(refresh=False)
+                    else:
+                        result = mail.sync()
                     service_mail = result.get("services", {}).get("mail", {})
                     if (service_mail.get("error") or
                             (result.get("mail_preference") == "hub" and service_mail.get("enabled") and
                              (not service_mail.get("smtp") or result.get("mode") != "hub"))):
-                        raise Error("Hub email setup could not finish; it will be retried.", retryable=True)
+                        provision_error = "Hub email setup could not finish; it will be retried."
+                        if not mail.linked().get("connections_api"):
+                            raise Error(provision_error, retryable=True)
                 elif mail.state.get("pending"):
                     result = mail.enroll()
                 else:
@@ -861,15 +1091,24 @@ def main():
             initialize_linked_dns(result)
         if args.command == "provision":
             if result.get("dns_setup_error"):
-                raise Error(result["dns_setup_error"], retryable=True)
+                if not mail.linked().get("connections_api"):
+                    raise Error(result["dns_setup_error"], retryable=True)
+                with locked():
+                    current = Mail()
+                    if current.linked().get("device_id") == mail.linked().get("device_id"):
+                        dns, secret = current.refresh_provision_service("dns")
+                        current.remember_service("dns", dns, secret)
+                        current.save()
+                        if dns.get("enabled"):
+                            raise Error(result["dns_setup_error"], retryable=True)
+                        result = current.status(refresh=False)
+                result.pop("dns_setup_error", None)
+            if provision_error:
+                raise Error(provision_error, retryable=True)
             with locked():
                 current = Mail()
                 if current.linked().get("device_id") == mail.linked().get("device_id"):
-                    current.state.pop("provision_pending", None)
-                    current.save()
-                    (STATE_DIR / "provision-pending").unlink(missing_ok=True)
-                    if RUNTIME:
-                        RUNTIME.schedule("provision", False)
+                    current.clear_provision()
         if args.command == "enroll" and args.require_backup:
             run(["tklbam-init"], timeout=60)
         if result.get("dns_setup_error") and not args.json:
@@ -884,7 +1123,8 @@ def main():
         return 0
     except Error as error:
         if args.json:
-            print(json.dumps({"status": "error", "error": error.code, "message": str(error)}))
+            print(json.dumps({"status": "error", "error": error.code, "message": str(error),
+                              "retryable": error.retryable}))
         else:
             print(str(error), file=sys.stderr)
         return 1

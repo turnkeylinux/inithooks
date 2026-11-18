@@ -104,16 +104,19 @@ class RecoveryTest(unittest.TestCase):
         second = onboarding.start_flow('confconsole')
         pairing = {'verification_uri': mail.HUB + '/connect', 'user_code': 'ABCD-EFGH',
                    'device_code': fixture.DEVICE_CODE, 'expires_in': 600, 'interval': 5}
-        token = 'c'*32 + '.' + 'd'*64
+        device_id = 'c' * 32
         before_pairing_saved = []
-        def response(route, payload):
-            if route == 'device/start':
+        def response(route, payload, namespace='appmail'):
+            if route == 'start':
+                self.assertEqual(namespace, 'connections')
                 self.assertNotIn('pairing', self.client.state)
                 onboarding.reconcile()
                 before_pairing_saved.append(onboarding.decision())
                 return pairing.copy()
-            if route == 'device/poll':
-                return {'status': 'approved', 'enrollment_token': token}
+            if route == 'complete':
+                self.assertEqual(namespace, 'connections')
+                return {'status': 'linked', 'device_id': device_id, 'services': {},
+                        'account_email': 'owner@example.net'}
             return self.hub(route, payload)
         with patch.object(mail, 'request', side_effect=response):
             self.client.start()
@@ -126,7 +129,7 @@ class RecoveryTest(unittest.TestCase):
             self.assertEqual(self.client.state['link']['flow']['flow_id'], second['flow_id'])
             onboarding.reconcile()
             self.assertIsNone(onboarding.decision())
-            token = 'e'*32 + '.' + 'f'*64
+            device_id = 'e' * 32
             self.client.start()
             self.client.poll(notified=True)
         onboarding.reconcile()

@@ -33,6 +33,18 @@ class DNSHandoffTest(unittest.TestCase):
             helper.initialize_linked_dns(self.result)
         run.assert_not_called()
         self.assertEqual("legacy", (helper.HUBDNS_DIR / "sub_apikey").read_text())
+    def test_modern_relink_only_replaces_scoped_state_from_an_old_connection(self):
+        token = helper.HUBDNS_DIR / "sub_apikey"
+        self.result["services"].update(device_id="a" * 32, dns={"enabled": True, "version": 1})
+        for existing in ("legacy", "hubdns2." + "a" * 32 + "." + "s" * 43):
+            token.write_text(existing)
+            with patch.object(helper.subprocess, "run") as run:
+                helper.initialize_linked_dns(self.result)
+            run.assert_not_called()
+        token.write_text("hubdns2." + "b" * 32 + "." + "s" * 43)
+        with patch.object(helper.subprocess, "run", side_effect=[self.response(), self.response(), self.response()]) as run:
+            helper.initialize_linked_dns(self.result)
+        self.assertEqual(["/usr/bin/hubdns-init", "--force"], run.call_args.args[0])
     def test_missing_or_old_package_does_not_block_linking(self):
         for responses in ([self.response(1)], [self.response(text="1.4.0"), self.response(1)]):
             with patch.object(helper.subprocess, "run", side_effect=responses) as run:

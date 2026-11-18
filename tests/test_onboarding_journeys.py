@@ -194,11 +194,34 @@ class JourneysTest(unittest.TestCase):
         d = Mock()
         with patch.object(self.hub, 'mail_call', side_effect=[
                 {'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'D34C-F5A9'},
-                {'status': 'error', 'message': 'Hub unavailable', 'retryable': True}]):
+                {'status': 'error', 'message': 'Hub unavailable'}]):
             self.hub.connect_mail(d)
         self.assertEqual(onboarding.decision(), 'skipped')
         self.assertIn('sudo turnkey connect', d.msgbox.call_args.args[1])
         self.assertEqual(self.names()[-3:], ['approval_checked', 'error', 'skipped'])
+
+    def test_lost_completion_can_retry_manually_with_the_same_code(self):
+        dialog = Mock()
+        self.confirm.side_effect = ['approved', 'check']
+        with patch.object(self.hub, 'mail_call', side_effect=[
+                {'verification_uri': 'https://hub.turnkeylinux.org/connect', 'user_code': 'D34C-F5A9'},
+                {'status': 'error', 'message': 'Hub unavailable', 'retryable': True},
+                {'connection_status': 'linked', 'setup_pending': True}]) as call:
+            self.hub.connect_mail(dialog)
+        self.assertEqual([item.args[1] for item in call.call_args_list], ['--start', '--poll', '--poll'])
+        self.assertEqual(onboarding.decision(), 'linked')
+        self.assertIn('D34C-F5A9', self.confirm.call_args.args[1])
+        self.assertIn('Try again with this code', self.confirm.call_args.args[1])
+
+    def test_confirmation_names_only_services_that_are_finishing_setup(self):
+        self.assertEqual(self.hub.confirmation_message({"services": {"backup": {"status": "active"}}}),
+                         "CONNECTED: Hub connection saved.")
+        self.assertEqual(self.hub.confirmation_message(
+            {"setup_pending": True, "services": {"dns": {"enabled": True}}}),
+            "CONNECTED: Setting up DNS.")
+        self.assertEqual(self.hub.confirmation_message(
+            {"setup_pending": True, "services": {"mail": {"enabled": True}, "dns": {"enabled": True}}}),
+            "CONNECTED: Setting up email delivery and DNS.")
 
     def test_start_failure_skips_and_continues_setup(self):
         d = Mock()

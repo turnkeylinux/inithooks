@@ -23,6 +23,7 @@ TOKEN = "a" * 32 + "." + "b" * 64
 DEVICE_CODE = "t" * 43
 PASSWORD = "p" * 43
 DNS_PASSWORD = "d" * 43
+BACKUP_PASSWORD = "b" * 43
 CONFIG = {"version": 1, "device_id": "a" * 32,
           "smtp": {"host": "smtp.hub.turnkeylinux.org", "port": 587, "username": "tkl-" + "a" * 32},
           "sender": "noreply@fixture.tklapp.com", "domain": "fixture.tklapp.com", "status": "ready",
@@ -85,6 +86,234 @@ class MailTest(unittest.TestCase):
         config["dns_password"] = DNS_PASSWORD
         self.client.apply(config)
         return config
+
+    def start_connection(self):
+        with patch.object(mail, "request", return_value={
+                "verification_uri": mail.HUB + "/connect", "user_code": "D34C-F5A9",
+                "device_code": DEVICE_CODE, "expires_in": 600, "interval": 5}):
+            self.client.start()
+        return self.client.state["pairing"]["control_secret"]
+
+    def completion(self, backup=True):
+        device = CONFIG["device_id"]
+        services = {
+            "email": dict(version=1, enabled=True, status="active", grant_id=device, smtp=CONFIG["smtp"],
+                          domain=CONFIG["domain"], sender=CONFIG["sender"], credential=PASSWORD),
+            "dns": dict(version=1, enabled=True, credential=f"hubdns2.{device}.{DNS_PASSWORD}", **CONFIG["dyndns"]),
+        }
+        if backup:
+            services["backup"] = dict(version=1, requested=True, status="active",
+                                      credential=f"tklbam2.{device}.{BACKUP_PASSWORD}")
+        return dict(status="linked", device_id=device, account_email="owner@example.net", services=services)
+
+    def test_modern_completion_and_background_setup_do_not_discover_or_register_ready_services(self):
+        control = self.start_connection()
+        self.main.write_text("myhostname = original.example\n")
+        self.assertTrue(mail.SERVICE_SECRET.fullmatch(control))
+        self.assertEqual(mail.Mail().state["pairing"]["control_secret"], control)
+        with patch.object(mail, "request", return_value=self.completion()) as request:
+            public = self.client.poll(notified=True, background=True)
+        request.assert_called_once_with("complete", {"device_code": DEVICE_CODE, "control_secret": control}, "connections")
+        self.assertEqual(public["connection_status"], "linked")
+        self.assertTrue(public["setup_pending"])
+        self.assertEqual(self.calls, [])
+        mail.smtp_check.assert_not_called()
+        self.assertEqual(mail.HUB_EMAIL_CACHE.read_text().strip(), "owner@example.net")
+        saved = mail.STATE_DIR / "state.json"
+        self.assertEqual(saved.stat().st_mode & 0o777, 0o600)
+        for secret in (control, PASSWORD, DNS_PASSWORD, BACKUP_PASSWORD, DEVICE_CODE):
+            self.assertNotIn(secret, json.dumps(public))
+
+        def initialize_dns(result):
+            self.assertTrue(result["services"]["dns"]["enabled"])
+            self.assertEqual(mail.Mail().credential("dns")["credential"],
+                             f"hubdns2.{CONFIG['device_id']}.{DNS_PASSWORD}")
+
+        with patch.object(mail, "request") as request, \
+                patch.object(mail, "initialize_linked_dns", side_effect=initialize_dns) as dns, \
+                patch.object(mail.os, "geteuid", return_value=0), \
+                patch.object(mail.sys, "argv", ["turnkey-hub", "provision", "--json"]), \
+                patch.object(mail.sys, "stdout", new_callable=io.StringIO):
+            self.assertEqual(mail.main(), 0)
+            saved_client = mail.Mail()
+            self.assertFalse(saved_client.status(refresh=False)["setup_pending"])
+            self.assertEqual(saved_client.credential("backup")["credential"],
+                             f"tklbam2.{CONFIG['device_id']}.{BACKUP_PASSWORD}")
+        request.assert_not_called()
+        dns.assert_called_once()
+        mail.smtp_check.assert_called_once()
+
+    def test_modern_completion_resends_saved_proof_after_loss(self):
+        control = self.start_connection()
+        with patch.object(mail, "request", side_effect=[
+                mail.Error("lost response", retryable=True), self.completion()]) as request:
+            with self.assertRaises(mail.Error):
+                self.client.poll()
+            self.assertEqual(mail.Mail().poll()["connection_status"], "linked")
+        self.assertEqual(len(request.call_args_list), 2)
+        self.assertEqual(request.call_args_list[0], request.call_args_list[1])
+        self.assertEqual(request.call_args.args[1]["control_secret"], control)
+
+    def test_later_backup_approval_fetches_one_scoped_credential(self):
+        control = self.start_connection()
+        value = self.completion()
+        backup = value["services"].pop("backup")
+        with patch.object(mail, "request", return_value=value):
+            self.client.poll()
+        with patch.object(mail, "request", return_value=backup) as request:
+            expected = {"credential": f"tklbam2.{CONFIG['device_id']}.{BACKUP_PASSWORD}"}
+            self.assertEqual(mail.Mail().credential("backup"), expected)
+            self.assertEqual(mail.Mail().credential("backup"), expected)
+        request.assert_called_once_with("service", {"device_id": CONFIG["device_id"], "control_secret": control,
+                                                    "service": "backup", "version": 1}, "connections")
+
+    def test_modern_explicit_refresh_reads_status_without_registering_credentials(self):
+        control = self.start_connection()
+        with patch.object(mail, "request", return_value=self.completion()):
+            self.client.poll()
+        self.hub_active = True
+        with patch.object(mail, "request", side_effect=self.hub) as request:
+            result = self.client.sync()
+        request.assert_called_once_with("configure", {"device_id": CONFIG["device_id"], "control_secret": control})
+        self.assertEqual(result["services"]["backup"]["status"], "disabled")
+        self.assertEqual(self.client.state["backup_secret"], BACKUP_PASSWORD)
+        self.assertEqual(self.client.state["smtp_secret"]["password"], PASSWORD)
+
+    def test_modern_unknown_services_and_versions_are_not_initialized(self):
+        self.start_connection()
+        value = self.completion()
+        value["services"] = {
+            "email": dict(version=99, enabled=True, credential=PASSWORD),
+            "future": dict(version=1, enabled=True, credential="new-format"),
+        }
+        with patch.object(mail, "request", return_value=value):
+            result = self.client.poll()
+        self.assertEqual(result["connection_status"], "linked")
+        self.assertFalse(result["setup_pending"])
+        self.assertNotIn("mail", result["services"])
+        self.assertNotIn("future", result["services"])
+        self.assertNotIn("smtp_secret", self.client.state)
+
+    def test_wrong_scope_on_known_service_does_not_overwrite_an_existing_link(self):
+        self.client.state["link"] = {"mode": "hub", "device_id": "f" * 32, "control_secret": "c" * 43}
+        self.client.save()
+        self.start_connection()
+        value = self.completion()
+        value["services"]["backup"]["credential"] = f"hubdns2.{CONFIG['device_id']}.{DNS_PASSWORD}"
+        with patch.object(mail, "request", return_value=value), self.assertRaises(mail.Error):
+            self.client.poll()
+        self.assertEqual(mail.Mail().linked()["device_id"], "f" * 32)
+        self.assertFalse((mail.STATE_DIR / "provision-pending").exists())
+
+    def test_modern_dns_proceeds_when_email_recovery_is_unavailable(self):
+        control = self.start_connection()
+        value = self.completion()
+        available = value["services"]["email"]
+        value["services"]["email"] = dict(version=1, enabled=True, status="unavailable")
+        with patch.object(mail, "request", return_value=value):
+            self.client.poll()
+        with patch.object(mail, "request", side_effect=[
+                mail.Error("offline", retryable=True), available]) as request, \
+                patch.object(mail, "initialize_linked_dns") as dns, \
+                patch.object(mail.os, "geteuid", return_value=0), \
+                patch.object(mail.sys, "argv", ["turnkey-hub", "provision", "--json"]), \
+                patch.object(mail.sys, "stdout", new_callable=io.StringIO):
+            self.assertEqual(mail.main(), 1)
+            dns.assert_called_once()
+            self.assertTrue(mail.Mail().status(refresh=False)["setup_pending"])
+            self.assertEqual(mail.main(), 0)
+        self.assertEqual(request.call_count, 2)
+        self.assertEqual(request.call_args.args, (
+            "service", {"device_id": CONFIG["device_id"], "control_secret": control,
+                        "service": "email", "version": 1}, "connections"))
+        self.assertFalse(mail.Mail().status(refresh=False)["setup_pending"])
+
+    def test_modern_email_disable_releases_queue_without_overwriting_local_settings(self):
+        self.main.write_text("myhostname = original.example\ndefer_transports = local\n")
+        self.start_connection()
+        value = self.completion()
+        value["services"]["email"] = dict(version=1, enabled=True, status="unavailable")
+        with patch.object(mail, "request", return_value=value):
+            self.client.poll()
+        with patch.object(mail, "request", side_effect=mail.Error("offline", retryable=True)), \
+                self.assertRaises(mail.Error):
+            self.client.provision_connection_mail()
+        self.assertEqual(mail.cf_entries(self.main.read_text())["defer_transports"], "local smtp")
+        with self.main.open("a") as config:
+            config.write("message_size_limit = 99999\n")
+        with patch.object(mail, "request", return_value={"version": 1, "enabled": False, "status": "disabled"}):
+            result = mail.Mail().provision_connection_mail()
+        self.assertEqual(result["services"]["mail"]["status"], "disabled")
+        self.assertEqual(mail.cf_entries(self.main.read_text()), {
+            "myhostname": "original.example", "defer_transports": "local", "message_size_limit": "99999"})
+        self.assertNotIn("guard", mail.Mail().state)
+        mail.smtp_check.assert_not_called()
+
+    def test_modern_mail_recovery_refreshes_a_rejected_cached_credential(self):
+        self.start_connection()
+        value = self.completion()
+        current = {**value["services"]["email"], "credential": "n" * 43}
+        with patch.object(mail, "request", return_value=value):
+            self.client.poll()
+        with patch.object(mail, "request", return_value=current) as request:
+            mail.smtp_check.side_effect = [mail.Error("old grant rejected", retryable=True), None]
+            self.assertIn("error", mail.Mail().provision_connection_mail()["services"]["mail"])
+            request.assert_not_called()
+            self.assertNotIn("error", mail.Mail().provision_connection_mail()["services"]["mail"])
+        request.assert_called_once()
+        self.assertEqual(request.call_args.args[1]["service"], "email")
+        self.assertEqual(mail.Mail().state["active"]["password"], "n" * 43)
+
+    def test_modern_relink_retries_after_postfix_rolls_back_to_the_previous_relay(self):
+        previous = mail.checked_config(dict(CONFIG, device_id="f" * 32), "o" * 43)
+        self.client.apply(previous)
+        self.start_connection()
+        value = self.completion()
+        with patch.object(mail, "request", return_value=value):
+            self.client.poll()
+        self.fail_command = ["postfix", "reload"]
+        with patch.object(mail, "request", return_value=value["services"]["email"]) as request, \
+                patch.object(mail, "initialize_linked_dns"), \
+                patch.object(mail.os, "geteuid", return_value=0), \
+                patch.object(mail.sys, "argv", ["turnkey-hub", "provision", "--json"]), \
+                patch.object(mail.sys, "stdout", new_callable=io.StringIO):
+            self.assertEqual(mail.main(), 1)
+            saved = mail.Mail()
+            self.assertTrue(saved.status(refresh=False)["setup_pending"])
+            self.assertIn("error", saved.state["services"]["mail"])
+            self.assertEqual(saved.state["active"], previous)
+            request.assert_not_called()
+            self.fail_command = None
+            self.assertEqual(mail.main(), 0)
+        request.assert_called_once()
+        self.assertEqual(request.call_args.args[1]["service"], "email")
+        saved = mail.Mail()
+        self.assertFalse(saved.status(refresh=False)["setup_pending"])
+        self.assertEqual(saved.state["active"]["device_id"], CONFIG["device_id"])
+        self.assertNotIn("error", saved.state["services"]["mail"])
+
+    def test_modern_rejected_dns_clears_the_job_if_hub_no_longer_authorizes_dns(self):
+        for response in ({"version": 1, "enabled": False, "status": "disabled"},
+                         mail.Error("connection revoked", code="invalid_credentials")):
+            with self.subTest(disabled=isinstance(response, dict)):
+                self.start_connection()
+                with patch.object(mail, "request", return_value=self.completion()):
+                    self.client.poll()
+                reply = {"return_value": response} if isinstance(response, dict) else {"side_effect": response}
+                with patch.object(mail, "request", **reply) as request, \
+                        patch.object(mail, "initialize_linked_dns",
+                                     side_effect=lambda status: status.update(dns_setup_error="DNS denied")), \
+                        patch.object(mail.os, "geteuid", return_value=0), \
+                        patch.object(mail.sys, "argv", ["turnkey-hub", "provision", "--json"]), \
+                        patch.object(mail.sys, "stdout", new_callable=io.StringIO):
+                    self.assertEqual(mail.main(), 0)
+                request.assert_called_once()
+                self.assertEqual(request.call_args.args[1]["service"], "dns")
+                saved = mail.Mail()
+                self.assertFalse(saved.status(refresh=False)["setup_pending"])
+                self.assertFalse(saved.state["services"]["dns"]["enabled"])
+                self.assertNotIn("dns_password", saved.linked())
+                self.client = saved
 
     def test_background_enrollment_saves_connection_and_defers_services(self):
         self.main.write_text("myhostname = original.example\n")
@@ -155,7 +384,8 @@ class MailTest(unittest.TestCase):
             mail.ONBOARDING_STATE.write_text(json.dumps(state))
             with patch.object(mail, "request", return_value=response.copy()) as request:
                 self.client.start()
-            request.assert_called_once_with("device/start", expected)
+            request.assert_called_once_with("start", dict(expected, supported_services=mail.SUPPORTED_SERVICES),
+                                            "connections")
 
     def test_pairing_describes_the_appliance_when_its_build_metadata_is_known(self):
         response = {"verification_uri": mail.HUB + "/connect", "user_code": "D34C&F5A9",
@@ -179,7 +409,8 @@ class MailTest(unittest.TestCase):
                     (self.root / name).write_text(text + "\n")
                 with patch.object(mail, "request", return_value=response.copy()) as request:
                     self.client.start()
-                request.assert_called_once_with("device/start", expected)
+                request.assert_called_once_with("start", dict(expected, supported_services=mail.SUPPORTED_SERVICES),
+                                                "connections")
 
     def test_sync_persists_exact_grant_secret_before_registration_and_retries(self):
         self.client.state["link"] = {"mode": "hub", "device_id": CONFIG["device_id"],
@@ -725,7 +956,7 @@ class MailTest(unittest.TestCase):
                             "verification_uri": mail.HUB + "/connect"}
                 with patch.object(mail, "request", return_value=response) as request:
                     public = self.client.start()
-                request.assert_called_once_with("device/start", {})
+                request.assert_called_once_with("start", {"supported_services": mail.SUPPORTED_SERVICES}, "connections")
                 self.assertEqual(public["user_code"], "D34C-F5A9")
                 saved = json.loads((mail.STATE_DIR / "state.json").read_text())["pairing"]
                 self.assertEqual(saved["user_code"], "D34C-F5A9")
