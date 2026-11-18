@@ -116,8 +116,16 @@ def main():
     finally:
         signal.signal(signal.SIGINT, previous_sigint)
 
-    subprocess.run(confconsole)
+    # The console owns Ctrl-C and can offer to quit. A caught signal handler
+    # is reset on exec, so the child still receives SIGINT normally.
+    previous_sigint = signal.signal(signal.SIGINT, lambda signum, frame: None)
+    try:
+        returncode = subprocess.run(confconsole).returncode
+    finally:
+        signal.signal(signal.SIGINT, previous_sigint)
+    if returncode == 130 or returncode == -signal.SIGINT:
+        return 130
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
