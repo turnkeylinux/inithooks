@@ -170,15 +170,11 @@ def eligible_backup_cron_mode():
     return mode
 
 
-def forget_backup_auth(device_id):
-    credential = BACKUP_DIR / "sub_apikey"
-    try:
-        token = credential.read_text()
-    except FileNotFoundError:
-        return
-    if token.startswith("tklbam2." + device_id + "."):
-        credential.unlink(missing_ok=True)
+def forget_backup_auth(device_id=None):
+    token = BACKUP_TOKEN.fullmatch(backup_file("sub_apikey") or "")
+    if token and (device_id is None or token.group(1) == device_id):
         (BACKUP_DIR / "credentials").unlink(missing_ok=True)
+        (BACKUP_DIR / "sub_apikey").unlink(missing_ok=True)
 
 
 def backup_file(name):
@@ -757,6 +753,9 @@ class Mail:
             self.prepare_daily_backup(pairing, device_id, account_id, backup_secret)
         else:
             remove_daily_backup()
+        if not backup_secret:
+            forget_backup_auth()
+            (BACKUP_DIR / "hub-daily-initialized").unlink(missing_ok=True)
         for field in ("smtp_secret", "backup_secret", "pending", "pairing", "error", "enrolled_token_hash"):
             self.state.pop(field, None)
         self.state["link"] = dict(mode="hub", device_id=device_id, control_secret=pairing["control_secret"],

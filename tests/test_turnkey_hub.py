@@ -432,6 +432,30 @@ class MailTest(unittest.TestCase):
         self.assertEqual(mail.backup_file("hbr"), records["hbr"])
         self.assertEqual(mail.BACKUP_CRON.stat().st_mode & 0o777, 0o750)
 
+    def test_reconnect_without_backup_grant_clears_old_scoped_credentials(self):
+        registry, records = self.initialized_daily_backup()
+        next_device = "b" * 32
+        self.start_connection()
+        response = self.backup_completion(device=next_device, account_id=10, enabled=False)
+        with patch.object(mail, "request", return_value=response) as request:
+            self.client.poll()
+        request.assert_called_once()
+        self.assertNotIn("backup_secret", mail.Mail().state)
+        for name in ("sub_apikey", "credentials", "hub-daily-initialized"):
+            self.assertFalse((registry / name).exists(), name)
+        for name in ("hbr", "secret", "key", "profile/profile_id"):
+            self.assertEqual(mail.backup_file(name), records[name], name)
+        self.assertEqual(mail.backup_file("hub-managed-daily"), f"{next_device} managed")
+
+    def test_reconnect_without_backup_grant_preserves_legacy_backup_credentials(self):
+        mail.BACKUP_DIR.mkdir()
+        (mail.BACKUP_DIR / "sub_apikey").write_text("independent-legacy-subkey\n")
+        (mail.BACKUP_DIR / "credentials").write_text("existing AWS credential cache\n")
+        self.stock_backup_job()
+        self.client.complete(DAILY_PAIRING, self.backup_completion(enabled=False))
+        self.assertEqual(mail.backup_file("sub_apikey"), "independent-legacy-subkey")
+        self.assertEqual(mail.backup_file("credentials"), "existing AWS credential cache")
+
     def test_daily_backup_reset_preserves_an_existing_executable_job_and_history(self):
         self.stock_backup_job(mode=0o750)
         device = CONFIG["device_id"]
