@@ -54,7 +54,7 @@ class Dialog:
             retcode = retcode[0]
         logging.debug(f"_handle_exitcode(retcode={retcode!r})")
         if retcode == self.console.ESC:  # ESC, ALT+?
-            text = "    Do you really want to quit?"
+            text = "\n    Do you really want to quit?"
             with dialog_interrupt() as interrupted:
                 try:
                     answer = self.console.yesno(text, height=7, width=39)
