@@ -75,16 +75,23 @@ def main():
     if email and not EMAIL_RE.match(email):
         fatal("email is not valid")
 
-    if not email:
+    reconfigure = bool(os.environ.get("_TURNKEY_RECONFIGURE"))
+    if reconfigure:
+        current = onboarding.load().get("notification_choice", "")
+        email_placeholder = current if onboarding.valid_email(current) else onboarding.email_default(email_placeholder)
+        email = ""
+    elif not email:
         email = onboarding.email_default()
 
     if not email:
         d = Dialog("TurnKey Linux - First boot configuration")
         email = onboarding.email_default(email_placeholder)
         while 1:
-            retcode, email = d.inputbox(TITLE, TEXT, email, "Enable", "Skip")
+            retcode, email = d.inputbox(TITLE, TEXT, email, "Enable", "Cancel" if reconfigure else "Skip")
 
             if retcode == "cancel":
+                if reconfigure:
+                    return
                 email = ""
                 onboarding.notification_choice("SKIP")
                 break
@@ -105,7 +112,7 @@ def main():
 
     # Hub-linked users manage announcements in their account. Only a deliberate
     # firstboot Skip offers the separate newsletter, with affirmative consent.
-    if onboarding.skipped_unlinked():
+    if not reconfigure and onboarding.skipped_unlinked():
         d = Dialog("TurnKey Linux - First boot configuration")
         newsletter_email = email or email_placeholder
         while True:

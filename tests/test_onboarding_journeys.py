@@ -294,6 +294,29 @@ class JourneysTest(unittest.TestCase):
                 call.assert_called_once_with('connect', '--start')
                 open_watcher.return_value.close.assert_called_once_with()
 
+    def test_reconfigure_prompts_with_current_recipient_and_saves_change(self):
+        onboarding.notification_choice('old@example.net')
+        dialog = self.alerts.Dialog.return_value
+        dialog.inputbox.return_value = ('ok', 'new@example.net')
+        dialog.yesno.return_value = True
+        with patch.dict(os.environ, {'_TURNKEY_RECONFIGURE': '1'}), \
+                patch.object(sys, 'argv', ['secalerts.py']), \
+                patch.object(self.alerts.subprocess, 'run') as run:
+            self.alerts.main()
+        self.assertEqual(dialog.inputbox.call_args.args[2], 'old@example.net')
+        self.assertEqual(run.call_args.args[0][-1], 'new@example.net')
+        self.assertEqual(onboarding.load()['notification_choice'], 'new@example.net')
+
+    def test_reconfigure_cancel_preserves_recipient(self):
+        onboarding.notification_choice('old@example.net')
+        self.alerts.Dialog.return_value.inputbox.return_value = ('cancel', '')
+        with patch.dict(os.environ, {'_TURNKEY_RECONFIGURE': '1'}), \
+                patch.object(sys, 'argv', ['secalerts.py']), \
+                patch.object(self.alerts.subprocess, 'run') as run:
+            self.alerts.main()
+        run.assert_not_called()
+        self.assertEqual(onboarding.load()['notification_choice'], 'old@example.net')
+
     def test_linked_user_gets_local_notifications_without_newsletter_prompt(self):
         onboarding.record('link_completed')
         with patch.object(sys, 'argv', ['secalerts.py', '--email=owner@example.net']), \
