@@ -114,14 +114,14 @@ def main():
     # the local recipient, then request separate consent for announcements.
     if offer_newsletter and email:
         d = Dialog("TurnKey Linux - First boot configuration")
-        decline = d.yesno(
+        subscribe = d.yesno(
             "Security announcements",
             "Also receive TurnKey security announcements and news at:\n\n"
             f"{email}\n\nUnsubscribe at any time.",
-            "No thanks", "Subscribe",
+            "Subscribe", "No thanks",
         )
-        onboarding.observe("newsletter_choice", newsletter_consent=not decline)
-        if not decline:
+        onboarding.observe("newsletter_choice", newsletter_consent=subscribe)
+        if subscribe:
             configure([os.path.join(os.path.dirname(__file__), "secalerts.sh"),
                        email, "--newsletter-only"])
 

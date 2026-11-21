@@ -338,7 +338,7 @@ class JourneysTest(unittest.TestCase):
 
     def test_skipped_user_can_decline_newsletter_without_affecting_local_notifications(self):
         onboarding.record('skipped')
-        self.alerts.Dialog.return_value.yesno.return_value = True
+        self.alerts.Dialog.return_value.yesno.return_value = False
         with patch.object(sys, 'argv', ['secalerts.py', '--email=chosen@example.net']), \
                 patch.object(self.alerts.subprocess, 'run') as run:
             self.alerts.main()
@@ -359,7 +359,7 @@ class JourneysTest(unittest.TestCase):
 
     def test_skipped_user_affirmatively_subscribes_separately(self):
         onboarding.record('skipped')
-        self.alerts.Dialog.return_value.yesno.return_value = False
+        self.alerts.Dialog.return_value.yesno.return_value = True
         with patch.object(sys, 'argv', ['secalerts.py', '--email=chosen@example.net']), \
                 patch.object(self.alerts.subprocess, 'run') as run:
             self.alerts.main()
@@ -370,14 +370,14 @@ class JourneysTest(unittest.TestCase):
         onboarding.record('skipped')
         dialog = self.alerts.Dialog.return_value
         dialog.inputbox.return_value = ('ok', 'chosen@example.net')
-        dialog.yesno.return_value = False  # Subscribe is the second button.
+        dialog.yesno.return_value = True
         with patch.object(sys, 'argv', ['secalerts.py']), \
                 patch.object(self.alerts.subprocess, 'run') as run:
             self.alerts.main()
         dialog.inputbox.assert_called_once()
         self.assertEqual(dialog.yesno.call_count, 1)
         self.assertIn('chosen@example.net', dialog.yesno.call_args.args[1])
-        self.assertEqual(dialog.yesno.call_args.args[2:], ('No thanks', 'Subscribe'))
+        self.assertEqual(dialog.yesno.call_args.args[2:], ('Subscribe', 'No thanks'))
         self.assertEqual(run.call_args_list[0].args[0][-1], 'chosen@example.net')
         self.assertEqual(run.call_args_list[1].args[0][-2:], ['chosen@example.net', '--newsletter-only'])
         self.assertTrue(onboarding.load()['pending'][-1]['newsletter_consent'])
