@@ -27,7 +27,7 @@ configure_cronapt() {
     key=$1
     val=$2
     cfg="/etc/cron-apt/config"
-    [ -e $cfg ] || return
+    [ -e "$cfg" ] || return 0
     grep -q ^${key}= $cfg || (echo "$key=\"$val\"" >> $cfg; return)
     sed -i "s/^${key}=.*/$key=\"$val\"/" $cfg
 }
