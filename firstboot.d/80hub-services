@@ -10,11 +10,6 @@ set +x
 if [ -n "${HUB_EMAIL_TOKEN:-}" ]; then
     if ! printf '%s' "$HUB_EMAIL_TOKEN" | "$INITHOOKS_PATH/bin/turnkey-hub" enroll --token-stdin; then
         echo 'Hub setup did not finish. Check turnkey-hub status; temporary failures retry automatically.' >&2
-    elif [ -z "${HUB_APIKEY:-}" ] && command -v tklbam-init >/dev/null; then
-        # Reuse launch enrollment without opening a linking prompt at boot.
-        if ! timeout 60 tklbam-init </dev/null >/dev/null 2>&1; then
-            echo 'Backup setup did not finish. Open Backup and Migration in Webmin to continue.' >&2
-        fi
     fi
     # Explicit legacy keys remain supported; new Hub launches use only a token.
     [ -n "${HUB_APIKEY:-}" ] || exit 0

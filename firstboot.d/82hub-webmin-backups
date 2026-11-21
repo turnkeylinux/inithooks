@@ -1,0 +1,22 @@
+#!/bin/bash -e
+# reconfigure: no
+# reconfigure-title: Hub Launch Backup Setup
+# reconfigure-description: Prepare backups and the Webmin dashboard for Hub launches.
+
+grep -qsE '^SERVERID=.+$' /var/lib/hubclient/server.conf || exit 0
+
+config=/etc/webmin/config
+if [ -f "$config" ] && grep -qx 'gotomodule=tklbam' "$config"; then
+    sed -i '/^gotomodule=tklbam$/d' "$config"
+fi
+
+# The Hub supplies scoped credentials during registration. Legacy key setup is
+# handled by the services hook, which Hub launch data can replace.
+set +x
+. /etc/default/inithooks
+[ ! -e "$INITHOOKS_CONF" ] || . "$INITHOOKS_CONF"
+[ -n "${HUB_EMAIL_TOKEN:-}" ] && [ -z "${HUB_APIKEY:-}" ] || exit 0
+command -v tklbam-init >/dev/null || exit 0
+if ! timeout -k 5 60 tklbam-init </dev/null >/dev/null 2>&1; then
+    echo 'Backup setup did not finish. Open Backup and Migration in Webmin to continue.' >&2
+fi

@@ -198,7 +198,7 @@ if __name__ == "__main__":
 
 
 class ExplicitLegacyPreseedTests(unittest.TestCase):
-    def exercise(self, apikey, backup_exit=0):
+    def exercise(self, apikey):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / 'bin').mkdir()
@@ -211,26 +211,15 @@ class ExplicitLegacyPreseedTests(unittest.TestCase):
             helper.write_text('#!/bin/sh\nread token\n[ "$token" = fixture-token ] || exit 1\necho enroll >> "' + str(log) + '"\n')
             legacy = root / 'bin/hubservices.py'
             legacy.write_text('#!/bin/sh\n[ "$1" = --apikey=legacy-fixture-key ] || exit 1\n[ "$2" = --fqdn=fixture.tklapp.com ] || exit 1\necho legacy >> "' + str(log) + '"\n')
-            backup = root / 'bin/tklbam-init'
-            backup.write_text(
-                '#!/bin/sh\n[ "$#" = 0 ] || exit 2\n'
-                'echo backup >> "' + str(log) + '"\nexit ' + str(backup_exit) + '\n')
-            backup.chmod(0o755)
             helper.chmod(0o755)
             legacy.chmod(0o755)
             script = (ROOT / 'firstboot.d/80hub-services').read_text().replace('/etc/default/inithooks', str(defaults))
-            result = subprocess.run(['bash'], input=script, text=True, capture_output=True,
-                                    env=dict(os.environ, PATH=f"{root / 'bin'}:{os.environ['PATH']}"))
+            result = subprocess.run(['bash'], input=script, text=True, capture_output=True)
             self.assertEqual(0, result.returncode, result.stderr)
-            return log.read_text().splitlines(), result.stderr
+            return log.read_text().splitlines()
 
     def test_explicit_legacy_key_preseed_runs_after_token_enrollment(self):
-        self.assertEqual((['enroll', 'legacy'], ''), self.exercise('legacy-fixture-key'))
+        self.assertEqual(['enroll', 'legacy'], self.exercise('legacy-fixture-key'))
 
     def test_new_token_only_launch_never_runs_legacy_key_initializer(self):
-        self.assertEqual((['enroll', 'backup'], ''), self.exercise(''))
-
-    def test_backup_failure_does_not_block_first_boot(self):
-        calls, diagnostic = self.exercise('', backup_exit=1)
-        self.assertEqual(['enroll', 'backup'], calls)
-        self.assertIn('Backup setup did not finish.', diagnostic)
+        self.assertEqual(['enroll'], self.exercise(''))

@@ -1,4 +1,4 @@
 # v2.3.11 release notes
 
-* Prepare TKLBAM during first boot on Hub-launched servers using their existing
-  Hub connection. First boot continues if backup setup needs attention.
+* Open the Webmin dashboard after a Hub launch and prepare TKLBAM using the
+  existing Hub connection. Other installations retain their Webmin start page.
