@@ -37,6 +37,7 @@ import fcntl
 import hashlib
 import ipaddress
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -426,9 +427,10 @@ def journey():
 
 
 class Mail:
-    def __init__(self):
+    def __init__(self, *, recover=True):
         self.state = self.load()
-        self.recover()
+        if recover:
+            self.recover()
 
     def load(self):
         path = STATE_DIR / "state.json"
@@ -917,7 +919,21 @@ class Mail:
         self.save()
         return self.sync()
 
-    def start(self):
+    def pending_pairing(self):
+        """Describe an active pairing without exporting its proof or credentials."""
+        pairing = self.state.get("pairing", {})
+        expires = pairing.get("expires", 0) - time.time()
+        if expires <= 0 or not pairing.get("user_code") or not pairing.get("verification_uri"):
+            return {"status": "idle"}
+        return {"status": "pending", "user_code": pairing["user_code"],
+                "verification_uri": pairing["verification_uri"], "expires_in": math.ceil(expires),
+                "interval": pairing["interval"]}
+
+    def start(self, resume=False):
+        if resume:
+            pending = self.pending_pairing()
+            if pending["status"] == "pending":
+                return pending
         correlation = journey()
         offers = dict(SUPPORTED_SERVICES)
         if eligible_backup_cron_mode() is None:
@@ -951,10 +967,14 @@ class Mail:
         except ImportError:
             pass
         self.save()
+        if resume:
+            return self.pending_pairing()
         return {key: result[key] for key in ("verification_uri", "user_code", "expires_in", "interval")}
 
-    def poll(self, notified=False, background=False):
+    def poll(self, notified=False, background=False, expected_code=None):
         pairing = self.state.get("pairing", {})
+        if expected_code is not None and expected_code != pairing.get("user_code"):
+            return {"status": "replaced"}
         if pairing.get("expires", 0) <= time.time():
             return {"status": "expired"}
         if pairing.get("backup_v2_offered") and eligible_backup_cron_mode() is None:
@@ -983,6 +1003,11 @@ class Mail:
             return self.enroll(token, pairing.get("flow", {}), background=background)
         if result.get("status") not in ("pending", "expired", "denied"):
             raise Error("The Hub returned an invalid connection status.")
+        if expected_code is not None and result["status"] != "pending":
+            # A browser that reloads or starts again must not resume a denied
+            # or remotely expired pairing. Keep the unchanged CLI behavior.
+            self.state.pop("pairing")
+            self.save()
         return {"status": result["status"], "interval": pairing["interval"]}
 
     def status(self, refresh=True):
@@ -1132,6 +1157,9 @@ def main():
     mode = connect.add_mutually_exclusive_group()
     mode.add_argument("--start", action="store_true")
     mode.add_argument("--poll", action="store_true")
+    mode.add_argument("--pending", action="store_true")
+    connect.add_argument("--resume", action="store_true")
+    connect.add_argument("--expected-code")
     connect.add_argument("--notified", action="store_true")
     connect.add_argument("--background", action="store_true")
     custom = commands.add_parser("configure")
@@ -1147,6 +1175,9 @@ def main():
     args = parser.parse_args()
     if args.command == "connect" and (args.notified or args.background) and not args.poll:
         parser.error("--notified and --background require --poll")
+    if args.command == "connect" and ((args.resume and not args.start) or
+                                      (args.expected_code is not None and not args.poll)):
+        parser.error("--resume requires --start and --expected-code requires --poll")
     try:
         if os.geteuid() != 0:
             raise Error("Run this command as root.")
@@ -1163,7 +1194,7 @@ def main():
                 raise Error("Connection was not completed. Run turnkey-hub to try again.")
         provision_error = None
         with locked():
-            mail = Mail()
+            mail = Mail(recover=not (args.command == "connect" and args.pending))
             was_linked = bool(mail.linked().get("control_secret"))
             if args.command == "enroll":
                 result = mail.enroll(sys.stdin.read(512).strip())
@@ -1183,7 +1214,13 @@ def main():
                 except (ValueError, KeyError, TypeError):
                     raise Error("The custom SMTP settings are invalid.")
             elif args.command == "connect":
-                result = mail.poll(notified=args.notified, background=args.background) if args.poll else mail.start()
+                if args.pending:
+                    result = mail.pending_pairing()
+                elif args.poll:
+                    result = mail.poll(notified=args.notified, background=args.background,
+                                       expected_code=args.expected_code)
+                else:
+                    result = mail.start(resume=True) if args.resume else mail.start()
             elif args.command == "provision":
                 if mail.state.get("provision_pending"):
                     if mail.linked().get("connections_api"):
@@ -1215,7 +1252,7 @@ def main():
                 result = mail.status(refresh=not args.local)
             else:
                 result = getattr(mail, args.command.replace("-", "_"))()
-        if args.command == "connect" and not args.start and not args.poll:
+        if args.command == "connect" and not (args.start or args.poll or args.pending):
             print("Open %s\nConnection code: %s\nSign in or create a free Hub account, then approve this appliance.\nWaiting for approval (Ctrl-C to cancel)..." %
                   (result["verification_uri"], result["user_code"]), flush=True)
             while True:

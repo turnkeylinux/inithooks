@@ -1329,6 +1329,84 @@ class MailTest(unittest.TestCase):
             self.assertEqual(self.client.poll()["status"], "pending")
         self.assertEqual(self.main.read_bytes(), original)
 
+    def browser_connect(self, *arguments):
+        output = io.StringIO()
+        with patch.object(mail.sys, "argv", ["turnkey-hub", "connect", *arguments, "--json"]), \
+                patch.object(mail.os, "geteuid", return_value=0), \
+                patch.object(mail.os, "umask"), patch.object(mail.sys, "stdout", output):
+            self.assertEqual(mail.main(), 0)
+        return json.loads(output.getvalue())
+
+    def test_browser_refresh_and_concurrent_start_resume_one_public_request(self):
+        response = dict(device_code=DEVICE_CODE, user_code="D34C&F5A9", expires_in=600,
+                        interval=5, verification_uri=mail.HUB + "/connect")
+        with patch.object(mail, "request", return_value=response) as request, \
+                patch.object(mail.time, "time", return_value=100):
+            self.assertEqual(self.browser_connect("--pending"), {"status": "idle"})
+            started = self.browser_connect("--start", "--resume")
+            self.assertEqual(self.browser_connect("--pending"), started)
+            resumed = self.browser_connect("--start", "--resume")
+        request.assert_called_once_with("start", {"supported_services": LEGACY_OFFERS}, "connections")
+        self.assertEqual(started, resumed)
+        self.assertEqual(started, {"status": "pending", "user_code": "D34C-F5A9",
+                                  "verification_uri": mail.HUB + "/connect",
+                                  "expires_in": 600, "interval": 5})
+        # The fixture server's private proof stays on the appliance.
+        state = mail.Mail().state["pairing"]
+        for secret in (DEVICE_CODE, state["control_secret"]):
+            self.assertNotIn(secret, json.dumps(resumed))
+
+    def test_browser_pending_status_does_not_recover_an_interrupted_mail_change(self):
+        self.start_connection()
+        transient = self.main.parent / "turnkey-mail-interrupted.sasl"
+        transient.write_text("incomplete settings")
+        self.client.state["applying"] = {"original": self.main.read_text(), "files": [str(transient)]}
+        self.main.write_text("myhostname = interrupted.example\n")
+        self.client.save()
+        state_path = mail.STATE_DIR / "state.json"
+        before = state_path.read_bytes()
+        with patch.object(mail, "request") as request:
+            pending = self.browser_connect("--pending")
+        self.assertEqual(pending["user_code"], "D34C-F5A9")
+        self.assertEqual(state_path.read_bytes(), before)
+        self.assertEqual(self.main.read_text(), "myhostname = interrupted.example\n")
+        self.assertTrue(transient.exists())
+        self.assertEqual(self.calls, [])
+        request.assert_not_called()
+
+    def test_browser_poll_rejects_replaced_code_and_current_code_starts_provision(self):
+        self.start_connection()
+        new_code = "ABCD-1234"
+        response = dict(device_code="u" * 43, user_code=new_code, expires_in=600,
+                        interval=5, verification_uri=mail.HUB + "/connect")
+        with patch.object(mail, "request", return_value=response):
+            self.browser_connect("--start")
+        with patch.object(mail, "request", return_value=self.completion()) as request, \
+                patch("libinithooks.hub_runtime.start_provision") as start_provision:
+            self.assertEqual(self.browser_connect("--poll", "--expected-code", "D34C-F5A9", "--background"),
+                             {"status": "replaced"})
+            request.assert_not_called()
+            start_provision.assert_not_called()
+            linked = self.browser_connect("--poll", "--expected-code", new_code, "--background")
+        request.assert_called_once()
+        self.assertEqual(request.call_args.args[0], "complete")
+        self.assertEqual(request.call_args.args[1]["device_code"], response["device_code"])
+        start_provision.assert_called_once_with()
+        self.assertEqual(linked["connection_status"], "linked")
+        self.assertTrue(linked["setup_pending"])
+        self.assertTrue((mail.STATE_DIR / "provision-pending").exists())
+        self.assertEqual(self.browser_connect("--pending"), {"status": "idle"})
+
+    def test_browser_denial_and_remote_expiry_end_the_saved_request(self):
+        for result in ("expired", "denied"):
+            with self.subTest(result=result):
+                self.start_connection()
+                with patch.object(mail, "request", return_value={"status": result}) as request:
+                    ended = self.browser_connect("--poll", "--expected-code", "D34C-F5A9", "--background")
+                    self.assertEqual(ended["status"], result)
+                    self.assertEqual(self.browser_connect("--pending"), {"status": "idle"})
+                request.assert_called_once()
+
     def test_pairing_accepts_legacy_and_new_wire_codes_with_one_display_format(self):
         for code in ("D34C&F5A9", "D34C-F5A9"):
             with self.subTest(code=code):
