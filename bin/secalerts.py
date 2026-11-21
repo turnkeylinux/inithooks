@@ -76,19 +76,23 @@ def main():
         fatal("email is not valid")
 
     reconfigure = bool(os.environ.get("_TURNKEY_RECONFIGURE"))
-    offer_newsletter = not reconfigure and onboarding.skipped_unlinked()
+    register_security_alerts = not reconfigure and onboarding.skipped_unlinked()
     if reconfigure:
         current = onboarding.load().get("notification_choice", "")
         email_placeholder = current if onboarding.valid_email(current) else onboarding.email_default(email_placeholder)
         email = ""
-    elif not email:
+    elif not email and not register_security_alerts:
         email = onboarding.email_default()
 
     if not email:
         d = Dialog("TurnKey Linux - First boot configuration")
         email = onboarding.email_default(email_placeholder)
         while 1:
-            retcode, email = d.inputbox(TITLE, TEXT, email, "Enable", "Cancel" if reconfigure else "Skip")
+            title = "Admin email" if register_security_alerts else TITLE
+            text = ("Receive system notifications and TurnKey security alerts at this address.\n\nEmail:"
+                    if register_security_alerts else TEXT)
+            action = "Continue" if register_security_alerts else "Enable"
+            retcode, email = d.inputbox(title, text, email, action, "Cancel" if reconfigure else "Skip")
 
             if retcode == "cancel":
                 if reconfigure:
@@ -101,7 +105,7 @@ def main():
                 d.error("Email is not valid")
                 continue
 
-            if offer_newsletter or d.yesno("Is your email correct?", email):
+            if register_security_alerts or d.yesno("Is your email correct?", email):
                 break
 
     if email:
@@ -110,20 +114,12 @@ def main():
         configure([cmd, email])
         onboarding.observe("email_provided", email=email)
 
-    # Hub-linked users manage announcements in their account. Ask once for
-    # the local recipient, then request separate consent for announcements.
-    if offer_newsletter and email:
-        d = Dialog("TurnKey Linux - First boot configuration")
-        subscribe = d.yesno(
-            "Security announcements",
-            "Also receive TurnKey security announcements and news at:\n\n"
-            f"{email}\n\nUnsubscribe at any time.",
-            "Subscribe", "No thanks",
-        )
-        onboarding.observe("newsletter_choice", newsletter_consent=subscribe)
-        if subscribe:
-            configure([os.path.join(os.path.dirname(__file__), "secalerts.sh"),
-                       email, "--newsletter-only"])
+    # Hub-linked users manage announcements in their account. The firstboot
+    # email dialog describes both uses before registering an unlinked user.
+    if register_security_alerts and email:
+        onboarding.observe("newsletter_choice", newsletter_consent=True)
+        configure([os.path.join(os.path.dirname(__file__), "secalerts.sh"),
+                   email, "--newsletter-only"])
 
 
 if __name__ == "__main__":

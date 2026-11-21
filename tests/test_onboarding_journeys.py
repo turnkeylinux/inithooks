@@ -336,15 +336,6 @@ class JourneysTest(unittest.TestCase):
         self.assertEqual(onboarding.load()['notification_choice'], 'SKIP')
         run.assert_not_called()
 
-    def test_skipped_user_can_decline_newsletter_without_affecting_local_notifications(self):
-        onboarding.record('skipped')
-        self.alerts.Dialog.return_value.yesno.return_value = False
-        with patch.object(sys, 'argv', ['secalerts.py', '--email=chosen@example.net']), \
-                patch.object(self.alerts.subprocess, 'run') as run:
-            self.alerts.main()
-        self.assertEqual(run.call_count, 1)
-        self.assertFalse(onboarding.load()['pending'][-1]['newsletter_consent'])
-
     def test_skipped_relink_preserves_linked_account_newsletter_exclusion(self):
         onboarding.record('skipped')
         onboarding.HUB_STATE.write_text('{"link":{"control_secret":"existing-link"}}')
@@ -357,30 +348,30 @@ class JourneysTest(unittest.TestCase):
         self.assertNotIn('email_provided', self.names())
         self.assertNotIn('newsletter_choice', self.names())
 
-    def test_skipped_user_affirmatively_subscribes_separately(self):
+    def test_skipped_hub_uses_one_email_for_notifications_and_alerts(self):
         onboarding.record('skipped')
-        self.alerts.Dialog.return_value.yesno.return_value = True
-        with patch.object(sys, 'argv', ['secalerts.py', '--email=chosen@example.net']), \
-                patch.object(self.alerts.subprocess, 'run') as run:
-            self.alerts.main()
-        self.assertEqual(run.call_count, 2)
-        self.assertEqual(run.call_args.args[0][-2:], ['chosen@example.net', '--newsletter-only'])
-
-    def test_skipped_hub_asks_once_for_email_and_separate_consent(self):
-        onboarding.record('skipped')
+        onboarding.remember_email('cached@example.net')
         dialog = self.alerts.Dialog.return_value
         dialog.inputbox.return_value = ('ok', 'chosen@example.net')
-        dialog.yesno.return_value = True
         with patch.object(sys, 'argv', ['secalerts.py']), \
                 patch.object(self.alerts.subprocess, 'run') as run:
             self.alerts.main()
         dialog.inputbox.assert_called_once()
-        self.assertEqual(dialog.yesno.call_count, 1)
-        self.assertIn('chosen@example.net', dialog.yesno.call_args.args[1])
-        self.assertEqual(dialog.yesno.call_args.args[2:], ('Subscribe', 'No thanks'))
+        self.assertEqual(dialog.inputbox.call_args.args[0], 'Admin email')
+        self.assertIn('system notifications and TurnKey security alerts', dialog.inputbox.call_args.args[1])
+        self.assertEqual(dialog.inputbox.call_args.args[2:], ('cached@example.net', 'Continue', 'Skip'))
+        dialog.yesno.assert_not_called()
         self.assertEqual(run.call_args_list[0].args[0][-1], 'chosen@example.net')
         self.assertEqual(run.call_args_list[1].args[0][-2:], ['chosen@example.net', '--newsletter-only'])
         self.assertTrue(onboarding.load()['pending'][-1]['newsletter_consent'])
+
+    def test_preseeded_email_registers_for_security_alerts(self):
+        onboarding.record('skipped')
+        with patch.object(sys, 'argv', ['secalerts.py', '--email=chosen@example.net']), \
+                patch.object(self.alerts.subprocess, 'run') as run:
+            self.alerts.main()
+        self.alerts.Dialog.assert_not_called()
+        self.assertEqual(run.call_args_list[1].args[0][-2:], ['chosen@example.net', '--newsletter-only'])
 
     def test_skip_email_does_not_offer_or_subscribe_to_newsletter(self):
         onboarding.record('skipped')
