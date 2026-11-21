@@ -8,11 +8,11 @@
 . /etc/default/inithooks
 
 [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
-[ "$SEC_ALERTS" != "SKIP" ] || {
+[ "${_TURNKEY_RECONFIGURE:-}" ] || [ "$SEC_ALERTS" != "SKIP" ] || {
     "$INITHOOKS_PATH/bin/turnkey-onboarding" notifications --email SKIP
     exit 0
 }
 
 $INITHOOKS_PATH/bin/secalerts.py \
-    --email="$SEC_ALERTS" \
+    --email="$([ "${_TURNKEY_RECONFIGURE:-}" ] || printf %s "$SEC_ALERTS")" \
     --email-placeholder="$($INITHOOKS_PATH/bin/inithooks_cache.py APP_EMAIL)"

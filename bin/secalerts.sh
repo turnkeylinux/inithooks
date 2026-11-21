@@ -17,8 +17,12 @@ configure_alias() {
     email=$2
     cfg=/etc/aliases
     touch $cfg
-    grep -q ^${user}: $cfg || (echo "$user:    $email" >> $cfg; return)
-    sed -i "s/${user}:.*/${user}:    $email/" $cfg
+    if grep -q "^${user}:" "$cfg"; then
+        escaped=$(printf '%s' "$email" | sed 's/[\\/&]/\\&/g')
+        sed -i "s/^${user}:.*/${user}:    ${escaped}/" "$cfg"
+    else
+        printf "%s:    %s\n" "$user" "$email" >> "$cfg"
+    fi
     newaliases
 }
 

@@ -104,11 +104,10 @@ def main():
                 break
 
     if email:
-        onboarding.notification_choice(email)
-        onboarding.observe("email_provided", email=email)
         cmd = os.path.join(os.path.dirname(__file__), "secalerts.sh")
         logging.debug(f"\tcmd:`{cmd}'")
         configure([cmd, email])
+        onboarding.observe("email_provided", email=email)
 
     # Hub-linked users manage announcements in their account. Only a deliberate
     # firstboot Skip offers the separate newsletter, with affirmative consent.

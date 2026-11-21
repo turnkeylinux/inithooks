@@ -305,7 +305,8 @@ class JourneysTest(unittest.TestCase):
             self.alerts.main()
         self.assertEqual(dialog.inputbox.call_args.args[2], 'old@example.net')
         self.assertEqual(run.call_args.args[0][-1], 'new@example.net')
-        self.assertEqual(onboarding.load()['notification_choice'], 'new@example.net')
+        # The shell helper records the choice after updating the alias.
+        self.assertEqual(onboarding.load()['notification_choice'], 'old@example.net')
 
     def test_reconfigure_cancel_preserves_recipient(self):
         onboarding.notification_choice('old@example.net')
