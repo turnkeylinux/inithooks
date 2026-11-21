@@ -1318,6 +1318,47 @@ class MailTest(unittest.TestCase):
         for secret in (PASSWORD, DNS_PASSWORD, TOKEN):
             self.assertNotIn(secret, output)
 
+    def test_read_only_local_status_preserves_mail_journal_and_old_status_recovers(self):
+        original = self.main.read_text()
+        interrupted = original + "# incomplete update\n"
+        transient = self.main.parent / "turnkey-mail-interrupted.sasl"
+        transient.write_text("incomplete settings")
+        self.client.state["applying"] = {"original": original, "files": [str(transient)]}
+        self.client.save()
+        self.main.write_text(interrupted)
+        state_path = mail.STATE_DIR / "state.json"
+        before = state_path.read_bytes()
+
+        def status(*options):
+            output = io.StringIO()
+            argv = ["turnkey-hub", "status", "--local", "--json", *options]
+            with patch.object(mail.sys, "argv", argv), \
+                    patch.object(mail.os, "geteuid", return_value=0), \
+                    patch.object(mail.os, "umask"), patch.object(mail.sys, "stdout", output):
+                self.assertEqual(mail.main(), 0)
+            return json.loads(output.getvalue())
+
+        with patch.object(mail, "request") as request:
+            snapshot = status("--read-only")
+            self.assertEqual(state_path.read_bytes(), before)
+            self.assertEqual(self.main.read_text(), interrupted)
+            self.assertTrue(transient.exists())
+            self.assertFalse((mail.STATE_DIR / "lock").exists())
+            self.assertEqual(self.calls, [])
+
+            self.assertEqual(status(), snapshot)
+        request.assert_not_called()
+        self.assertEqual(self.main.read_text(), original)
+        self.assertNotIn("applying", json.loads(state_path.read_text()))
+        self.assertFalse(transient.exists())
+        self.assertEqual(self.calls, [(["postfix", "reload"], None)])
+
+    def test_read_only_status_requires_local(self):
+        with patch.object(mail.sys, "argv", ["turnkey-hub", "status", "--read-only"]), \
+                patch.object(mail.sys, "stderr", io.StringIO()), self.assertRaises(SystemExit) as error:
+            mail.main()
+        self.assertEqual(error.exception.code, 2)
+
     def test_pairing_only_returns_public_fields_and_pending_keeps_current_relay(self):
         original = self.main.read_bytes()
         response = {"device_code": DEVICE_CODE, "user_code": "ABCD&1234", "expires_in": 900, "interval": 5,

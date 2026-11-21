@@ -1166,6 +1166,7 @@ def main():
     custom.add_argument("--stdin", action="store_true", required=True)
     status = commands.add_parser("status")
     status.add_argument("--local", action="store_true")
+    status.add_argument("--read-only", action="store_true", help="Read local status without applying recovery")
     for name in ("reset", "reset-mail", "retry", "dns-update", "sync", "use-hub", "provision"):
         commands.add_parser(name)
     test = commands.add_parser("test")
@@ -1178,6 +1179,9 @@ def main():
     if args.command == "connect" and ((args.resume and not args.start) or
                                       (args.expected_code is not None and not args.poll)):
         parser.error("--resume requires --start and --expected-code requires --poll")
+    read_only = args.command == "status" and args.read_only
+    if read_only and not args.local:
+        parser.error("status --read-only requires --local")
     try:
         if os.geteuid() != 0:
             raise Error("Run this command as root.")
@@ -1193,8 +1197,10 @@ def main():
             if result:
                 raise Error("Connection was not completed. Run turnkey-hub to try again.")
         provision_error = None
-        with locked():
-            mail = Mail(recover=not (args.command == "connect" and args.pending))
+        # Local status comes from a single snapshot of the atomically replaced
+        # state file. Browser reads need neither the write lock nor recovery.
+        with (contextlib.nullcontext() if read_only else locked()):
+            mail = Mail(recover=not (read_only or (args.command == "connect" and args.pending)))
             was_linked = bool(mail.linked().get("control_secret"))
             if args.command == "enroll":
                 result = mail.enroll(sys.stdin.read(512).strip())
