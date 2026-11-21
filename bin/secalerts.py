@@ -76,6 +76,7 @@ def main():
         fatal("email is not valid")
 
     reconfigure = bool(os.environ.get("_TURNKEY_RECONFIGURE"))
+    offer_newsletter = not reconfigure and onboarding.skipped_unlinked()
     if reconfigure:
         current = onboarding.load().get("notification_choice", "")
         email_placeholder = current if onboarding.valid_email(current) else onboarding.email_default(email_placeholder)
@@ -100,7 +101,7 @@ def main():
                 d.error("Email is not valid")
                 continue
 
-            if d.yesno("Is your email correct?", email):
+            if offer_newsletter or d.yesno("Is your email correct?", email):
                 break
 
     if email:
@@ -109,28 +110,20 @@ def main():
         configure([cmd, email])
         onboarding.observe("email_provided", email=email)
 
-    # Hub-linked users manage announcements in their account. Only a deliberate
-    # firstboot Skip offers the separate newsletter, with affirmative consent.
-    if not reconfigure and onboarding.skipped_unlinked():
+    # Hub-linked users manage announcements in their account. Ask once for
+    # the local recipient, then request separate consent for announcements.
+    if offer_newsletter and email:
         d = Dialog("TurnKey Linux - First boot configuration")
-        newsletter_email = email or email_placeholder
-        while True:
-            status, newsletter_email = d.inputbox("Security announcements",
-                "Optional: receive TurnKey security announcements and news. "
-                "This is a low-traffic newsletter; unsubscribe at any time.\n\nEmail:",
-                newsletter_email, "Subscribe", "No thanks")
-            if status == "cancel":
-                onboarding.observe("newsletter_choice", newsletter_consent=False)
-                break
-            newsletter_email = newsletter_email.strip()
-            if not onboarding.valid_email(newsletter_email):
-                d.error("Enter a valid email address, or choose No thanks.")
-                continue
-            onboarding.observe("newsletter_choice", newsletter_consent=True)
-            onboarding.observe("email_provided", email=newsletter_email)
+        decline = d.yesno(
+            "Security announcements",
+            "Also receive TurnKey security announcements and news at:\n\n"
+            f"{email}\n\nUnsubscribe at any time.",
+            "No thanks", "Subscribe",
+        )
+        onboarding.observe("newsletter_choice", newsletter_consent=not decline)
+        if not decline:
             configure([os.path.join(os.path.dirname(__file__), "secalerts.sh"),
-                       newsletter_email, "--newsletter-only"])
-            break
+                       email, "--newsletter-only"])
 
 
 if __name__ == "__main__":

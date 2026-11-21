@@ -338,7 +338,7 @@ class JourneysTest(unittest.TestCase):
 
     def test_skipped_user_can_decline_newsletter_without_affecting_local_notifications(self):
         onboarding.record('skipped')
-        self.alerts.Dialog.return_value.inputbox.return_value = ('cancel', 'chosen@example.net')
+        self.alerts.Dialog.return_value.yesno.return_value = True
         with patch.object(sys, 'argv', ['secalerts.py', '--email=chosen@example.net']), \
                 patch.object(self.alerts.subprocess, 'run') as run:
             self.alerts.main()
@@ -359,25 +359,39 @@ class JourneysTest(unittest.TestCase):
 
     def test_skipped_user_affirmatively_subscribes_separately(self):
         onboarding.record('skipped')
-        self.alerts.Dialog.return_value.inputbox.return_value = ('ok', 'chosen@example.net')
+        self.alerts.Dialog.return_value.yesno.return_value = False
         with patch.object(sys, 'argv', ['secalerts.py', '--email=chosen@example.net']), \
                 patch.object(self.alerts.subprocess, 'run') as run:
             self.alerts.main()
         self.assertEqual(run.call_count, 2)
         self.assertEqual(run.call_args.args[0][-2:], ['chosen@example.net', '--newsletter-only'])
 
-    def test_newsletter_shows_editable_email_and_recovers_from_empty_or_invalid_input(self):
+    def test_skipped_hub_asks_once_for_email_and_separate_consent(self):
         onboarding.record('skipped')
         dialog = self.alerts.Dialog.return_value
-        dialog.inputbox.side_effect = [('ok', ''), ('ok', 'invalid'), ('ok', 'different@example.net')]
-        with patch.object(sys, 'argv', ['secalerts.py', '--email=local@example.net']), \
+        dialog.inputbox.return_value = ('ok', 'chosen@example.net')
+        dialog.yesno.return_value = False  # Subscribe is the second button.
+        with patch.object(sys, 'argv', ['secalerts.py']), \
                 patch.object(self.alerts.subprocess, 'run') as run:
             self.alerts.main()
-        self.assertEqual(dialog.inputbox.call_args_list[0].args[-3:], ('local@example.net', 'Subscribe', 'No thanks'))
-        self.assertEqual(dialog.error.call_count, 2)
-        self.assertEqual(run.call_args.args[0][-2:], ['different@example.net', '--newsletter-only'])
-        self.assertTrue(run.call_args.kwargs['capture_output'])
-        self.assertEqual(sum(event['event_name'] == 'newsletter_choice' for event in onboarding.load()['pending']), 1)
+        dialog.inputbox.assert_called_once()
+        self.assertEqual(dialog.yesno.call_count, 1)
+        self.assertIn('chosen@example.net', dialog.yesno.call_args.args[1])
+        self.assertEqual(dialog.yesno.call_args.args[2:], ('No thanks', 'Subscribe'))
+        self.assertEqual(run.call_args_list[0].args[0][-1], 'chosen@example.net')
+        self.assertEqual(run.call_args_list[1].args[0][-2:], ['chosen@example.net', '--newsletter-only'])
+        self.assertTrue(onboarding.load()['pending'][-1]['newsletter_consent'])
+
+    def test_skip_email_does_not_offer_or_subscribe_to_newsletter(self):
+        onboarding.record('skipped')
+        dialog = self.alerts.Dialog.return_value
+        dialog.inputbox.return_value = ('cancel', '')
+        with patch.object(sys, 'argv', ['secalerts.py']), \
+                patch.object(self.alerts.subprocess, 'run') as run:
+            self.alerts.main()
+        dialog.inputbox.assert_called_once()
+        dialog.yesno.assert_not_called()
+        run.assert_not_called()
 
     def test_linked_account_email_configures_local_notifications_without_reasking(self):
         onboarding.record('link_completed')
