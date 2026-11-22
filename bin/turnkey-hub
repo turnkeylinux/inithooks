@@ -229,7 +229,7 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def request(route, payload, namespace="appmail"):
+def request(route, payload, namespace="appmail", *, timeout=15):
     """Only post credentials to the fixed, certificate-verified Hub origin."""
     if namespace not in ("appmail", "connections") or not re.fullmatch(r"[a-z/]+", route):
         raise Error("Invalid Hub operation.")
@@ -238,7 +238,7 @@ def request(route, payload, namespace="appmail"):
                                  headers={"Content-Type": "application/json", "Accept": "application/json"})
     opener = urllib.request.build_opener(NoRedirect(), urllib.request.HTTPSHandler(context=ssl.create_default_context()))
     try:
-        with opener.open(req, timeout=15) as response:
+        with opener.open(req, timeout=timeout) as response:
             raw = response.read(MAX_JSON + 1)
     except urllib.error.HTTPError as exc:
         code = "unavailable"
@@ -1010,13 +1010,33 @@ class Mail:
             self.save()
         return {"status": result["status"], "interval": pairing["interval"]}
 
+    def connection_status(self):
+        """Read the Hub's current settings independently of local setup."""
+        link = self.linked()
+        if not link.get("control_secret"):
+            return {"connection_status": "disconnected"}
+        device_id = link["device_id"]
+        proof = {"device_id": device_id, "control_secret": link["control_secret"]}
+        try:
+            value = request("status", proof, "connections", timeout=2)
+        except Error as error:
+            if error.code in ("invalid_credentials", "revoked"):
+                return {"connection_status": "disconnected", "device_id": device_id,
+                        "reason": error.code}
+            raise
+        if (value.get("connection_status") != "linked" or value.get("device_id") != device_id
+                or not isinstance(value.get("services"), dict)):
+            raise Error("The Hub returned an invalid connection status.")
+        return value
+
     def status(self, refresh=True):
         link = self.linked()
         if refresh and link.get("control_secret"):
             return self.sync()
         active = self.state.get("active", {})
         services = self.state.get("services", {})
-        return {"status": active.get("status", "linked" if link.get("control_secret") else "connecting" if self.state.get("pending") else "disconnected"),
+        return {"device_id": link.get("device_id", ""),
+                "status": active.get("status", "linked" if link.get("control_secret") else "connecting" if self.state.get("pending") else "disconnected"),
                 "connection_status": "linked" if link.get("control_secret") else "disconnected",
                 "mode": active.get("mode", ""), "mail_preference": self.state.get("mail_preference", "hub"),
                 "domain": active.get("domain", ""), "sender": active.get("sender", ""),
@@ -1167,6 +1187,7 @@ def main():
     status = commands.add_parser("status")
     status.add_argument("--local", action="store_true")
     status.add_argument("--read-only", action="store_true", help="Read local status without applying recovery")
+    commands.add_parser("connection-status", help="Read current Hub settings without applying them")
     for name in ("reset", "reset-mail", "retry", "dns-update", "sync", "use-hub", "provision"):
         commands.add_parser(name)
     test = commands.add_parser("test")
@@ -1179,9 +1200,10 @@ def main():
     if args.command == "connect" and ((args.resume and not args.start) or
                                       (args.expected_code is not None and not args.poll)):
         parser.error("--resume requires --start and --expected-code requires --poll")
-    read_only = args.command == "status" and args.read_only
-    if read_only and not args.local:
+    local_read_only = args.command == "status" and args.read_only
+    if local_read_only and not args.local:
         parser.error("status --read-only requires --local")
+    read_only = local_read_only or args.command == "connection-status"
     try:
         if os.geteuid() != 0:
             raise Error("Run this command as root.")
@@ -1302,6 +1324,8 @@ def main():
             print(result["dns_setup_error"], file=sys.stderr)
         if args.json or args.command == "credential":
             print(json.dumps(result, sort_keys=True))
+        elif args.command == "connection-status":
+            print("Hub connection: %s" % result["connection_status"])
         elif result.get("message"):
             print(result["message"])
         else:

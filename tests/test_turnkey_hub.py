@@ -1353,6 +1353,42 @@ class MailTest(unittest.TestCase):
         self.assertFalse(transient.exists())
         self.assertEqual(self.calls, [(["postfix", "reload"], None)])
 
+    def test_connection_status_uses_one_display_request_without_lock_or_recovery(self):
+        device = CONFIG["device_id"]
+        proof = {"device_id": device, "control_secret": "c" * 43}
+        self.client.state["link"] = dict(proof, mode="hub")
+        self.client.state["applying"] = {"original": "interrupted", "files": []}
+        self.client.save()
+        state_path = mail.STATE_DIR / "state.json"
+        before = state_path.read_bytes()
+        response = {"connection_status": "linked", "device_id": device,
+                    "services": {"mail": {"enabled": False}}}
+        output = io.StringIO()
+        with patch.object(mail.sys, "argv", ["turnkey-hub", "connection-status", "--json"]), \
+                patch.object(mail.os, "geteuid", return_value=0), patch.object(mail.os, "umask"), \
+                patch.object(mail.sys, "stdout", output), \
+                patch.object(mail, "locked", side_effect=AssertionError("write lock used")), \
+                patch.object(mail.Mail, "recover", side_effect=AssertionError("recovery ran")), \
+                patch.object(mail, "request", return_value=response) as request:
+            self.assertEqual(mail.main(), 0)
+        self.assertEqual(response, json.loads(output.getvalue()))
+        request.assert_called_once_with("status", proof, "connections", timeout=2)
+        self.assertEqual(before, state_path.read_bytes())
+        self.assertEqual([], self.calls)
+
+    def test_unlinked_and_revoked_are_distinct_from_network_failure(self):
+        with patch.object(mail, "request") as request:
+            self.assertEqual({"connection_status": "disconnected"}, self.client.connection_status())
+        request.assert_not_called()
+        device = CONFIG["device_id"]
+        self.client.state["link"] = {"mode": "hub", "device_id": device, "control_secret": "c" * 43}
+        with patch.object(mail, "request", side_effect=mail.Error("Revoked", code="revoked")):
+            self.assertEqual({"connection_status": "disconnected", "device_id": device, "reason": "revoked"},
+                             self.client.connection_status())
+        with patch.object(mail, "request", side_effect=mail.Error("Offline", code="unavailable")), \
+                self.assertRaises(mail.Error):
+            self.client.connection_status()
+
     def test_read_only_status_requires_local(self):
         with patch.object(mail.sys, "argv", ["turnkey-hub", "status", "--read-only"]), \
                 patch.object(mail.sys, "stderr", io.StringIO()), self.assertRaises(SystemExit) as error:
