@@ -383,9 +383,11 @@ class OnboardingTest(unittest.TestCase):
     def test_explicit_clone_reset_creates_new_installation_and_clears_email(self):
         first = flow.begin()
         flow.remember_email('previous@example.net')
+        (flow.STATE_DIR / 'root-forward-disabled').touch()
         with patch('sys.argv', ['turnkey-onboarding', 'reset-installation']), patch.object(flow.os, 'geteuid', return_value=0):
             flow.main()
         self.assertFalse((flow.CACHE_DIR / 'HUB_ACCOUNT_EMAIL').exists())
+        self.assertFalse((flow.STATE_DIR / 'root-forward-disabled').exists())
         self.assertNotEqual(first['installation_id'], flow.begin()['installation_id'])
 
     def test_optional_observation_failure_cannot_block_setup_or_replace_identity(self):

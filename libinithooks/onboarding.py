@@ -385,6 +385,7 @@ def command_line():
     elif args.command == 'reset-installation':
         with locked():
             (STATE_DIR / 'state.json').unlink(missing_ok=True)
+            (STATE_DIR / 'root-forward-disabled').unlink(missing_ok=True)
         (CACHE_DIR / 'HUB_ACCOUNT_EMAIL').unlink(missing_ok=True)
     elif args.command == 'notifications':
         notification_choice(args.email)

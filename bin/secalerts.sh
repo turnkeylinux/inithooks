@@ -69,6 +69,20 @@ enable_security_alerts() {
     $script
 }
 
+if [[ "${1:-}" == "--root-forward" && "$#" == 3 ]]; then
+    if [[ "$2" == "off" ]]; then
+        configure_alias root root
+        mkdir -p /var/lib/turnkey-onboarding
+        touch /var/lib/turnkey-onboarding/root-forward-disabled
+    elif [[ "$2" == "on" ]]; then
+        configure_alias root "$3"
+        rm -f /var/lib/turnkey-onboarding/root-forward-disabled
+    else
+        usage
+    fi
+    exit 0
+fi
+
 if [[ "$#" != "1" && !( "$#" == "2" && "$2" == "--newsletter-only" ) ]]; then
     usage
 fi
@@ -80,9 +94,9 @@ if [[ "${2:-}" == "--newsletter-only" ]]; then
     exit 0
 fi
 
-configure_alias "root" "$email"
-configure_cronapt "MAILON" "output"
+[ -e /var/lib/turnkey-onboarding/root-forward-disabled ] || configure_alias "root" "$email"
+configure_cronapt "MAILON" "upgrade"
 configure_cronapt "MAILTO" "root"
 "$(dirname "$0")/turnkey-onboarding" notifications --email "$email"
-send_enabled_notification "root"
+[ -e /var/lib/turnkey-onboarding/root-forward-disabled ] || send_enabled_notification "root"
 
