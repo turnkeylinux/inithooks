@@ -260,7 +260,7 @@ def link_instructions(result, pending=False, width=60):
     action = 'Approve in your browser.' if pending else 'Enter this code and approve:'
     return (
         'Connect email delivery, DNS, backups and migration.\n'
-        'Get security alerts by email.\n\n'
+        'Get security alerts.\n\n'
         'Open %s\n\n%s\n\n%s'
     ) % (result['verification_uri'].split('?', 1)[0],
          action.center(content_width), result['user_code'].center(content_width))

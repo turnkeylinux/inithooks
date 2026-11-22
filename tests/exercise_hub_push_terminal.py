@@ -99,7 +99,7 @@ def exercise(mode, columns):
             assert "I've approved" in initial and 'Skip' in initial
             assert 'hub.turnkeylinux.org/connect' in initial and 'Connect email delivery' in initial
             assert 'Open https://hub.turnkeylinux.org/connect' in initial
-            assert 'Get security alerts by email.' in initial
+            assert 'Get security alerts.' in initial
             row = next(line for line in initial.splitlines() if 'D34C-F5A9' in line)
             center = row.index('D34C-F5A9') + len('D34C-F5A9') / 2
             dialog_center = (row.index('│') + row.rindex('│') + 1) / 2
