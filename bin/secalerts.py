@@ -18,7 +18,7 @@ from typing import NoReturn
 from libinithooks.dialog_wrapper import Dialog, EMAIL_RE
 from libinithooks import onboarding
 
-TITLE = "System Notifications and Critical Security Alerts"
+TITLE = "Security contact"
 
 TEXT = (
     "Receive system notifications, including security update reports and "
@@ -88,7 +88,7 @@ def main():
         d = Dialog("TurnKey Linux - First boot configuration")
         email = onboarding.email_default(email_placeholder)
         while 1:
-            title = "Admin email" if register_security_alerts else TITLE
+            title = TITLE
             text = ("Receive critical system notifications and security alerts. You can turn this off at any time.\n\nEmail:"
                     if register_security_alerts else TEXT)
             action = "Continue" if register_security_alerts else "Enable"
