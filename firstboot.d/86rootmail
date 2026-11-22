@@ -1,6 +1,6 @@
 #!/bin/sh
 # reconfigure: yes
-# reconfigure-title: Root mail forwarding
+# reconfigure-title: System mail forwarding
 # reconfigure-description: Send server mail to the security contact.
 [ "${_TURNKEY_RECONFIGURE:-}" ] || exit 0
 exec /usr/lib/inithooks/bin/rootmail.py
