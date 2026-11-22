@@ -89,7 +89,7 @@ def main():
         email = onboarding.email_default(email_placeholder)
         while 1:
             title = "Admin email" if register_security_alerts else TITLE
-            text = ("Receive critical system notifications and TurnKey security alerts at this address. You can turn off either at any time.\n\nEmail:"
+            text = ("Receive critical system notifications and security alerts. You can turn this off at any time.\n\nEmail:"
                     if register_security_alerts else TEXT)
             action = "Continue" if register_security_alerts else "Enable"
             retcode, email = d.inputbox(title, text, email, action, "Cancel" if reconfigure else "Skip")

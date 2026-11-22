@@ -358,7 +358,7 @@ class JourneysTest(unittest.TestCase):
             self.alerts.main()
         dialog.inputbox.assert_called_once()
         self.assertEqual(dialog.inputbox.call_args.args[0], 'Admin email')
-        self.assertIn('critical system notifications and TurnKey security alerts', dialog.inputbox.call_args.args[1])
+        self.assertIn('critical system notifications and security alerts', dialog.inputbox.call_args.args[1])
         self.assertEqual(dialog.inputbox.call_args.args[2:], ('cached@example.net', 'Continue', 'Skip'))
         dialog.yesno.assert_not_called()
         self.assertEqual(run.call_args_list[0].args[0][-1], 'chosen@example.net')
