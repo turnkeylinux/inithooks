@@ -13,7 +13,7 @@ import tempfile
 
 STATE_DIR = Path('/var/lib/turnkey-onboarding')
 CACHE_DIR = Path('/var/lib/inithooks/cache')
-HUB_STATE = Path('/var/lib/turnkey-mail/state.json')
+HUB_STATE = Path('/var/lib/turnkey-hub/state.json')
 ALIASES = Path('/etc/aliases')
 ALERTS = '/usr/lib/inithooks/bin/secalerts.sh'
 ENDPOINT = 'https://ajax.turnkeylinux.org/initfence/v2/events'

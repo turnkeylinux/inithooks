@@ -1,7 +1,7 @@
 [Unit]
 Description=Finish pending Hub setup
 After=network-online.target
-ConditionPathExists=/var/lib/turnkey-mail/provision-pending
+ConditionPathExists=/var/lib/turnkey-hub/provision-pending
 
 [Service]
 Type=oneshot

@@ -18,7 +18,7 @@ import time
 from libinithooks.interrupt import dialog_interrupt
 
 URL = 'wss://ajax.turnkeylinux.org/initfence/v2/pairing'
-STATE = Path('/var/lib/turnkey-mail/state.json')
+STATE = Path('/var/lib/turnkey-hub/state.json')
 TERMINAL = {'approved', 'denied', 'expired'}
 
 

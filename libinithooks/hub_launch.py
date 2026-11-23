@@ -11,7 +11,7 @@ import sys
 import tempfile
 
 PROTOCOL = 'hub-services-v1'
-STATE_DIR = Path('/var/lib/turnkey-mail')
+STATE_DIR = Path('/var/lib/turnkey-hub')
 FAILURE = 'Hub registration could not finish. Check the network and Hub packages, then retry.'
 
 

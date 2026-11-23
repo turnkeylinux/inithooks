@@ -1,0 +1,41 @@
+#!/bin/sh
+set -e
+
+# Existing processes may still use the old path while dpkg replaces scripts.
+# Exchange the directory and compatibility link in one filesystem operation,
+# keeping the state files and their lock inodes in place.
+if [ "$1" = install ] || [ "$1" = upgrade ]; then
+    python3 - <<'PY'
+import ctypes
+import os
+from pathlib import Path
+
+legacy = Path('/var/lib/turnkey-mail')
+current = Path('/var/lib/turnkey-hub')
+if legacy.is_symlink():
+    if os.readlink(legacy) != 'turnkey-hub' or not current.is_dir():
+        raise SystemExit('Unexpected legacy Hub state link; preserve both paths and resolve the conflict.')
+elif legacy.exists():
+    if not legacy.is_dir():
+        raise SystemExit('Legacy Hub state is not a directory.')
+    if current.is_symlink() and os.readlink(current) == 'turnkey-hub':
+        pass  # Retry after interruption before the exchange.
+    elif current.exists() or current.is_symlink():
+        raise SystemExit('Both Hub state directories exist; preserve both and resolve the conflict.')
+    else:
+        current.symlink_to('turnkey-hub')
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.renameat2(-100, os.fsencode(legacy), -100, os.fsencode(current), 2):
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error))
+    # Persist the rename before dpkg installs readers of the new path.
+    directory = os.open(str(current.parent), os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+elif current.is_symlink() and os.readlink(current) == 'turnkey-hub':
+    raise SystemExit('Incomplete Hub state migration; the old directory is missing.')
+PY
+fi
+exit 0

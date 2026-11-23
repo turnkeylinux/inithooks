@@ -24,7 +24,7 @@ Confconsole also supports another SMTP provider through **Custom SMTP**. Enter t
 
 The standalone `bin/turnkey-hub` file is packaged by inithooks. The Hub installs the same reviewed file on supported existing images and passes enrollment through standard input. It is independent of application code.
 
-Enrollment saves a short-lived token and independently generated SMTP/DNS secrets under `/var/lib/turnkey-mail/`, accessible only to root. The retry timer resumes an incomplete connection after firstboot clears its preseed file. A new connection with no existing relay holds direct SMTP delivery until enrollment succeeds. Repeating a completed token preserves the existing device identity.
+Enrollment saves a short-lived token and independently generated SMTP/DNS secrets under `/var/lib/turnkey-hub/`, accessible only to root. The retry timer resumes an incomplete connection after firstboot clears its preseed file. A new connection with no existing relay holds direct SMTP delivery until enrollment succeeds. Repeating a completed token preserves the existing device identity.
 
 The DNS updater uses a separate hostname-scoped capability and leaves an enabled existing HubDNS hourly updater in control. The mail credential cannot update DNS. Connection state and credentials must be reset when cloning a server; the Hub snapshot path invokes `turnkey-hub reset` before enrollment with a new token. The full `reset` command clears local mail and DNS credentials without revoking the source server's credential. Use `reset-mail` for the mail-only action. Switching to Custom SMTP also preserves dynamic DNS.
 
