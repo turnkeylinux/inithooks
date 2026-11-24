@@ -7,6 +7,23 @@ chmod 755 /usr/lib/python3/dist-packages/libinithooks/inithooks_cache.py
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] \
         || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
     if [ "$1" = "configure" ]; then
+        # Preserve customized cron-apt actions and per-action configuration.
+        if [ -x /usr/sbin/cron-apt ] && [ -f /etc/cron-apt/action.d/0-update ] &&
+                [ ! -e /etc/cron-apt/config.d/0-update ] &&
+                [ ! -L /etc/cron-apt/config.d/0-update ]; then
+            mkdir -p /etc/cron-apt/config.d
+            cat > /etc/cron-apt/config.d/0-update <<'EOF'
+if [ -x /usr/lib/inithooks/bin/security-updates-status ]; then
+export TURNKEY_SECURITY_APT_COMMAND="$APTCOMMAND"
+export TURNKEY_SECURITY_CRON_PID="$$"
+export TURNKEY_SECURITY_CRON_ID="$$-$(date +%s)"
+export TURNKEY_SECURITY_ACTIONDIR="$ACTIONDIR"
+export TURNKEY_SECURITY_ACTIONCONFDIR="$ACTIONCONFDIR"
+export TURNKEY_SECURITY_CONFIG="$CONFIG"
+APTCOMMAND=/usr/lib/inithooks/bin/security-updates-status
+fi
+EOF
+        fi
         # Existing links keep their schedules and credentials when the helper
         # is renamed. Leave locally replaced units and commands alone.
         for job in retry dns; do

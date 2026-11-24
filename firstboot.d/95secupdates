@@ -38,16 +38,7 @@ install_updates() {
         echo "WARNING: $msg" >> $LOGFILE
         dpkg --audit 2>&1 | tee -a $LOGFILE
     fi
-    DEBIAN_FRONTEND=noninteractive dpkg --force-confdef --force-confold \
-        --configure -a 2>&1 | tee -a $LOGFILE
-    apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get autoclean -y
-    DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y \
-        -o APT::Get::Show-Upgraded=true \
-        -o Dir::Etc::sourceparts=/dev/null \
-        -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/security.sources.sources \
-        -o DPkg::Options::=--force-confdef \
-        -o DPkg::Options::=--force-confold | tee -a $LOGFILE
+    /usr/lib/inithooks/bin/security-updates-status --manual
 
     # per above note re containers
     # shellcheck disable=SC2012

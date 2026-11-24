@@ -14,6 +14,22 @@ This initialization process can be interactive or non-interactive depending on
 what works best given where and how the system is deployed. By default it is
 interactive.
 
+Security update status
+----------------------
+
+Run `turnkey-security-updates-status` to see the most recent recorded update
+attempt, successful APT index refresh, completed security upgrade, and
+installation of one or more packages. Add `--json` for machine-readable
+output. Timestamps are UTC. The installed count belongs to the latest
+successful attempt and can be unknown when APT does not report a count.
+
+The normal cron-apt security update policies and the first-boot/manual update
+command record their outcomes. A partial index refresh is reported as unknown.
+The status can also be unknown before the first recorded run or when a
+customized cron-apt action cannot be tracked. A failed or interrupted run keeps
+the previous successful timestamps. The reboot indicator appears when the
+system has created `/run/reboot-required`.
+
 
 Initialization fence
 --------------------

@@ -5,7 +5,8 @@ export PYBUILD_BEFORE_BUILD=\
 	usr/lib/inithooks/bin/inithooks_cache.py \
 	> debian/inithooks.links; \
 	echo usr/lib/inithooks/bin/turnkey usr/sbin/turnkey >> debian/inithooks.links; \
-	echo usr/lib/inithooks/bin/turnkey-reconfigure usr/sbin/turnkey-reconfigure >> debian/inithooks.links
+	echo usr/lib/inithooks/bin/turnkey-reconfigure usr/sbin/turnkey-reconfigure >> debian/inithooks.links; \
+	echo usr/lib/inithooks/bin/security-updates-status usr/sbin/turnkey-security-updates-status >> debian/inithooks.links
 
 export PYTHONDONTWRITEBYTECODE=1
 

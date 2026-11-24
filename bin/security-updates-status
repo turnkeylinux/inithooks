@@ -1,0 +1,486 @@
+#!/usr/bin/python3
+"""Run security update commands and record their completed outcome."""
+
+import datetime
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import shlex
+import subprocess
+import sys
+import tempfile
+import threading
+
+STATE = Path("/var/lib/turnkey-security-updates")
+RUNTIME = Path("/run/turnkey-security-updates")
+SECURITY_SOURCES = "/etc/apt/sources.list.d/security.sources.sources"
+LOGFILE = Path("/var/log/inithooks/secupdates.log")
+CRON_HOOK = Path("/etc/cron-apt/config.d/0-update")
+CRON_CONFIG = Path("/etc/cron-apt/config")
+CRON_SCHEDULE = Path("/etc/cron.d/cron-apt")
+HOOK_TEXT = '''if [ -x /usr/lib/inithooks/bin/security-updates-status ]; then
+export TURNKEY_SECURITY_APT_COMMAND="$APTCOMMAND"
+export TURNKEY_SECURITY_CRON_PID="$$"
+export TURNKEY_SECURITY_CRON_ID="$$-$(date +%s)"
+export TURNKEY_SECURITY_ACTIONDIR="$ACTIONDIR"
+export TURNKEY_SECURITY_ACTIONCONFDIR="$ACTIONCONFDIR"
+export TURNKEY_SECURITY_CONFIG="$CONFIG"
+APTCOMMAND=/usr/lib/inithooks/bin/security-updates-status
+fi
+'''
+SUMMARY = re.compile(r"^(\d+) upgraded, (\d+) newly installed, \d+ to remove and \d+ not upgraded")
+
+
+def now():
+    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def valid_time(value):
+    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", value):
+        return False
+    try:
+        datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+        return True
+    except ValueError:
+        return False
+
+
+def process_identity(pid):
+    stat = Path(f"/proc/{pid}/stat").read_text()
+    fields = stat[stat.rfind(")") + 2:].split()
+    if fields[0] == "Z":
+        raise ValueError("process exited")
+    return {"boot_id": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
+            "owner_pid": pid, "owner_start_ticks": int(fields[19])}
+
+
+def write_json(path, value):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".status-")
+    try:
+        with os.fdopen(fd, "w") as stream:
+            json.dump(value, stream)
+            stream.write("\n")
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def change_status(attempt, result, installed=None):
+    STATE.mkdir(mode=0o755, parents=True, exist_ok=True)
+    with (STATE / "lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        path = STATE / "status.json"
+        try:
+            previous = json.loads(path.read_text())
+        except (OSError, ValueError):
+            previous = {}
+        if not isinstance(previous, dict):
+            previous = {}
+        if result != "running" and previous.get("attempt_id") != attempt["attempt_id"]:
+            return
+        if result == "success" and previous.get("result") != "running":
+            return
+        record = {"schema_version": 1, "last_attempt": attempt["last_attempt"],
+                  "last_check": previous.get("last_check") if valid_time(previous.get("last_check")) else None,
+                  "last_success": previous.get("last_success") if valid_time(previous.get("last_success")) else None, "result": result,
+                  "last_install": previous.get("last_install") if valid_time(previous.get("last_install")) else None,
+                  "installed": installed, "attempt_id": attempt["attempt_id"]}
+        if "monitor_signature" in attempt:
+            record["monitor_signature"] = attempt["monitor_signature"]
+        if result == "running":
+            record.update(attempt["owner"])
+        if result == "success":
+            record["last_success"] = now()
+            if installed:
+                record["last_install"] = record["last_success"]
+        write_json(path, record)
+
+
+def record_check(attempt):
+    try:
+        with (STATE / "lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            path = STATE / "status.json"
+            value = json.loads(path.read_text())
+            if isinstance(value, dict) and value.get("attempt_id") == attempt["attempt_id"]:
+                value["last_check"] = now()
+                write_json(path, value)
+    except (OSError, ValueError, TypeError, KeyError):
+        print("Security update status could not be recorded.", file=sys.stderr)
+
+
+def invoke(command, log=None, warnings=None, log_errors=False):
+    count = None
+    log_lock = threading.Lock()
+    with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                          text=True, errors="replace", bufsize=1) as process:
+        def copy_errors():
+            for line in process.stderr:
+                sys.stderr.write(line)
+                sys.stderr.flush()
+                if log and log_errors:
+                    with log_lock:
+                        log.write(line)
+                        log.flush()
+                if warnings is not None and ("Failed to fetch" in line or "Some index files failed to download" in line):
+                    warnings.append(line)
+
+        reader = threading.Thread(target=copy_errors)
+        reader.start()
+        for line in process.stdout:
+            sys.stdout.write(line)
+            sys.stdout.flush()
+            if log:
+                with log_lock:
+                    log.write(line)
+                    log.flush()
+            match = SUMMARY.match(line)
+            if match:
+                count = int(match[1]) + int(match[2])
+            if warnings is not None and ("Failed to fetch" in line or "Some index files failed to download" in line):
+                warnings.append(line)
+        code = process.wait()
+        reader.join()
+    return code, count
+
+
+def attempt(owner, identifier):
+    return {"attempt_id": identifier, "last_attempt": now(), "owner": process_identity(owner)}
+
+
+def record(current, result, installed=None):
+    try:
+        change_status(current, result, installed)
+    except (OSError, ValueError, TypeError, KeyError, IndexError):
+        print("Security update status could not be recorded.", file=sys.stderr)
+
+
+def security_upgrade(args):
+    if any(arg in ("-s", "--simulate", "--just-print", "--dry-run", "--recon",
+                   "--no-act", "-d", "--download-only", "--print-uris")
+           or (re.fullmatch(r"-[A-Za-z]+", arg) and any(flag in arg[1:] for flag in ("s", "d")))
+           for arg in args):
+        return False
+    options = {}
+    iterator = iter(args)
+    for arg in iterator:
+        if arg in ("-o", "--option"):
+            setting = next(iterator, "")
+        elif arg.startswith("--option="):
+            setting = arg[len("--option="):]
+        elif arg.startswith("-o") and len(arg) > 2:
+            setting = arg[2:]
+        else:
+            continue
+        key, separator, value = setting.partition("=")
+        if separator:
+            options[key.lower()] = value
+    parts = options.get("dir::etc::sourceparts")
+    return (options.get("dir::etc::sourcelist") == SECURITY_SOURCES
+            and not any(options.get(key, "").lower() not in ("", "false", "0", "no")
+                        for key in ("apt::get::simulate", "apt::get::download-only", "apt::get::print-uris"))
+            and (parts == "/dev/null" or
+                 (parts == "nonexistent" and not Path("/etc/apt/nonexistent").exists())))
+
+
+def security_sources_available():
+    try:
+        contents = Path(SECURITY_SOURCES).read_text()
+    except (OSError, UnicodeError):
+        return False
+    for stanza in re.split(r"\n\s*\n", contents):
+        fields = {}
+        for line in stanza.splitlines():
+            key, separator, value = line.partition(":")
+            if separator and not line[0].isspace():
+                fields[key.lower()] = value.strip()
+        if (fields.get("enabled", "yes").lower() != "no"
+                and "deb" in fields.get("types", "").split()
+                and fields.get("uris") and fields.get("suites")):
+            return True
+    return False
+
+
+def update_covers_security(args):
+    # A custom APT configuration or source override can exclude the security
+    # sources from the index refresh. Leave its outcome unmonitored.
+    if os.environ.get("APT_CONFIG"):
+        return False
+    if any(
+        arg in ("-c", "--config-file")
+        or arg.startswith(("--config-file=", "-c"))
+        or any(key in arg.lower() for key in (
+            "dir::etc::sourcelist", "dir::etc::sourceparts",
+            "dir::etc::main", "dir::etc::parts", "dir::etc=", "dir=",
+        ))
+        for arg in args
+    ):
+        return False
+    try:
+        result = subprocess.run(["apt-config", "dump"], capture_output=True,
+                                text=True, timeout=5, check=True)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    settings = {key.lower(): value for key, value in
+                re.findall(r'^([^\s]+) "([^"]*)";$', result.stdout, re.MULTILINE)}
+    return (all(settings.get(key) == expected for key, expected in {
+        "dir": "/", "dir::etc": "etc/apt",
+        "dir::etc::sourcelist": "sources.list",
+        "dir::etc::sourceparts": "sources.list.d",
+    }.items()) and not any(
+        settings.get(key, "").lower() not in ("", "false", "0", "no")
+        for key in ("apt::get::simulate", "apt::get::download-only", "apt::get::print-uris")
+    ))
+
+
+def supported_cron_actions():
+    actions = Path(os.environ.get("TURNKEY_SECURITY_ACTIONDIR", "/etc/cron-apt/action.d"))
+    configs = Path(os.environ.get("TURNKEY_SECURITY_ACTIONCONFDIR", "/etc/cron-apt/config.d"))
+    try:
+        for path in actions.iterdir():
+            if not path.is_file() or path.name.startswith(".") or path.name.endswith("~"):
+                continue
+            # Even an empty action can load per-action settings that replace
+            # the command used by later actions.
+            if path.name != "0-update" and (configs / path.name).exists():
+                return False
+            lines = [line.split("#", 1)[0].strip() for line in path.read_text().splitlines()]
+            lines = [line for line in lines if line]
+            if path.name == "0-update":
+                if len(lines) != 1 or shlex.split(lines[0])[0] != "update":
+                    return False
+            elif path.name == "5-install":
+                if (len(lines) != 2 or not lines[0].startswith("autoclean ")
+                        or not security_upgrade(shlex.split(lines[1]))
+                        or shlex.split(lines[1])[0] not in ("upgrade", "dist-upgrade")):
+                    return False
+            elif lines:
+                return False
+        return ((actions / "0-update").is_file() and (actions / "5-install").is_file()
+                and security_sources_available())
+    except (OSError, ValueError):
+        return False
+
+
+def cron_monitor_signature():
+    if (os.environ.get("TURNKEY_SECURITY_CONFIG", str(CRON_CONFIG)) != str(CRON_CONFIG)
+            or os.environ.get("TURNKEY_SECURITY_ACTIONDIR", "/etc/cron-apt/action.d") != "/etc/cron-apt/action.d"
+            or os.environ.get("TURNKEY_SECURITY_ACTIONCONFDIR", "/etc/cron-apt/config.d") != "/etc/cron-apt/config.d"):
+        return ""
+    if CRON_HOOK.read_text() != HOOK_TEXT:
+        return ""
+    paths = [CRON_HOOK, CRON_CONFIG, CRON_SCHEDULE,
+             Path("/etc/cron-apt/action.d/0-update"),
+             Path("/etc/cron-apt/action.d/3-download"),
+             Path("/etc/cron-apt/action.d/5-install")]
+    digest = hashlib.sha256()
+    for path in paths:
+        digest.update(str(path).encode() + b"\0")
+        try:
+            digest.update(path.read_bytes())
+        except FileNotFoundError:
+            digest.update(b"<missing>")
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def cron(args):
+    original = os.environ.get("TURNKEY_SECURITY_APT_COMMAND", "/usr/bin/apt-get").split()
+    job = os.environ.get("TURNKEY_SECURITY_CRON_ID", "")
+    owner = os.environ.get("TURNKEY_SECURITY_CRON_PID", "")
+    if not re.fullmatch(r"[0-9]+-[0-9]+", job) or not owner.isdigit():
+        return invoke(original + args)[0]
+    runfile = RUNTIME / (job + ".json")
+    action = next((arg for arg in args if arg in ("update", "upgrade", "dist-upgrade", "autoclean")), "")
+    if action == "update":
+        if not supported_cron_actions() or not update_covers_security(original + args):
+            try:
+                current = attempt(int(owner), "cron:" + job)
+                current["monitor_signature"] = cron_monitor_signature()
+                change_status(current, "running")
+                change_status(current, "unknown")
+            except (OSError, ValueError, TypeError, IndexError):
+                print("Security update status could not be recorded.", file=sys.stderr)
+            return invoke(original + args)[0]
+        try:
+            runfile.unlink(missing_ok=True)
+            current = attempt(int(owner), "cron:" + job)
+            current["monitor_signature"] = cron_monitor_signature()
+            change_status(current, "running")
+        except (OSError, ValueError, TypeError, IndexError):
+            print("Security update status could not be recorded.", file=sys.stderr)
+            current = None
+        warnings = []
+        code, _ = invoke(original + args, warnings=warnings)
+        if current and code:
+            record(current, "failed")
+        elif current and warnings:
+            record(current, "unknown")
+        elif current:
+            record_check(current)
+            try:
+                write_json(runfile, current)
+            except (OSError, ValueError, TypeError):
+                record(current, "unknown")
+        return code
+    if action == "autoclean":
+        code, _ = invoke(original + args)
+        if code:
+            try:
+                current = json.loads(runfile.read_text())
+                if isinstance(current, dict) and current.get("owner") == process_identity(int(owner)):
+                    record(current, "failed")
+                    runfile.unlink(missing_ok=True)
+            except (OSError, ValueError, TypeError, IndexError):
+                pass
+        return code
+    if action in ("upgrade", "dist-upgrade") and security_upgrade(original[1:] + args) and update_covers_security([]):
+        try:
+            current = json.loads(runfile.read_text())
+            if not isinstance(current, dict) or current.get("owner") != process_identity(int(owner)):
+                current = None
+            elif (previous := json.loads((STATE / "status.json").read_text())).get("result") != "running" or previous.get("attempt_id") != current.get("attempt_id"):
+                current = None
+        except (OSError, ValueError, TypeError, IndexError, AttributeError):
+            current = None
+        code, count = invoke(original + args)
+        if current:
+            record(current, "success" if code == 0 else "failed", count if code == 0 else None)
+            try:
+                runfile.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return code
+    return invoke(original + args)[0]
+
+
+def manual():
+    try:
+        current = attempt(os.getpid(), "manual:" + str(os.getpid()) + ":" + now())
+        change_status(current, "running")
+    except (OSError, ValueError, TypeError, IndexError):
+        print("Security update status could not be recorded.", file=sys.stderr)
+        current = None
+    logfile = LOGFILE
+    logfile.parent.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ, DEBIAN_FRONTEND="noninteractive", LC_ALL="C")
+    os.environ.update(env)
+    sources_available = security_sources_available() and update_covers_security([])
+    commands = [
+        ["dpkg", "--force-confdef", "--force-confold", "--configure", "-a"],
+        ["apt-get", "update"],
+        ["apt-get", "autoclean", "-y"],
+        ["apt-get", "dist-upgrade", "-y", "-o", "APT::Get::Show-Upgraded=true",
+         "-o", "Dir::Etc::sourceparts=/dev/null",
+         "-o", "Dir::Etc::sourcelist=" + SECURITY_SOURCES,
+         "-o", "DPkg::Options::=--force-confdef", "-o", "DPkg::Options::=--force-confold"],
+    ]
+    try:
+        with logfile.open("a") as log:
+            incomplete = []
+            for command in commands:
+                command_log = log if command[0] == "dpkg" or "dist-upgrade" in command else None
+                code, count = invoke(command, command_log,
+                                     incomplete if command == ["apt-get", "update"] else None,
+                                     log_errors=command[0] == "dpkg")
+                if code:
+                    if current:
+                        record(current, "failed")
+                    return code
+                if current and command == ["apt-get", "update"] and not incomplete and sources_available:
+                    record_check(current)
+        if current:
+            record(current, "unknown" if incomplete or not sources_available else "success",
+                   count if not incomplete and sources_available else None)
+        return 0
+    except (OSError, subprocess.SubprocessError):
+        if current:
+            record(current, "failed")
+        raise
+
+
+def status():
+    try:
+        value = json.loads((STATE / "status.json").read_text())
+        if (not isinstance(value, dict) or type(value.get("schema_version")) is not int
+                or value.get("schema_version") != 1
+                or value.get("result") not in ("running", "success", "failed", "unknown")
+                or not valid_time(value.get("last_attempt"))
+                or (value.get("last_success") is not None and not valid_time(value["last_success"]))
+                or (value.get("last_check") is not None and not valid_time(value["last_check"]))
+                or (value.get("last_install") is not None and not valid_time(value["last_install"]))
+                or (value.get("result") == "success" and not valid_time(value.get("last_success")))
+                or (value.get("installed") is not None
+                    and (type(value["installed"]) is not int or value["installed"] < 0))):
+            raise ValueError("invalid status")
+        current_time = now()
+        if (value["last_attempt"] > current_time
+                or (value.get("last_success") and value["last_success"] > current_time)
+                or (value.get("last_check") and value["last_check"] > current_time)
+                or (value.get("last_install") and value["last_install"] > current_time)
+                or (value["result"] == "success" and value["last_success"] < value["last_attempt"])):
+            raise ValueError("invalid status timestamps")
+    except (OSError, ValueError, TypeError):
+        value = {"schema_version": 1, "last_attempt": None, "last_check": None, "last_success": None, "last_install": None,
+                 "result": "unknown", "installed": None}
+    if value.get("result") == "running":
+        try:
+            owner = process_identity(int(value["owner_pid"]))
+            if any(owner[key] != value.get(key) for key in owner):
+                value["result"] = "interrupted"
+        except (OSError, ValueError, KeyError, TypeError, IndexError):
+            value["result"] = "interrupted"
+    if str(value.get("attempt_id", "")).startswith("cron:"):
+        try:
+            if (not value.get("monitor_signature")
+                    or value["monitor_signature"] != cron_monitor_signature()
+                    or not supported_cron_actions()
+                    or not update_covers_security([])):
+                value["result"] = "unknown"
+        except OSError:
+            value["result"] = "unknown"
+    return {"schema_version": 1, "last_attempt": value.get("last_attempt"),
+            "last_check": value.get("last_check"),
+            "last_success": value.get("last_success"), "result": value["result"],
+            "last_install": value.get("last_install"),
+            "installed": value.get("installed") if value["result"] == "success" else None,
+            "reboot_required": True if Path("/run/reboot-required").exists() else None}
+
+
+def show_status(as_json):
+    value = status()
+    if as_json:
+        print(json.dumps(value, sort_keys=True))
+        return
+    print("Security updates:", value["result"])
+    if value["last_attempt"]:
+        print("Last attempt:", value["last_attempt"])
+    if value["last_check"]:
+        print("Last successful index refresh:", value["last_check"])
+    if value["last_success"]:
+        print("Last successful check:", value["last_success"])
+    if value["last_install"]:
+        print("Last installation:", value["last_install"])
+    if value["installed"] is not None:
+        print("Packages installed:", value["installed"])
+    if value["reboot_required"]:
+        print("Reboot required")
+
+
+if __name__ == "__main__":
+    try:
+        if Path(sys.argv[0]).name == "turnkey-security-updates-status":
+            if sys.argv[1:] not in ([], ["--json"]):
+                sys.exit("Usage: turnkey-security-updates-status [--json]")
+            show_status(sys.argv[1:] == ["--json"])
+        else:
+            sys.exit(manual() if sys.argv[1:] == ["--manual"] else cron(sys.argv[1:]))
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        print(f"security update status: {error}", file=sys.stderr)
+        sys.exit(1)

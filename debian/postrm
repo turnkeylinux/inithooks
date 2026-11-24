@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = remove ] || [ "$1" = purge ]; then
+    hook=/etc/cron-apt/config.d/0-update
+    if [ -f "$hook" ] && [ ! -L "$hook" ] && cmp -s "$hook" - <<'EOF'
+if [ -x /usr/lib/inithooks/bin/security-updates-status ]; then
+export TURNKEY_SECURITY_APT_COMMAND="$APTCOMMAND"
+export TURNKEY_SECURITY_CRON_PID="$$"
+export TURNKEY_SECURITY_CRON_ID="$$-$(date +%s)"
+export TURNKEY_SECURITY_ACTIONDIR="$ACTIONDIR"
+export TURNKEY_SECURITY_ACTIONCONFDIR="$ACTIONCONFDIR"
+export TURNKEY_SECURITY_CONFIG="$CONFIG"
+APTCOMMAND=/usr/lib/inithooks/bin/security-updates-status
+fi
+EOF
+    then
+        rm -f "$hook"
+    fi
+fi
+
+#DEBHELPER#
