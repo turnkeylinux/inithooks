@@ -35,12 +35,13 @@ def usage(e=None):
     if e:
         print("error: " + str(e), file=sys.stderr)
 
-    print("Syntax: %s [-h|--help] [-c|--full-confconsole]\n" % (sys.argv[0]), file=sys.stderr)
+    print("Syntax: %s [-h|--help] [-c|--full-confconsole] [--setup-only]\n" % (sys.argv[0]), file=sys.stderr)
     print(__doc__.strip(), file=sys.stderr)
     print("\nOptions:\n")
     print("  -h|--help             - print this help and exit")
     print("  -c|--full-confconsole - after initialization open full confconsole (default is basic).")
     print("                          If Confconsole not installed, will be ignored.")
+    print("  --setup-only          - return after initialization without opening Confconsole.")
     print("\nBlacklist:\n", file=sys.stderr)
     for script in BLACKLIST:
         print("    %s" % script, file=sys.stderr)
@@ -98,12 +99,15 @@ def main():
         confconsole = ['/bin/true', '--null']
 
     args = sys.argv[1:]
+    setup_only = False
     if args:
         for arg in args:
             if arg in ('-h', '--help'):
                 usage()
             if arg in ('-c', '--full-confconsole'):
                 confconsole = confconsole[:-1]
+            if arg == '--setup-only':
+                setup_only = True
 
     # The active hook owns Ctrl-C and can ask before aborting setup.
     previous_sigint = signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -111,10 +115,16 @@ def main():
     try:
         inithooks.execute('firstboot.d')
     except subprocess.CalledProcessError as error:
+        if setup_only:
+            fatal("Setup stopped at %s. Correct the error and try again."
+                  % os.path.basename(error.cmd[-1]))
         fatal("Setup stopped at %s. Correct the error and run turnkey-init again."
               % os.path.basename(error.cmd[-1]))
     finally:
         signal.signal(signal.SIGINT, previous_sigint)
+
+    if setup_only:
+        return
 
     # The console owns Ctrl-C and can offer to quit. A caught signal handler
     # is reset on exec, so the child still receives SIGINT normally.

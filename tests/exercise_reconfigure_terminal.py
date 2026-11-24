@@ -36,7 +36,12 @@ for cols in (60, 80, 120):
             child.send('\r'); child.expect('PASSWORD_RETURNED')
         elif mode in ('empty', 'pending'):
             assert ('no settings' if mode == 'empty' else 'Finish initial setup') in text, text
-            child.send('\r'); child.expect('MENU_RETURNED')
+            if mode == 'pending':
+                assert 'Continue setup' in text and 'turnkey-init' not in text, text
+                child.send('\x1b')
+            else:
+                child.send('\r')
+            child.expect('MENU_RETURNED')
         else:
             assert 'Example App' in text and 'Details' in text and 'Back' in text, text
             if mode == 'normal':

@@ -128,8 +128,22 @@ def menu(directory=HOOKS):
     d = Dialog('TurnKey GNU/Linux - Reconfigure')
     try:
         if setup_pending():
-            message(d, 'Complete setup', 'Finish initial setup before reconfiguring this server.\n\nRun turnkey-init to continue.')
-            return 1
+            columns, rows = shutil.get_terminal_size((80, 24))
+            with dialog_interrupt() as interrupted:
+                result = d.console.yesno(
+                    'Finish initial setup before changing settings.\n\n'
+                    'Setup starts from the beginning and may ask you to confirm settings again.',
+                    title='Complete setup', width=min(76, columns - 4),
+                    height=min(rows - 2, 12), yes_label='Continue setup', no_label='Back')
+            if interrupted[0] or result != 'ok':
+                return 0
+            try:
+                result = subprocess.run(['/usr/sbin/turnkey-init', '--setup-only']).returncode
+            except OSError:
+                result = 1
+            if result != 0 or setup_pending():
+                message(d, 'Complete setup', 'Setup did not finish. You can try again.')
+                return 1
         while True:
             hooks = discover(directory)
             columns, rows = shutil.get_terminal_size((80, 24))
@@ -172,7 +186,7 @@ def menu(directory=HOOKS):
             if code not in (0, 130):
                 message(d, hook.title, 'Configuration could not finish. You can try again or choose another setting.')
     except DialogError:
-        print('Could not display Reconfigure. Run sudo turnkey reconfigure in an interactive terminal.', file=sys.stderr)
+        print('Could not display Reconfigure.', file=sys.stderr)
         return 1
 
 

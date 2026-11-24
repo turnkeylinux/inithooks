@@ -144,13 +144,47 @@ class ReconfigureTest(unittest.TestCase):
         self.assertEqual(d.console.menu.call_count, 3)
         d.console.msgbox.assert_called_once()
 
-    def test_empty_menu_and_pending_setup_do_not_execute(self):
-        for pending in (True, False):
-            d = Mock()
-            with patch('libinithooks.dialog_wrapper.Dialog', return_value=d), patch.object(rc, 'setup_pending', return_value=pending), patch.object(rc, 'execute') as execute:
-                rc.menu(self.root)
-            execute.assert_not_called()
-            d.console.msgbox.assert_called_once()
+    def test_pending_setup_can_be_cancelled_without_running_hooks(self):
+        d = Mock()
+        d.console.yesno.return_value = 'cancel'
+        with patch('libinithooks.dialog_wrapper.Dialog', return_value=d), \
+             patch.object(rc, 'setup_pending', return_value=True), \
+             patch.object(rc.subprocess, 'run') as run:
+            self.assertEqual(rc.menu(self.root), 0)
+        run.assert_not_called()
+        self.assertEqual(d.console.yesno.call_args.kwargs['yes_label'], 'Continue setup')
+        self.assertNotIn('turnkey-init', d.console.yesno.call_args.args[0])
+
+    def test_completed_setup_opens_reconfigure(self):
+        self.hook('40example', 'exit 0')
+        d = Mock()
+        d.console.yesno.return_value = 'ok'
+        d.console.menu.return_value = ('cancel', '')
+        with patch('libinithooks.dialog_wrapper.Dialog', return_value=d), \
+             patch.object(rc, 'setup_pending', side_effect=[True, False]), \
+             patch.object(rc.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)) as run:
+            self.assertEqual(rc.menu(self.root), 0)
+        run.assert_called_once_with(['/usr/sbin/turnkey-init', '--setup-only'])
+        d.console.menu.assert_called_once()
+
+    def test_incomplete_or_failed_setup_stays_out_of_reconfigure(self):
+        for result, pending in ((1, False), (0, True)):
+            with self.subTest(result=result, pending=pending):
+                d = Mock()
+                d.console.yesno.return_value = 'ok'
+                with patch('libinithooks.dialog_wrapper.Dialog', return_value=d), \
+                     patch.object(rc, 'setup_pending', side_effect=[True, pending]), \
+                     patch.object(rc.subprocess, 'run', return_value=subprocess.CompletedProcess([], result)):
+                    self.assertEqual(rc.menu(self.root), 1)
+                d.console.menu.assert_not_called()
+                d.console.msgbox.assert_called_once()
+
+    def test_empty_menu_does_not_execute(self):
+        d = Mock()
+        with patch('libinithooks.dialog_wrapper.Dialog', return_value=d), patch.object(rc, 'setup_pending', return_value=False), patch.object(rc, 'execute') as execute:
+            rc.menu(self.root)
+        execute.assert_not_called()
+        d.console.msgbox.assert_called_once()
 
 
 if __name__ == '__main__':

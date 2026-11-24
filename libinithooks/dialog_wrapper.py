@@ -319,8 +319,7 @@ class Dialog:
         columns, rows = shutil.get_terminal_size((80, 24))
         width = min(self.width, columns - 4)
         text = ("Generated password:\n\n" + password +
-                "\n\nSave this password. Server settings are available via Console > Reconfigure."
-                "\n\nFrom a shell: sudo turnkey reconfigure")
+                "\n\nSave this password. Server settings are available via Console > Reconfigure.")
         lines = sum(max(1, len(textwrap.wrap(line, width - 6))) for line in text.splitlines())
         arguments = ['--no-collapse', '--no-mouse', '--backtitle', getattr(self, 'title', 'TurnKey GNU/Linux'), '--title', title,
                      '--ok-label', 'Continue', '--msgbox', text, str(min(rows - 2, lines + 6)), str(width)]
