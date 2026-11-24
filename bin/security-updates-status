@@ -18,6 +18,7 @@ STATE = Path("/var/lib/turnkey-security-updates")
 RUNTIME = Path("/run/turnkey-security-updates")
 SECURITY_SOURCES = "/etc/apt/sources.list.d/security.sources.sources"
 LOGFILE = Path("/var/log/inithooks/secupdates.log")
+INSTALL_COMMAND = "/usr/sbin/turnkey-install-security-updates"
 CRON_HOOK = Path("/etc/cron-apt/config.d/0-update")
 CRON_CONFIG = Path("/etc/cron-apt/config")
 CRON_SCHEDULE = Path("/etc/cron.d/cron-apt")
@@ -75,59 +76,105 @@ def change_status(attempt, result, installed=None):
     STATE.mkdir(mode=0o755, parents=True, exist_ok=True)
     with (STATE / "lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        path = STATE / "status.json"
-        try:
-            previous = json.loads(path.read_text())
-        except (OSError, ValueError):
-            previous = {}
-        if not isinstance(previous, dict):
-            previous = {}
-        if result != "running" and previous.get("attempt_id") != attempt["attempt_id"]:
-            return
-        if result == "success" and previous.get("result") != "running":
-            return
-        record = {"schema_version": 1, "last_attempt": attempt["last_attempt"],
-                  "last_check": previous.get("last_check") if valid_time(previous.get("last_check")) else None,
-                  "last_success": previous.get("last_success") if valid_time(previous.get("last_success")) else None, "result": result,
-                  "last_install": previous.get("last_install") if valid_time(previous.get("last_install")) else None,
-                  "installed": installed, "attempt_id": attempt["attempt_id"]}
-        if "monitor_signature" in attempt:
-            record["monitor_signature"] = attempt["monitor_signature"]
-        if result == "running":
-            record.update(attempt["owner"])
-        if result == "success":
-            record["last_success"] = now()
-            if installed:
-                record["last_install"] = record["last_success"]
-        write_json(path, record)
+        # Each stream has its own active attempt, so an interactive retry
+        # cannot overwrite or prevent the scheduled outcome being recorded.
+        daily = attempt["attempt_id"].startswith("cron:")
+        paths = [STATE / "daily.json", STATE / "status.json"] if daily else [STATE / "status.json"]
+        for path in paths:
+            try:
+                previous = json.loads(path.read_text())
+            except (OSError, ValueError):
+                previous = {}
+            if not isinstance(previous, dict):
+                previous = {}
+            if result != "running" and previous.get("attempt_id") != attempt["attempt_id"]:
+                continue
+            if result == "success" and previous.get("result") != "running":
+                continue
+            record = {"schema_version": 1, "last_attempt": attempt["last_attempt"],
+                      "last_check": previous.get("last_check") if valid_time(previous.get("last_check")) else None,
+                      "last_success": previous.get("last_success") if valid_time(previous.get("last_success")) else None,
+                      "result": result,
+                      "last_install": previous.get("last_install") if valid_time(previous.get("last_install")) else None,
+                      "installed": installed, "attempt_id": attempt["attempt_id"]}
+            if "monitor_signature" in attempt:
+                record["monitor_signature"] = attempt["monitor_signature"]
+            if result in ("failed", "unknown"):
+                record["failure_stage"] = attempt.get("stage")
+            if result == "running":
+                record.update(attempt["owner"])
+            if result == "success":
+                record["last_success"] = now()
+                if installed:
+                    record["last_install"] = record["last_success"]
+            write_json(path, record)
 
 
 def record_check(attempt):
     try:
         with (STATE / "lock").open("a") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
-            path = STATE / "status.json"
-            value = json.loads(path.read_text())
-            if isinstance(value, dict) and value.get("attempt_id") == attempt["attempt_id"]:
-                value["last_check"] = now()
-                write_json(path, value)
+            paths = [STATE / "daily.json", STATE / "status.json"] if attempt["attempt_id"].startswith("cron:") else [STATE / "status.json"]
+            for path in paths:
+                try:
+                    value = json.loads(path.read_text())
+                    if isinstance(value, dict) and value.get("attempt_id") == attempt["attempt_id"]:
+                        value["last_check"] = now()
+                        write_json(path, value)
+                except (OSError, ValueError, TypeError, KeyError):
+                    pass
     except (OSError, ValueError, TypeError, KeyError):
         print("Security update status could not be recorded.", file=sys.stderr)
+
+
+def invoke_cron(command, *, warnings=None, truncate=False):
+    # Keep the full failure output for an administrator without exposing
+    # repository URLs or other configuration to unprivileged readers.
+    fd = None
+    try:
+        STATE.mkdir(mode=0o755, parents=True, exist_ok=True)
+        fd = os.open(STATE / "daily.log", os.O_WRONLY | os.O_CREAT | (os.O_TRUNC if truncate else os.O_APPEND), 0o600)
+        os.fchmod(fd, 0o600)
+        log = os.fdopen(fd, "w" if truncate else "a")
+    except OSError:
+        if fd is not None:
+            os.close(fd)
+        return invoke(command, warnings=warnings) if warnings is not None else invoke(command)
+    try:
+        return invoke(command, log=log, warnings=warnings, log_errors=True)
+    finally:
+        try:
+            log.close()
+        except OSError:
+            pass
 
 
 def invoke(command, log=None, warnings=None, log_errors=False):
     count = None
     log_lock = threading.Lock()
+    log_failed = False
+
+    def log_line(line):
+        nonlocal log_failed
+        with log_lock:
+            if log is None or log_failed:
+                return
+            try:
+                log.write(line)
+                log.flush()
+            except (OSError, ValueError):
+                # A full or failed log filesystem must not stop APT or leave
+                # either child pipe undrained. Continue forwarding its output.
+                log_failed = True
+
     with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                           text=True, errors="replace", bufsize=1) as process:
         def copy_errors():
             for line in process.stderr:
                 sys.stderr.write(line)
                 sys.stderr.flush()
-                if log and log_errors:
-                    with log_lock:
-                        log.write(line)
-                        log.flush()
+                if log_errors:
+                    log_line(line)
                 if warnings is not None and ("Failed to fetch" in line or "Some index files failed to download" in line):
                     warnings.append(line)
 
@@ -136,10 +183,7 @@ def invoke(command, log=None, warnings=None, log_errors=False):
         for line in process.stdout:
             sys.stdout.write(line)
             sys.stdout.flush()
-            if log:
-                with log_lock:
-                    log.write(line)
-                    log.flush()
+            log_line(line)
             match = SUMMARY.match(line)
             if match:
                 count = int(match[1]) + int(match[2])
@@ -299,7 +343,7 @@ def cron(args):
     runfile = RUNTIME / (job + ".json")
     action = next((arg for arg in args if arg in ("update", "upgrade", "dist-upgrade", "autoclean")), "")
     if action == "update":
-        if not supported_cron_actions() or not update_covers_security(original + args):
+        if original != ["/usr/bin/apt-get"] or not supported_cron_actions() or not update_covers_security(original + args):
             try:
                 current = attempt(int(owner), "cron:" + job)
                 current["monitor_signature"] = cron_monitor_signature()
@@ -317,11 +361,14 @@ def cron(args):
             print("Security update status could not be recorded.", file=sys.stderr)
             current = None
         warnings = []
-        code, _ = invoke(original + args, warnings=warnings)
+        code, _ = (invoke_cron(original + args, warnings=warnings, truncate=True)
+                   if current else invoke(original + args, warnings=warnings))
+        if current:
+            current["stage"] = "repository refresh"
         if current and code:
             record(current, "failed")
         elif current and warnings:
-            record(current, "unknown")
+            record(current, "failed")
         elif current:
             record_check(current)
             try:
@@ -330,10 +377,11 @@ def cron(args):
                 record(current, "unknown")
         return code
     if action == "autoclean":
-        code, _ = invoke(original + args)
+        code, _ = invoke_cron(original + args) if runfile.exists() else invoke(original + args)
         if code:
             try:
                 current = json.loads(runfile.read_text())
+                current["stage"] = "package cleanup"
                 if isinstance(current, dict) and current.get("owner") == process_identity(int(owner)):
                     record(current, "failed")
                     runfile.unlink(missing_ok=True)
@@ -345,12 +393,13 @@ def cron(args):
             current = json.loads(runfile.read_text())
             if not isinstance(current, dict) or current.get("owner") != process_identity(int(owner)):
                 current = None
-            elif (previous := json.loads((STATE / "status.json").read_text())).get("result") != "running" or previous.get("attempt_id") != current.get("attempt_id"):
+            elif (previous := json.loads((STATE / "daily.json").read_text())).get("result") != "running" or previous.get("attempt_id") != current.get("attempt_id"):
                 current = None
         except (OSError, ValueError, TypeError, IndexError, AttributeError):
             current = None
-        code, count = invoke(original + args)
+        code, count = invoke_cron(original + args) if current else invoke(original + args)
         if current:
+            current["stage"] = "security update installation"
             record(current, "success" if code == 0 else "failed", count if code == 0 else None)
             try:
                 runfile.unlink(missing_ok=True)
@@ -382,32 +431,49 @@ def manual():
          "-o", "DPkg::Options::=--force-confdef", "-o", "DPkg::Options::=--force-confold"],
     ]
     try:
-        with logfile.open("a") as log:
+        fd = os.open(logfile, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        try:
+            os.fchmod(fd, 0o600)
+        except OSError:
+            os.close(fd)
+            raise
+        with os.fdopen(fd, "a") as log:
+            log.write("[security-updates] Manual run " + now() + "\n")
+            log.flush()
             incomplete = []
             for command in commands:
-                command_log = log if command[0] == "dpkg" or "dist-upgrade" in command else None
-                code, count = invoke(command, command_log,
+                code, count = invoke(command, log,
                                      incomplete if command == ["apt-get", "update"] else None,
-                                     log_errors=command[0] == "dpkg")
-                if code:
+                                     log_errors=True)
+                if code or incomplete:
                     if current:
+                        current["stage"] = ("repository refresh" if command == ["apt-get", "update"]
+                                            else "package configuration" if command[0] == "dpkg"
+                                            else "security update installation")
                         record(current, "failed")
-                    return code
+                    return code or 1
                 if current and command == ["apt-get", "update"] and not incomplete and sources_available:
                     record_check(current)
+            if not sources_available:
+                reason = "Could not verify the configured security update sources. Check the APT security repository configuration."
+                print(reason, file=sys.stderr)
+                log.write(reason + "\n")
+                log.flush()
         if current:
             record(current, "unknown" if incomplete or not sources_available else "success",
                    count if not incomplete and sources_available else None)
-        return 0
+        # A custom or missing security source cannot establish a reliable
+        # outcome even if APT itself completed successfully.
+        return 0 if sources_available else 1
     except (OSError, subprocess.SubprocessError):
         if current:
             record(current, "failed")
         raise
 
 
-def status():
+def status_file(filename):
     try:
-        value = json.loads((STATE / "status.json").read_text())
+        value = json.loads((STATE / filename).read_text())
         if (not isinstance(value, dict) or type(value.get("schema_version")) is not int
                 or value.get("schema_version") != 1
                 or value.get("result") not in ("running", "success", "failed", "unknown")
@@ -450,7 +516,17 @@ def status():
             "last_success": value.get("last_success"), "result": value["result"],
             "last_install": value.get("last_install"),
             "installed": value.get("installed") if value["result"] == "success" else None,
-            "reboot_required": True if Path("/run/reboot-required").exists() else None}
+            "reboot_required": True if Path("/run/reboot-required").exists() else None,
+            "failure_stage": value.get("failure_stage") if value["result"] in ("failed", "unknown") else None,
+            "source": ("manual" if str(value.get("attempt_id", "")).startswith("manual:") else
+                       "daily" if str(value.get("attempt_id", "")).startswith("cron:") else None)}
+
+
+def status():
+    value = status_file("status.json")
+    daily = status_file("daily.json")
+    value["daily"] = {key: daily.get(key) for key in ("result", "last_attempt", "last_success", "failure_stage")}
+    return value
 
 
 def show_status(as_json):
@@ -458,7 +534,41 @@ def show_status(as_json):
     if as_json:
         print(json.dumps(value, sort_keys=True))
         return
-    print("Security updates:", value["result"])
+    daily = value["daily"]
+    print("Daily security updates:", daily["result"])
+    if daily["last_attempt"]:
+        print("Last daily attempt:", daily["last_attempt"])
+    if daily["last_success"]:
+        print("Last successful daily run:", daily["last_success"])
+    if daily["failure_stage"]:
+        print("Failed stage:", daily["failure_stage"])
+    if daily["result"] in ("failed", "interrupted"):
+        print("Daily output: /var/lib/turnkey-security-updates/daily.log")
+        try:
+            lines = (STATE / "daily.log").read_text(errors="replace").splitlines()[-20:]
+            if lines:
+                print("Recent output:")
+                for line in lines:
+                    print("  " + "".join(c if c.isprintable() else "?" for c in line)[:500])
+        except OSError:
+            print("Run with sudo to read the daily output.")
+        print("Retry: sudo security-updates")
+    print("Most recent update:", value["result"])
+    if value["source"] == "manual" and value["result"] in ("failed", "unknown"):
+        if value["failure_stage"]:
+            print("Manual update failed during:", value["failure_stage"])
+        elif value["result"] == "unknown":
+            print("Manual update outcome could not be verified.")
+        print("Manual update output:", LOGFILE)
+        try:
+            lines = LOGFILE.read_text(errors="replace").splitlines()
+            markers = [i for i, line in enumerate(lines) if line.startswith("[security-updates] Manual run ")]
+            if markers:
+                print("Recent manual output:")
+                for line in lines[markers[-1] + 1:][-20:]:
+                    print("  " + "".join(c if c.isprintable() else "?" for c in line)[:500])
+        except OSError:
+            print("Run with sudo to read the manual update output.")
     if value["last_attempt"]:
         print("Last attempt:", value["last_attempt"])
     if value["last_check"]:
@@ -475,7 +585,14 @@ def show_status(as_json):
 
 if __name__ == "__main__":
     try:
-        if Path(sys.argv[0]).name == "turnkey-security-updates-status":
+        name = Path(sys.argv[0]).name
+        if name == "security-updates":
+            if not sys.argv[1:]:
+                os.execv(INSTALL_COMMAND, [INSTALL_COMMAND])
+            if sys.argv[1:] not in (["--status"], ["--json"]):
+                sys.exit("Usage: security-updates [--status|--json]")
+            show_status(sys.argv[1:] == ["--json"])
+        elif name == "turnkey-security-updates-status":
             if sys.argv[1:] not in ([], ["--json"]):
                 sys.exit("Usage: turnkey-security-updates-status [--json]")
             show_status(sys.argv[1:] == ["--json"])

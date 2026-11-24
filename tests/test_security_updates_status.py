@@ -89,13 +89,23 @@ class SecurityUpdatesStatusTests(unittest.TestCase):
     def test_unwritable_telemetry_does_not_prevent_cron_update(self):
         env = {"TURNKEY_SECURITY_CRON_ID": "123-456",
                "TURNKEY_SECURITY_CRON_PID": str(os.getpid()),
-               "TURNKEY_SECURITY_APT_COMMAND": "/usr/bin/apt-get --custom"}
+               "TURNKEY_SECURITY_APT_COMMAND": "/usr/bin/apt-get"}
         with patch.dict(os.environ, env), patch.object(status, "supported_cron_actions", return_value=True), \
              patch.object(status, "cron_monitor_signature", return_value="signature"), \
              patch.object(status, "change_status", side_effect=PermissionError), \
              patch.object(status, "invoke", return_value=(0, None)) as invoke:
             self.assertEqual(status.cron(["update"]), 0)
-        invoke.assert_called_once_with(["/usr/bin/apt-get", "--custom", "update"], warnings=[])
+        invoke.assert_called_once_with(["/usr/bin/apt-get", "update"], warnings=[])
+
+    def test_custom_apt_command_cannot_claim_a_successful_update(self):
+        env = {"TURNKEY_SECURITY_CRON_ID": "123-456", "TURNKEY_SECURITY_CRON_PID": str(os.getpid()),
+               "TURNKEY_SECURITY_APT_COMMAND": "/usr/bin/echo"}
+        with patch.dict(os.environ, env), patch.object(status, "cron_monitor_signature", return_value="sig"), \
+             patch.object(status, "supported_cron_actions", return_value=True), \
+             patch.object(status, "update_covers_security", return_value=True), \
+             patch.object(status, "invoke", return_value=(0, None)):
+            self.assertEqual(status.cron(["update"]), 0)
+            self.assertEqual(status.status()["daily"]["result"], "unknown")
 
     def test_wrong_shaped_runfile_does_not_prevent_upgrade(self):
         self.runtime.mkdir()
@@ -128,13 +138,144 @@ class SecurityUpdatesStatusTests(unittest.TestCase):
                 self.assertEqual(status.status()["result"], "unknown")
 
     def test_manual_failure_and_success(self):
-        with patch.object(status, "invoke", side_effect=[(0, None), (100, None)]):
+        with patch.object(status, "security_sources_available", return_value=True), patch.object(status, "update_covers_security", return_value=True), patch.object(status, "invoke", side_effect=[(0, None), (100, None)]):
             self.assertEqual(status.manual(), 100)
         self.assertEqual(status.status()["result"], "failed")
-        with patch.object(status, "invoke", side_effect=[(0, None), (0, None), (0, None), (0, 2)]):
+        with patch.object(status, "security_sources_available", return_value=True), patch.object(status, "update_covers_security", return_value=True), patch.object(status, "invoke", side_effect=[(0, None), (0, None), (0, None), (0, 2)]):
             self.assertEqual(status.manual(), 0)
         self.assertEqual(status.status()["result"], "success")
         self.assertEqual(status.status()["installed"], 2)
+
+    def test_daily_failure_survives_manual_success_and_overlapping_runs(self):
+        daily = status.attempt(os.getpid(), "cron:123-456")
+        manual = status.attempt(os.getpid(), "manual:123")
+        with patch.object(status, "cron_monitor_signature", return_value="sig"), \
+             patch.object(status, "supported_cron_actions", return_value=True), \
+             patch.object(status, "update_covers_security", return_value=True):
+            daily["monitor_signature"] = "sig"
+            status.change_status(daily, "running")
+            status.change_status(manual, "running")
+            daily["stage"] = "repository refresh"
+            status.change_status(daily, "failed")
+            status.change_status(manual, "success", 2)
+            result = status.status()
+        self.assertEqual(result["result"], "success")
+        self.assertEqual(result["daily"]["result"], "failed")
+        self.assertEqual(result["daily"]["failure_stage"], "repository refresh")
+
+    def test_daily_partial_refresh_fails_with_diagnostic_log(self):
+        env = {"TURNKEY_SECURITY_CRON_ID": "123-456", "TURNKEY_SECURITY_CRON_PID": str(os.getpid())}
+        command = [sys.executable, "-c", 'import sys; print("Failed to fetch repository", file=sys.stderr)']
+        with patch.dict(os.environ, env), patch.object(status, "supported_cron_actions", return_value=True), \
+             patch.object(status, "cron_monitor_signature", return_value="sig"), \
+             patch.object(status, "update_covers_security", return_value=True):
+            # APT can return zero while reporting a failed index download.
+            real_invoke = status.invoke_cron
+            with patch.object(status, "invoke_cron") as run:
+                def local_invoke(_args, *, warnings=None, truncate=False):
+                    return real_invoke(command, warnings=warnings, truncate=truncate)
+                run.side_effect = local_invoke
+                with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                    self.assertEqual(status.cron(["update"]), 0)
+            result = status.status()["daily"]
+        self.assertEqual(result["result"], "failed")
+        self.assertEqual(result["failure_stage"], "repository refresh")
+        self.assertIn("Failed to fetch repository", (self.state / "daily.log").read_text())
+        self.assertEqual((self.state / "daily.log").stat().st_mode & 0o777, 0o600)
+
+    def test_daily_install_success_and_failure(self):
+        env = {"TURNKEY_SECURITY_CRON_ID": "123-456", "TURNKEY_SECURITY_CRON_PID": str(os.getpid())}
+        args = ["dist-upgrade", "-o", "Dir::Etc::sourcelist=" + status.SECURITY_SOURCES,
+                "-o", "Dir::Etc::sourceparts=/dev/null"]
+        with patch.dict(os.environ, env), patch.object(status, "supported_cron_actions", return_value=True), \
+             patch.object(status, "cron_monitor_signature", return_value="sig"), \
+             patch.object(status, "update_covers_security", return_value=True), \
+             patch.object(status, "invoke_cron", side_effect=[(0, None), (42, None), (0, None), (0, 2)]):
+            self.assertEqual(status.cron(["update"]), 0)
+            self.assertEqual(status.cron(args), 42)
+            self.assertEqual(status.status()["daily"]["result"], "failed")
+            self.assertEqual(status.status()["daily"]["failure_stage"], "security update installation")
+            self.assertEqual(status.cron(["update"]), 0)
+            self.assertEqual(status.cron(args), 0)
+            result = status.status()["daily"]
+        self.assertEqual(result["result"], "success")
+        self.assertIsNotNone(result["last_success"])
+
+    def test_cli_shows_latest_manual_failure_and_private_diagnostics(self):
+        def failing_invoke(command, log, warnings, log_errors):
+            if command[0] == "dpkg":
+                return 0, None
+            log.write("repository unavailable\n")
+            log.flush()
+            return 100, None
+        with patch.object(status, "security_sources_available", return_value=True), \
+             patch.object(status, "update_covers_security", return_value=True), \
+             patch.object(status, "invoke", side_effect=failing_invoke):
+            self.assertEqual(status.manual(), 100)
+        self.assertEqual(status.LOGFILE.stat().st_mode & 0o777, 0o600)
+        output = io.StringIO()
+        with redirect_stdout(output):
+            status.show_status(False)
+        self.assertIn("Manual update failed during: repository refresh", output.getvalue())
+        self.assertIn("repository unavailable", output.getvalue())
+        self.assertIn("Daily security updates: unknown", output.getvalue())
+
+    def test_cli_shows_interrupted_daily_output_and_retry(self):
+        daily = status.attempt(os.getpid(), "cron:123-456")
+        daily["monitor_signature"] = "sig"
+        with patch.object(status, "cron_monitor_signature", return_value="sig"), \
+             patch.object(status, "supported_cron_actions", return_value=True), \
+             patch.object(status, "update_covers_security", return_value=True):
+            status.change_status(daily, "running")
+            path = self.state / "daily.json"
+            record = json.loads(path.read_text())
+            record["boot_id"] = "another boot"
+            path.write_text(json.dumps(record))
+            (self.state / "daily.log").write_text("last line before interruption\n")
+            output = io.StringIO()
+            with redirect_stdout(output):
+                status.show_status(False)
+        self.assertIn("Daily security updates: interrupted", output.getvalue())
+        self.assertIn("last line before interruption", output.getvalue())
+        self.assertIn("Retry: sudo security-updates", output.getvalue())
+
+    def test_manual_missing_security_sources_returns_failure(self):
+        errors = io.StringIO()
+        def completed(*args, **kwargs):
+            print("APT command finished", file=sys.stderr)
+            return 0, 0
+        with patch.object(status, "security_sources_available", return_value=False), \
+             patch.object(status, "invoke", side_effect=completed), redirect_stderr(errors):
+            self.assertEqual(status.manual(), 1)
+        self.assertTrue(errors.getvalue().splitlines()[-1].startswith("Could not verify the configured security update sources"))
+        self.assertIn("Could not verify the configured security update sources", status.LOGFILE.read_text())
+        self.assertEqual(status.status()["result"], "unknown")
+        output = io.StringIO()
+        with redirect_stdout(output):
+            status.show_status(False)
+        self.assertIn("Manual update outcome could not be verified", output.getvalue())
+        self.assertIn("Could not verify the configured security update sources", output.getvalue())
+
+    def test_security_updates_streams_update_output_and_exit_status(self):
+        import subprocess
+        root = Path(self.temp.name)
+        installer = root / "fake-installer"
+        installer.write_text('#!/bin/sh\necho update-output\necho update-error >&2\nexit "$1"\n')
+        installer.chmod(0o755)
+        # Use an executable launcher at the exact installed command name; the
+        # substituted installer emits output and returns a controlled status.
+        launcher = root / "security-updates"
+        source = (ROOT / "bin/security-updates-status").read_text()
+        source = source.replace('INSTALL_COMMAND = "/usr/sbin/turnkey-install-security-updates"',
+                                'INSTALL_COMMAND = ' + repr(str(installer)))
+        launcher.write_text(source)
+        launcher.chmod(0o755)
+        for exitcode in (0, 42):
+            installer.write_text('#!/bin/sh\necho update-output\necho update-error >&2\nexit ' + str(exitcode) + '\n')
+            result = subprocess.run([str(launcher)], text=True, capture_output=True)
+            self.assertEqual(result.returncode, exitcode)
+            self.assertEqual(result.stdout, "update-output\n")
+            self.assertEqual(result.stderr, "update-error\n")
 
     def test_only_effective_security_sources_qualify(self):
         args = ["dist-upgrade", "-o", "Dir::Etc::sourcelist=" + status.SECURITY_SOURCES,
@@ -166,6 +307,52 @@ class SecurityUpdatesStatusTests(unittest.TestCase):
                   'apt::get::simulate "true";\n')
         with patch.object(status.subprocess, "run", return_value=__import__("subprocess").CompletedProcess([], 0, config, "")):
             self.assertFalse(status.update_covers_security([]))
+
+    def test_log_write_failure_does_not_block_either_output_pipe(self):
+        class BrokenLog:
+            def write(self, text):
+                raise OSError("disk full")
+            def flush(self):
+                raise AssertionError("flush after failure")
+        script = ('import sys\n'
+                  'for i in range(5000):\n'
+                  ' print("out-%04d" % i)\n'
+                  ' print("err-%04d" % i, file=sys.stderr)\n')
+        output, errors = io.StringIO(), io.StringIO()
+        with redirect_stdout(output), redirect_stderr(errors):
+            code, count = status.invoke([sys.executable, "-c", script], BrokenLog(), log_errors=True)
+        self.assertEqual((code, count), (0, None))
+        self.assertEqual(len(output.getvalue().splitlines()), 5000)
+        self.assertEqual(len(errors.getvalue().splitlines()), 5000)
+
+    def test_log_flush_failure_preserves_real_apt_exit_code(self):
+        class BrokenLog:
+            def write(self, text):
+                pass
+            def flush(self):
+                raise OSError("disk full")
+        output, errors = io.StringIO(), io.StringIO()
+        with redirect_stdout(output), redirect_stderr(errors):
+            code, _ = status.invoke([sys.executable, "-c", 'print("message"); raise SystemExit(37)'], BrokenLog())
+        self.assertEqual(code, 37)
+        self.assertEqual(output.getvalue(), "message\n")
+
+    def test_log_close_failure_does_not_override_update_result(self):
+        real_fdopen = status.os.fdopen
+        class CloseFailure:
+            def __init__(self, fd, mode):
+                self.stream = real_fdopen(fd, mode)
+            def write(self, value):
+                return self.stream.write(value)
+            def flush(self):
+                return self.stream.flush()
+            def close(self):
+                self.stream.close()
+                raise OSError("disk full")
+        with patch.object(status.os, "fdopen", side_effect=CloseFailure):
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                code, _ = status.invoke_cron([sys.executable, "-c", 'print("message"); raise SystemExit(37)'])
+        self.assertEqual(code, 37)
 
     def test_large_stdout_and_stderr_are_streamed_and_logged(self):
         output, errors, log = io.StringIO(), io.StringIO(), io.StringIO()

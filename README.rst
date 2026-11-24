@@ -17,18 +17,21 @@ interactive.
 Security update status
 ----------------------
 
-Run `turnkey-security-updates-status` to see the most recent recorded update
-attempt, successful APT index refresh, completed security upgrade, and
-installation of one or more packages. Add `--json` for machine-readable
-output. Timestamps are UTC. The installed count belongs to the latest
-successful attempt and can be unknown when APT does not report a count.
+Run ``sudo security-updates`` to install security updates and see the command
+output. Run ``sudo security-updates --status`` for the latest recorded results
+and diagnostics, or ``sudo security-updates --json`` for machine-readable
+status. Timestamps are UTC. ``turnkey-security-updates-status`` remains
+available for read-only status, including its ``--json`` option.
 
-The normal cron-apt security update policies and the first-boot/manual update
-command record their outcomes. A partial index refresh is reported as unknown.
-The status can also be unknown before the first recorded run or when a
-customized cron-apt action cannot be tracked. A failed or interrupted run keeps
-the previous successful timestamps. The reboot indicator appears when the
-system has created `/run/reboot-required`.
+The daily cron-apt result is recorded separately from manual runs, so a manual
+retry does not erase a failed daily result. Diagnostic output for the latest
+daily run is in ``/var/lib/turnkey-security-updates/daily.log``; manual update
+output is in ``/var/log/inithooks/secupdates.log``. Both logs are readable by
+root. A partial repository refresh is recorded as failed. The status can be
+unknown before the first recorded run or when a customized cron-apt action
+cannot be tracked. A failed or interrupted run retains the previous successful
+timestamps. The reboot indicator appears when the system has created
+``/run/reboot-required``.
 
 
 Initialization fence
