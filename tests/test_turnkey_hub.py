@@ -31,6 +31,44 @@ CONFIG = {"version": 1, "device_id": "a" * 32,
           "sender": "noreply@fixture.tklapp.com", "domain": "fixture.tklapp.com", "status": "ready",
           "dyndns": {"hostname": "fixture.tklapp.com", "update_uri": mail.HUB + "/api/appmail/dns/update"}}
 
+class PostfixReloadRaceTests(unittest.TestCase):
+    def test_reload_waits_for_restart_and_retries_once(self):
+        responses = [subprocess.CompletedProcess([], 1, b"", b"not running"),
+                     subprocess.CompletedProcess([], 0, b"activating\n", b""),
+                     subprocess.CompletedProcess([], 0, b"", b""),
+                     subprocess.CompletedProcess([], 0, b"done", b"")]
+        with patch.object(mail.subprocess, "run", side_effect=responses) as execute:
+            self.assertEqual(mail.run(["postfix", "reload"]), b"done")
+        self.assertEqual([call.args[0] for call in execute.call_args_list], [
+            ["postfix", "reload"],
+            ["systemctl", "show", "postfix.service", "--property=ActiveState", "--value"],
+            ["systemctl", "start", "postfix.service"],
+            ["postfix", "reload"],
+        ])
+
+    def test_reload_failure_does_not_start_stopped_service(self):
+        responses = [subprocess.CompletedProcess([], 1, b"", b"failure"),
+                     subprocess.CompletedProcess([], 0, b"failed\n", b"")]
+        with patch.object(mail.subprocess, "run", side_effect=responses) as execute:
+            with self.assertRaises(mail.Error):
+                mail.run(["postfix", "reload"])
+        self.assertEqual(execute.call_count, 2)
+
+    def test_successful_reload_has_no_extra_service_check(self):
+        with patch.object(mail.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, b"", b"")) as execute:
+            mail.run(["postfix", "reload"])
+        execute.assert_called_once()
+
+    def test_failed_retry_preserves_original_failure(self):
+        responses = [subprocess.CompletedProcess([], 1, b"", b"not running"),
+                     subprocess.CompletedProcess([], 0, b"activating\n", b""),
+                     subprocess.CompletedProcess([], 0, b"", b""),
+                     subprocess.CompletedProcess([], 1, b"", b"still failing")]
+        with patch.object(mail.subprocess, "run", side_effect=responses) as execute:
+            with self.assertRaises(mail.Error):
+                mail.run(["postfix", "reload"])
+        self.assertEqual(execute.call_count, 4)
+
 
 class MailTest(unittest.TestCase):
     def setUp(self):

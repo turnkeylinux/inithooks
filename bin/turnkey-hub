@@ -216,6 +216,17 @@ def run(command, data=None, timeout=30):
     try:
         result = subprocess.run(command, input=data, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, timeout=timeout)
+        if result.returncode and command == ["postfix", "reload"]:
+            state = subprocess.run(
+                ["systemctl", "show", "postfix.service", "--property=ActiveState", "--value"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5,
+            )
+            if state.returncode == 0 and state.stdout.strip() in (b"activating", b"active"):
+                ready = subprocess.run(["systemctl", "start", "postfix.service"],
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+                if ready.returncode == 0:
+                    result = subprocess.run(command, input=data, stdout=subprocess.PIPE,
+                                            stderr=subprocess.PIPE, timeout=timeout)
     except (OSError, subprocess.TimeoutExpired):
         raise Error("A required system command could not finish. Check the service and try again.", retryable=True)
     if result.returncode:
